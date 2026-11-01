@@ -17,6 +17,8 @@ BLEND = ROOT / 'spike/blend/gergeti_church.blend'
 FBX = ROOT / 'spike/export/gergeti_church.fbx'
 VIEWS = BLEND.parent / 'views'
 ARCH_SEGMENTS = 64
+ROOF_PITCH = 38.0
+EAVE_OVERHANG = .45
 
 
 def activate(obj):
@@ -149,6 +151,27 @@ def ray_hit(obj, start, direction, distance):
     return obj.ray_cast(origin, delta.normalized(), distance=distance)[0]
 
 
+def tower_openings_check():
+    tower=bpy.data.objects['BellTower_8']
+    parts=[o for o in bpy.context.scene.objects
+           if o.type=='MESH' and o.name.startswith('BellTower')]
+    for direction in ((1,0,0),(-1,0,0),(0,1,0),(0,-1,0)):
+        n=Vector(direction)
+        tangent=Vector((-n.y,n.x,0))
+        # All three apertures, including the curved arch crown and both jambs.
+        for offset in (-1.45,0,1.45):
+            for u,z in ((0,9.8),(0,12.12),(-.42,10.6),(.42,10.6)):
+                start=Vector((10.5,-2,z))+n*3.5+tangent*(offset+u)
+                if any(ray_hit(obj,start,-n,7) for obj in parts):
+                    return False
+        # Verify the two 0.35 m piers remain solid on each facade.
+        for offset in (-.725,.725):
+            start=Vector((10.5,-2,10.6))+n*3.5+tangent*offset
+            if not ray_hit(tower,start,-n,7):
+                return False
+    return True
+
+
 def openings_check():
     # Test the whole recessed passage, not just the final wall cutter.
     portal = [o for o in bpy.context.scene.objects if o.name.startswith('Portal_Layer')]
@@ -157,17 +180,12 @@ def openings_check():
         for obj in portal+[wall]:
             assert not ray_hit(obj,(x,-9.65,z),(0,1,0),2.5), (obj.name,x,z)
     assert ray_hit(wall,(-.3,-8.5,4.4),(0,1,0),1.3), 'missing solid shoulder'
-    tower = bpy.data.objects['BellTower_8']
-    for direction in [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0)]:
-        n=Vector(direction)
-        for u,z in [(0,8.7),(0,11.1),(.55,9.3),(-.55,9.3)]:
-            tangent=Vector((-n.y,n.x,0))
-            start=Vector((10.5,-2,z))+n*2.2+tangent*u
-            assert not ray_hit(tower,start,-n,4.4), ('belfry blocked',direction,u,z)
+    belfry_cut = tower_openings_check()
+    assert belfry_cut, 'blocked triple belfry opening'
     assert len(portal)==3
     assert len([o for o in bpy.context.scene.objects if o.name.startswith('Steps_')])==5
     assert len([o for o in bpy.context.scene.objects if o.name.startswith('Lamp_Base')])==2
-    print('[VERIFY] recessed portal + four through belfry arches ray tests PASS')
+    print('[VERIFY] recessed portal + twelve through belfry arches ray tests PASS')
 
 
 def prepare():
@@ -199,7 +217,107 @@ def prepare():
     return objects
 
 
-def render_views(objects):
+def mesh_integrity(obj):
+    """Closed components, consistent winding and finite per-corner export UVs."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    assert all(e.is_manifold and e.is_contiguous for e in bm.edges), obj.name
+    assert all(f.calc_area() > 1e-12 for f in bm.faces), obj.name
+    bm.free()
+    uv = obj.data.uv_layers.active
+    assert uv and len(uv.data) == len(obj.data.loops), obj.name
+    assert all(math.isfinite(v) for loop in uv.data for v in loop.uv), obj.name
+
+
+def merged_openings_check(objects):
+    # Repeat through-opening tests against the final material batches.
+    for x,z in [(-2,1.6),(-2,4.02),(-1.4,2),(-2.6,2)]:
+        assert not any(ray_hit(o,(x,-9.65,z),(0,1,0),2.5) for o in objects)
+    for direction in ((1,0,0),(-1,0,0),(0,1,0),(0,-1,0)):
+        n=Vector(direction)
+        tangent=Vector((-n.y,n.x,0))
+        for offset in (-1.45,0,1.45):
+            for u,z in ((0,9.8),(0,12.12),(-.42,10.6),(.42,10.6)):
+                start=Vector((10.5,-2,z))+n*3.5+tangent*(offset+u)
+                assert not any(ray_hit(o,start,-n,7) for o in objects)
+        for offset in (-.725,.725):
+            start=Vector((10.5,-2,10.6))+n*3.5+tangent*offset
+            assert any(ray_hit(o,start,-n,7) for o in objects)
+
+
+def optimize_church(objects):
+    before = sum(triangle_count(o) for o in objects)
+    count_before = len(objects)
+    lo_before, hi_before = bounds(objects)
+    # Preserve curved aperture profiles / crosses / horizontal stone courses.
+    # Broad planar masonry and small bevel strips can collapse much harder.
+    def retention(obj):
+        if 'Cross' in obj.name and obj.name != 'Cross_Roof':
+            return .9
+        if any(key in obj.name for key in
+               ('Voussoir', 'Jamb', 'Main_Shell', 'Drum_', 'BellTower_8', 'Course_')):
+            return .48
+        return .18
+    estimate = sum(triangle_count(o)*retention(o) for o in objects)
+    budget_scale = min(1.0, 74000 / estimate)
+    for obj in objects:
+        activate(obj)
+        mod = obj.modifiers.new('Unity_Collapse', 'DECIMATE')
+        mod.decimate_type = 'COLLAPSE'
+        mod.ratio = retention(obj)*budget_scale
+        mod.use_collapse_triangulate = True
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+        # Remove sub-micrometre slivers left by bevel/Collapse, without welding parts.
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        bmesh.ops.dissolve_degenerate(bm, dist=1e-6, edges=list(bm.edges))
+        bm.to_mesh(obj.data)
+        bm.free()
+        normals(obj)
+        mesh_integrity(obj)
+    bpy.context.view_layer.update()
+    openings_check()
+    # Join only; do not weld intersecting/disconnected architectural components.
+    # Blender join retains UV loop layers and the original material assignment.
+    batches = {}
+    for obj in objects:
+        batches.setdefault(obj.data.materials[0].name, []).append(obj)
+    merged = []
+    for name, parts in sorted(batches.items()):
+        activate(parts[0])
+        for obj in parts:
+            obj.select_set(True)
+        bpy.ops.object.join()
+        obj = bpy.context.object
+        obj.name = name
+        obj.data.name = name + '_Mesh'
+        normals(obj)
+        mesh_integrity(obj)
+        assert len(obj.data.materials) == 1
+        merged.append(obj)
+    bpy.context.view_layer.update()
+    lo, hi = bounds(merged)
+    assert max(abs(a-b) for a,b in zip((*lo,*hi),(*lo_before,*hi_before))) < .035
+    after = sum(triangle_count(o) for o in merged)
+    size = hi-lo
+    bbox_ok = all(abs(a-b)<=2 for a,b in zip(size,(28,22,24.5)))
+    scene = bpy.context.scene
+    scene['tris_before'] = before
+    scene['objects_before'] = count_before
+    scene['triangle_count'] = after
+    scene['bbox_xyz'] = list(size)
+    merged_openings_check(merged)
+    print('[CHURCH6] tris_before=%d tris_after=%d objects_before=%d objects_after=%d '
+          'bbox=%.3fx%.3fx%.3f bbox_ok=%s' %
+          (before,after,count_before,len(merged),*size,bbox_ok),flush=True)
+    assert after <= 80000 and len(merged) <= 6 and bbox_ok
+    print('[VERIFY] material batches: ' + ', '.join(
+        '%s=%d tris' % (o.name,triangle_count(o)) for o in merged),flush=True)
+    print('[VERIFY] closed manifold / consistent normals / finite UVs / final opening rays PASS')
+    return merged
+
+
+def render_views(objects, framing=None):
     scene=bpy.context.scene
     scene.render.engine='BLENDER_WORKBENCH'
     shade=scene.display.shading
@@ -220,7 +338,9 @@ def render_views(objects):
     scene.render.image_settings.file_format='PNG'
     scene.render.film_transparent=False
     VIEWS.mkdir(parents=True,exist_ok=True)
-    lo,hi=bounds(objects)
+    framing = framing or [o.matrix_world@Vector(p) for o in objects for p in o.bound_box]
+    lo=Vector([min(p[i] for p in framing) for i in range(3)])
+    hi=Vector([max(p[i] for p in framing) for i in range(3)])
     target=(lo+hi)/2
     directions={'front':(0,-1,0),'side':(1,0,0),'top':(0,0,1),'iso':(1,-1,.8)}
     cameras=[]
@@ -233,7 +353,7 @@ def render_views(objects):
         data.type='ORTHO'
         # Fit all corners in camera space, using the same centre in every view.
         inv=cam.rotation_euler.to_matrix().transposed()
-        pts=[inv@(o.matrix_world@Vector(p)-target) for o in objects for p in o.bound_box]
+        pts=[inv@(p-target) for p in framing]
         data.ortho_scale=2*max(max(abs(p.x),abs(p.y)) for p in pts)*1.13
         data.clip_end=300
         scene.camera=cam
@@ -254,6 +374,10 @@ def report(objects):
     ml,mh=bounds(main)
     bl,bh=bounds(bell)
     gap=math.hypot(max(ml.x-bh.x,bl.x-mh.x,0),max(ml.y-bh.y,bl.y-mh.y,0))
+    # New roof overhangs/caps project into the old 3 m masonry clearance.
+    masonry=[o for o in main if o.data.materials[0].name != 'Roof_Slate']
+    sl,sh=bounds(masonry)
+    masonry_gap=math.hypot(max(sl.x-bh.x,bl.x-sh.x,0),max(sl.y-bh.y,bl.y-sh.y,0))
     layers=[bpy.data.objects['Portal_Layer_%d'%i] for i in range(3)]
     pl,ph=bounds(layers)
     # Continuous open air passage measured from the outer jamb to inner wall face.
@@ -261,8 +385,16 @@ def report(objects):
     valid=all(abs(a-b)<=2 for a,b in zip(size,(28,22,24.5)))
     print(' [CHURCH2] bbox=%.3fx%.3fx%.3f bbox_ok=%s tris=%d tower_gap=%.3f portal_depth=%.3f '
           %(*size,valid,total,gap,depth),flush=True)
-    assert valid and total>=25000 and gap>=3 and depth>=1.2
-    assert bpy.data.objects['BellTower_8']['applied_boolean_count']==3
+    assert valid and total>=25000 and masonry_gap>=3 and gap>=2.5 and depth>=1.2
+    tower=bpy.data.objects['BellTower_8']
+    belfry_cut=tower_openings_check()
+    print('[CHURCH4] tower_r_base=%.3f tower_r_top=%.3f arches_per_face=%d '
+          'belfry_cut=%s tower_gap=%.3f bbox=%.3fx%.3fx%.3f bbox_ok=%s tris=%d'
+          % (tower['tower_r_base'],tower['tower_r_top'],tower['arches_per_face'],
+             belfry_cut,gap,*size,valid,total),flush=True)
+    assert tower['tower_r_base']>=2.5 and tower['arches_per_face']==3
+    assert belfry_cut and masonry_gap>=3 and gap>=2.5 and valid
+    assert tower['applied_boolean_count']==7
     assert bpy.data.objects['Main_Shell']['nave_size']=='16x9'
     # Measure the actual exposed apse masonry beyond the nave's south wall.
     shell = bpy.data.objects['Main_Shell']
@@ -280,10 +412,29 @@ def report(objects):
         start = (-2 + side * 7.5, 0, 12)
         assert ray_hit(bpy.data.objects['Transept_Gable_' + ('L' if side < 0 else 'R')],
                        start, (-side, 0, 0), 1)
-        assert not ray_hit(bpy.data.objects['Cross_Roof'], start, (-side, 0, 0), .75)
+        # CHURCH5 deliberately extends the roof over these unchanged gables.
     for obj in buttresses:
         bl, bh = bounds([obj])
         assert all(abs(a-b) < .08 for a,b in zip(bh-bl, (.6, .9, 8)))
+    roof = bpy.data.objects['Cross_Roof']
+    # Measure the original slope vertices retained through bevel/triangulation.
+    pitches = []
+    for face in roof.data.polygons:
+        n = face.normal
+        if .2 < abs(n.z) < .95:
+            pitches.append(math.degrees(math.acos(abs(n.z))))
+    pitch = min(pitches, key=lambda p: abs(p-ROOF_PITCH))
+    rl,rh = bounds([roof])
+    overhang = min((rh.x-rl.x-14)/2, (rh.y-rl.y-16)/2)
+    cl,ch = bounds([bpy.data.objects['Nave_Ridge']])
+    ridge_len = ch.y-cl.y
+    bbox_ok = valid and size.z <= 25.5
+    print('[CHURCH5] roof_pitch=%.3f eave_overhang=%.3f ridge_len=%.3f '
+          'bbox=%.3fx%.3fx%.3f bbox_ok=%s tris=%d'
+          % (pitch, overhang, ridge_len, *size, bbox_ok, total), flush=True)
+    assert 35 <= pitch <= 40 and overhang >= .4 and bbox_ok
+    assert all(o.data.materials[0].name == 'Roof_Slate' for o in objects
+               if o.name in ('Cross_Roof', 'Apse_Roof', 'Dome_12', 'BellTower_Roof'))
     return total,list(size)
 
 
@@ -306,6 +457,55 @@ def gable(name, cx, cy, width, length, eave, ridge, mat, across=False):
     else:
         vertices=[(cx+x,cy+y,z) for x,y,z in vertices]
     return mesh(name,vertices,[(0,2,1),(3,4,5),(0,1,4,3),(1,2,5,4),(2,0,3,5)],mat)
+
+
+def roof_trim(prefix, cx, cy, width, length, eave, ridge, mat, across=False):
+    """0.18 m fascia around all four edges; 0.25 x 0.20 m ridge cap."""
+    def point(x, y, z):
+        return (cx+y, cy+x, z) if across else (cx+x, cy+y, z)
+    for side in (-1, 1):
+        dims = (.18, length, .18)
+        box(prefix+'_Eave', point(side*(width/2-.09), 0, eave-.09),
+            (dims[1], dims[0], dims[2]) if across else dims, mat)
+        # Sloping fascia along each gable end, kept below the roof surface.
+        slope_len = math.hypot(width/2, ridge-eave)
+        for end in (-1, 1):
+            trim = box(prefix+'_Rake',
+                       point(side*width/4, end*(length/2-.09), (eave+ridge)/2-.09),
+                       (slope_len, .18, .18), mat)
+            trim.rotation_euler.y = side*math.radians(ROOF_PITCH)
+            if across:
+                trim.rotation_euler.z = math.pi/2
+    box(prefix+'_Ridge', point(0, 0, ridge+.06),
+        (length, .25, .2) if across else (.25, length, .2), mat)
+    for end in (-1, 1):
+        box(prefix+'_BeastHead', point(0, end*length/2, ridge+.175),
+            (.35, .35, .35), mat)
+
+
+def apse_half_roof(cx, cy, eave, wall_radius, mat):
+    """Rear-facing half cone; straight diameter is buried inside the nave roof."""
+    radius = wall_radius + EAVE_OVERHANG
+    n = 32
+    arc = [(cx+radius*math.cos(i*math.pi/n),
+            cy+radius*math.sin(i*math.pi/n), eave) for i in range(n+1)]
+    peak = (cx, cy, eave+radius*math.tan(math.radians(ROOF_PITCH)))
+    mesh('Apse_Roof', arc+[peak],
+         [tuple(reversed(range(n+1)))] + [(i,i+1,n+1) for i in range(n)]
+         + [(n,0,n+1)], mat)
+    # Continuous semicircular 0.18 m fascia below the cone eave.
+    verts = [(cx+r*math.cos(i*math.pi/n), cy+r*math.sin(i*math.pi/n), z)
+             for z in (eave-.18, eave) for r in (radius-.18, radius)
+             for i in range(n+1)]
+    k=n+1
+    faces=[]
+    for i in range(n):
+        faces.extend([(i,i+1,k+i+1,k+i),
+                      (2*k+i,3*k+i,3*k+i+1,2*k+i+1),
+                      (i,2*k+i,2*k+i+1,i+1),
+                      (k+i,k+i+1,3*k+i+1,3*k+i)])
+    faces.extend([(0,k,3*k,2*k),(n,2*k+n,3*k+n,k+n)])
+    mesh('Apse_Fascia', verts, faces, mat)
 
 
 def arch_stones(prefix,cx,y,bottom,width,height,stone):
@@ -337,7 +537,7 @@ def build():
     scene.unit_settings.length_unit='METERS'
     scene['origin_convention']='Crossing (-2,0); front -Y / local north; apse +Y / local south; tower (10.5,-2)'
     stone=material('Stone','C9A87C')
-    roof=material('Roof','7D8393')
+    roof=material('Roof_Slate','4A5560')
     wood=material('Wood','6B4A32')
     # A continuous hollow cross shell, with no solid intersecting internal walls.
     shell=box('Main_Shell',(-2,0,5.5),(9,16,11),stone)
@@ -373,14 +573,27 @@ def build():
             arch_stones('Front_Window',-2+side*3,-8.04,5.4,.85,2.4,stone)
             subtract(shell,arch('Front_Window_Cut',(-2+side*3,-8,5.4),.85,2.4,1.5))
     # Crossed pitched roofs are united for a clean intersection.
-    roofs=gable('Cross_Roof',-2,0,9.4,16.4,11,12.5,roof)
-    union(roofs,gable('Transept_Roof',-2,0,7.4,13,11,14,roof,True))
-    # Stop the solid roof prism at the inner gable faces so it cannot bury them.
+    nave_width, nave_length = 9+2*EAVE_OVERHANG, 16+2*EAVE_OVERHANG
+    transept_width, transept_length = 7+2*EAVE_OVERHANG, 14+2*EAVE_OVERHANG
+    nave_ridge = 11+nave_width/2*math.tan(math.radians(ROOF_PITCH))
+    transept_ridge = 11+transept_width/2*math.tan(math.radians(ROOF_PITCH))
+    roofs=gable('Cross_Roof',-2,0,nave_width,nave_length,11,nave_ridge,roof)
+    union(roofs,gable('Transept_Roof',-2,0,transept_width,transept_length,
+                     11,transept_ridge,roof,True))
+    roofs['eave_overhang']=EAVE_OVERHANG
+    roofs['ridge_len']=nave_length
+    roof_trim('Nave',-2,0,nave_width,nave_length,11,nave_ridge,roof)
+    roof_trim('Transept',-2,0,transept_width,transept_length,11,transept_ridge,roof,True)
     # Solid 0.5 m terminal gables, 7 m across Y, 3 m above the eave.
     # Their outward triangle faces are at the two ends of the X-axis transept.
     for label, x in (('L', -8.75), ('R', 4.75)):
         gable('Transept_Gable_' + label, x, 0, 7, .5, 11, 14, stone, True)
-    cone('Apse_Roof',(-2,apse_y),9.8,2.2,3.4,64,roof)
+        # Clear the roof's solid end prism out to the eave so the existing
+        # stone gable stays visible beneath the projecting slate roof.
+        side = -1 if label == 'L' else 1
+        subtract(roofs, gable('Roof_Gable_Clearance', x+side*.275, 0,
+                              7, 1.1, 10.99, 14, roof, True))
+    apse_half_roof(-2,apse_y,9.8,3.2,roof)
     # Main tower exact requested stack: 12.5+4+6.5+1.5 = 24.5.
     drum=cone('Drum_12',(-2,0),12.5,4,4.2,12,stone,4.2)
     for i in range(12):
@@ -390,17 +603,66 @@ def build():
                            math.atan2(-nx,ny)))
     cone('Dome_12',(-2,0),16.5,6.5,4.2,12,roof)
     cross('Dome_Cross',(-2,0),23,1.5,stone)
-    # Detached bell tower, hollow belfry with four real cardinal through openings.
-    tower=cone('BellTower_8',(10.5,-2),0,12,1.9,8,stone,1.9)
-    subtract(tower,cone('Bell_Core',(10.5,-2),8.3,4,1.35,8,stone,1.35))
+    # Detached eight-sided tower. The fixed centre and unchanged main bounds
+    # leave 2.1 m in X: a slightly compressed octagon preserves the 3 m gap.
+    # Radius means maximum radial distance, not the compressed X half-width.
+    def tower_section(name, bottom, height, r_bottom, r_top, mat):
+        def ring(r, z):
+            # Keep the outer arch jambs inside the silhouette at belfry height.
+            # Maximum corner radius still tapers from 2.6 to 2.2 m.
+            profile_r=max(r,2.2)
+            t=(2.6-profile_r)/.4
+            x=2.1-.05*t
+            y=math.sqrt(profile_r*profile_r-x*x)
+            north_x=1.3+(math.sqrt(2.2**2-2.05**2)-1.3)*t
+            north_y=math.sqrt(profile_r*profile_r-north_x*north_x)
+            scale=r/profile_r
+            x*=scale; y*=scale; north_x*=scale; north_y*=scale
+            return [(10.5+xx,-2+yy,z) for xx,yy in
+                    [(x,y),(north_x,north_y),(-north_x,north_y),(-x,y),
+                     (-x,-y),(-north_x,-north_y),(north_x,-north_y),(x,-y)]]
+        if r_top==0:
+            return mesh(name,ring(r_bottom,bottom)+[(10.5,-2,bottom+height)],
+                        [tuple(reversed(range(8)))]+[(i,(i+1)%8,8) for i in range(8)],mat)
+        vertices=ring(r_bottom,bottom)+ring(r_top,bottom+height)
+        faces=[tuple(reversed(range(8))),tuple(range(8,16))]
+        faces += [(i,(i+1)%8,(i+1)%8+8,i+8) for i in range(8)]
+        return mesh(name,vertices,faces,mat)
+
+    # Three progressively narrower masonry stages, continuous 13 m shaft.
+    tower=tower_section('BellTower_8',0,4.3,2.6,2.47,stone)
+    union(tower,tower_section('BellTower_Stage2',4.3,4.3,2.47,2.34,stone))
+    union(tower,tower_section('BellTower_Stage3',8.6,4.4,2.34,2.2,stone))
+    tower['tower_r_base']=2.6
+    tower['tower_r_top']=2.2
+    tower['arches_per_face']=3
+    tower['shaft_height']=13.0
+    # Hollow upper chamber; paired opposite faces share through cutters.
+    subtract(tower,tower_section('Bell_Core',9.3,3.2,1.65,1.65,stone))
     for rotation in (0,math.pi/2):
-        subtract(tower,arch('Bell_Through',(10.5,-2,8.3),1.6,3,5,rotation))
-    cone('BellTower_Roof',(10.5,-2),12,3,1.9,8,roof)
-    cross('BellTower_Cross',(10.5,-2),15,1,stone)
-    # Wedge trim around the four belfry faces (also leaves their centres open).
-    # Tower radius and four openings remain the specified dimensions.
-    for side in (-1,1):
-        arch_stones('BellTower_Trim',10.5,-2+side*1.7,8.3,1.6,3,stone)
+        for offset in (-1.45,0,1.45):
+            tangent=Vector((math.cos(rotation),math.sin(rotation),0))
+            centre=Vector((10.5,-2,9.6))+tangent*offset
+            subtract(tower,arch('Bell_Triple_Through',centre,1.1,2.6,7,rotation))
+    # Three 0.25 m high projecting stone courses, below the open belfry.
+    # Normal offset of each polygon edge is exactly 0.08 m.
+    for i,z in enumerate((3.1,6.2,9.1),1):
+        r=2.6-.4*z/13
+        course=tower_section('BellTower_Course_%d'%i,z,.25,r,r-.4*.25/13,stone)
+        # For this symmetric octagon an offset polygon can be built directly.
+        for layer in (0,1):
+            points=[Vector(course.data.vertices[layer*8+j].co[:2]) for j in range(8)]
+            for j,point in enumerate(points):
+                e1=(point-points[(j-1)%8]).normalized()
+                e2=(points[(j+1)%8]-point).normalized()
+                n1=Vector((e1.y,-e1.x)); n2=Vector((e2.y,-e2.x))
+                bisector=(n1+n2).normalized()
+                delta=bisector*(.08/bisector.dot(n1))
+                course.data.vertices[layer*8+j].co.x += delta.x
+                course.data.vertices[layer*8+j].co.y += delta.y
+        normals(course)
+    tower_section('BellTower_Roof',13,3.4,2.55,0,roof)
+    cross('BellTower_Cross',(10.5,-2),16.4,1.2,stone)
     # Low western side wing establishes 28m overall X extent without crowding tower.
     box('Annex_West',(-12.25,2.5,2.4),(6.5,6,4.8),stone)
     gable('Annex_Roof',-12.25,2.5,6.5,6,4.8,6.2,roof)
@@ -420,8 +682,8 @@ def build():
     objects=prepare()
     openings_check()
     total,size=report(objects)
-    scene['triangle_count']=total
-    scene['bbox_xyz']=size
+    framing=[o.matrix_world@Vector(p) for o in objects for p in o.bound_box]
+    objects=optimize_church(objects)
     BLEND.parent.mkdir(parents=True,exist_ok=True)
     FBX.parent.mkdir(parents=True,exist_ok=True)
     bpy.ops.object.select_all(action='DESELECT')
@@ -443,7 +705,7 @@ def build():
         for o in objects:
             o.data.transform(export_turn.inverted())
     bpy.context.view_layer.update()
-    render_views(objects)
+    render_views(objects, framing)
     bpy.context.preferences.filepaths.save_version=0
     bpy.ops.wm.save_as_mainfile(filepath=str(BLEND))
     print('[CHURCH] saved=%s exported=%s'%(BLEND,FBX))
@@ -452,8 +714,13 @@ def build():
 def verify():
     bpy.ops.wm.open_mainfile(filepath=str(BLEND))
     objects=[o for o in bpy.context.scene.objects if o.type=='MESH']
-    expected,size=report(objects)
-    openings_check()
+    expected=bpy.context.scene['triangle_count']
+    size=list(bpy.context.scene['bbox_xyz'])
+    assert len(objects)<=6 and expected<=80000
+    assert sum(triangle_count(o) for o in objects)==expected
+    for obj in objects:
+        mesh_integrity(obj)
+    merged_openings_check(objects)
     assert all(o.matrix_world.is_identity and o.data.uv_layers.active for o in objects)
     for name in ('front','side','top','iso'):
         img=bpy.data.images.load(str(VIEWS/(name+'.png')),check_existing=False)
@@ -473,7 +740,10 @@ def verify():
         bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
         o.data.transform(Matrix.Rotation(-math.pi,4,'Z'))
     bpy.context.view_layer.update()
-    openings_check()
+    merged_openings_check(objects)
+    assert len(objects)<=6
+    for obj in objects:
+        mesh_integrity(obj)
     print('[VERIFY] saved BLEND + FBX metre/triangle/UV round-trip + four PNG sizes PASS')
 
 
