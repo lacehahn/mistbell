@@ -15,7 +15,7 @@
 
 ### 引擎比较
 
-以下难度是依据本项目范围作的工程判断，不是通用排名；各引擎都能做 HD-2D，不能以「能导入像素图」等同于完成风格。
+以下难度是依据本项目范围作的工程判断，不是通用排名；各引擎都能做 HD-2D，不能以「能导入像素图」等同于完成风格。Unreal 侧以 **UE 5.8**（2026-10-22 发布，当前版本）为参照，5.7 仍在支持期内。
 
 | 维度 | Unity（URP） | Godot 4 | Unreal 5 |
 | --- | --- | --- | --- |
@@ -24,8 +24,8 @@
 | 后期管线 | 原生 Bloom、调色、景深；自定义 Render Pass 做保护遮罩与移轴感；URP 无 HDRP 同级原生局部体积雾 | Forward+ 有体积雾；Compositor 可扩展后期，但不是无需技术能力的编辑器开关 | 原生体积雾和电影镜头工具较全；本项目无需默认开启 Lumen、Nanite 或复杂时域方案 |
 | Blender 管线 | FBX＋外部纹理；材质手动映射到 URP，导入预设较易统一 | 推荐 glTF 2.0／GLB；直接导入 blend 会调用 Blender，构建机需考虑工具依赖 | FBX 静态网格成熟；材质仍需转换，单位和碰撞命名另定规范 |
 | 团队能力 | 若具备 C# 与基础图形调试，最易把文本、相机、UI 与渲染接在一起 | 若已有 GDScript／Godot 经验可缩短上手，但不能省去渲染验证 | 若已有 Blueprint／材质与 UE 制作经验可降低成本；本轮不假定已具备 |
-| macOS 开发／Windows 验证 | Metal 开发，Windows DX11 独立验证；平台 shader 与压缩需分别检查 | 需验证选用渲染器在 Mac 和 Windows 上的一致性，不能从 Compatibility 推断 Forward+ | Mac 可开发，但需单独核对渲染特性与目标硬件；不能用 Windows 高端效果推定 Mac 试玩能力 |
-| 发行成本 | 符合 Personal 条件时引擎许可可为 0；超过门槛需付订阅；Runtime Fee 已取消 | MIT，可商业发行、无引擎收入分成；需保留许可与第三方声明 | 标准游戏授权通常按单产品终身总收入超过 100 万美元的部分计 5% 版税，另有排除／优惠规则 |
+| macOS 开发／Windows 验证 | Metal 开发，Windows DX11 独立验证；平台 shader 与压缩需分别检查；**Windows 包只能 Mono（IL2CPP 不可跨平台编译）** | 需验证选用渲染器在 Mac 和 Windows 上的一致性，不能从 Compatibility 推断 Forward+ | Mac 可开发，且**支持从 macOS 交叉编译 Win64 包**（自带工具链）——这是相对 Unity 的实际优势；但仍须真 Windows 机器验画面与性能，转译层不算数 |
+| 发行成本 | 符合 Personal 条件时引擎许可可为 0；超过门槛需付订阅；Runtime Fee 已取消 | MIT，可商业发行、无引擎收入分成；需保留许可与第三方声明 | 单产品终身总收入 100 万美元以内免费；超出部分 5% 版税；若同期在 Epic 商店首发可降至 3.5%；游戏类无席位费 |
 | 本项目结论 | **已选**（D01 已定）：以受限雾方案换取可控产能、生态与打包成熟度 | 记录保留：适合已有 GDScript／Godot 经验、或把许可确定性放在第一位的团队 | 记录保留：**《歧路旅人》本体即由 Acquire 以 UE4 开发（峰值 6 名程序）**，说明该风格的光雾栈确实在 UE 上最顺；但像素清晰度、抗锯齿与打包成本对本规模不利，故不选 |
 
 能力依据：[Unity 6.3 渲染管线功能表](https://docs.unity3d.com/6000.3/Documentation/Manual/render-pipelines-feature-comparison.html)、[Godot Sprite3D](https://docs.godotengine.org/en/stable/classes/class_sprite3d.html)、[Godot 体积雾](https://docs.godotengine.org/en/stable/tutorials/3d/volumetric_fog.html)、[Godot Compositor](https://docs.godotengine.org/en/stable/tutorials/rendering/compositor.html)、[Unreal Paper 2D](https://dev.epicgames.com/documentation/unreal-engine/paper-2d-in-unreal-engine?application_version=5.2)、[Unreal 体积雾](https://dev.epicgames.com/documentation/en-us/unreal-engine/volumetric-fog-in-unreal-engine)、[Acquire 访谈：歧路旅人的 HD-2D 与 UE4 管线](https://www.unrealengine.com/spotlights/octopath-traveler-s-hd-2d-art-style-and-story-make-for-a-jrpg-dream-come-true)。Godot 体积雾限 Forward+，Compositor 的渲染器支持范围也有限；这影响低配降级，不能统一写成「所有模式都有」。参考作的实际管线（UE4）只用于解释风格成因，不构成本项目选型依据。
@@ -37,6 +37,37 @@
 - Unreal 的比较采用标准游戏版税模式，不把非游戏 seat 价格套入本项目；具体收入排除与优惠以发行时条款核对。[Unreal 授权页面](https://www.unrealengine.com/license)。
 
 以上只用于技术预算比较，尚未发生采购。商店、签名、素材、音频、字体与测试设备费用不包含在「引擎许可费」里。D01 在 M1 前核对适用授权；不在本文写死付费订阅单价，以免过期数字成为预算承诺。
+
+### 为什么不是 UE：逐项论证（2026-11-01 追加）
+
+D01 定稿后仍会被反复追问「《歧路旅人》就是 UE 做的，为什么不选 UE」。这里给出量化比较，避免用传闻拍板。
+
+权重是本项目的判断：2 人、无引擎经验、Mac 开发、Windows 优先、文本驱动的 12–16 分钟体验。
+
+| 维度 | 权重 | Unity 6.3 + URP | UE 5.8 |
+| --- | --- | --- | --- |
+| 学习曲线与「卡住时能不能搜到答案」 | 25% | 9／10：C# 与 URP 资料密度最高，中文问答充足 | 5／10：Blueprint 起步快，但 UMG／资产系统／C++ 编译链更重，零经验时无人可问的概率高 |
+| HD-2D 画面达成成本 | 25% | 6／10：需自写带状移轴与局部光雾两个 Pass | 9／10：tilt-shift DoF、Bloom、体积雾、Sequencer、Niagara 开箱即用 |
+| Mac → Windows 出包 | 15% | 5／10：只能 Mono，IL2CPP 需 Windows 机器 | 8／10：自带工具链可交叉编译 Win64 |
+| 文本／数据驱动内容 | 15% | 9／10：TMP ＋ JSON ＋ C# 最直接 | 5／10：UMG ＋ DataTable，长文排版与本地化管线更重 |
+| 迭代速度与包体 | 10% | 8／10：热重载快，包体 100–300 MB | 5／10：shader 编译与 C++ 重编慢，空包 1 GB 级 |
+| 授权与成本 | 10% | 9／10：Personal 门槛内为 0 | 7／10：100 万美元以内 0，之上 5%（Epic 首发 3.5%） |
+
+加权结果：**Unity 7.5 / UE 6.9**（自评，误差 ±0.5）。画面这一项 UE 领先 3 分，但被「学习曲线 + 文本驱动 + 迭代速度」合计 50% 的权重抵消。
+
+**UE 做像素风格的具体代价**（不是「太重」这种空话）：
+- TAA／TSR 会把像素 art 抹糊：必须关闭时域抗锯齿、锁 100% 屏幕百分比、关自动曝光，否则角色边缘永远在半像素间抖动；
+- 后处理是全局的：「只在揭示方向约 80 m 有雾」需要改后处理材质或做 stencil 分层，并不比 URP 的 RendererFeature 省事，只是换了种写法；
+- 包体与启动：空场景 Windows 包即 GB 级，Mac 上编辑器常驻内存显著高于 Unity（32 GB 够用但无余量）。
+
+**什么情况下应该改选 UE（触发条件，供将来复核）**
+1. spike 第 3 天在 URP 上超时或达不到 1080p／60 fps，且降级为全屏 tilt-shift 后画面不可接受；
+2. 团队中出现 UE 经验 ≥ 1 年的人，或愿意先投入 80 人时专职学 UMG／Sequencer；
+3. 发行目标改为「画面为王」的买断制并在 Steam 争首页可见度，愿意承担 5% 版税与更大包体。
+
+三条同时成立才重开 D01；任一条单独成立只作为局部降级处理，不构成换引擎的理由。
+
+**《歧路旅人》证据的正确解读**：那款游戏峰值有 6 名程序员。对两人零经验团队，这不是「小团队也能做」的论据，而是「有 6 名熟练程序员才把它做得又快又好」。参考作的价值在于说明观感如何构成，不在于证明引擎门槛低。
 
 ### D01 落地前的 3 天管线 spike（团队无引擎经验，必做）
 
