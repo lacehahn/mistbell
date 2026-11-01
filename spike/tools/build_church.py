@@ -1,68 +1,55 @@
-"""Gergeti blockout. Run: blender -b --python spike/tools/build_church.py
+"""Gergeti rebuild; Blender only, metres / Z up.
 
-Coordinates: metres, Z up, entrance centre at (0, 0, 0), front faces -Y.
-Terrace walking surface is Z=0; surrounding ground is Z=-1.2.
-The supplied component sizes contradict the requested overall bounds:
-40x32 terrace and 30m annex cannot fit 37x27 maximum width/depth.
-Default preserves component dimensions and reports this explicitly.
-Optional -- --compact reduces terrace/annex to fit the requested bounds.
-Only Blender's bundled modules and Python standard library are used.
+Run: blender -b --python spike/tools/build_church.py
+Verify saved files: blender -b --python spike/tools/build_church.py -- --verify
+The explicit placement datum takes precedence over the incompatible entrance-origin
+request: nave centre (0,-1), front -Y, entrance floor (0,-6.5,0).
+Terrace occupies z=-1.2..0, so the complete height is exactly 26.6m.
 """
-
 import math
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import bpy
+import bmesh
 from mathutils import Vector
 
-
-PARAMS = {
-    "terrace_width": 40.0, "terrace_depth": 32.0, "terrace_height": 1.2,
-    "step_count": 5, "step_width": 6.0, "step_run": 0.5,
-    "nave_width": 20.0, "nave_depth": 12.0, "wall_height": 11.0,
-    "wall_thickness": 0.6, "nave_roof_rise": 2.0,
-    "door_width": 2.2, "door_height": 3.4,
-    "window_width": 1.4, "window_height": 2.6, "window_sill": 5.0,
-    "drum_sides": 12, "drum_radius": 5.2, "drum_height": 4.0,
-    "dome_height": 6.0, "main_cross_height": 1.2,
-    "tower_sides": 8, "tower_radius": 2.2, "tower_height": 14.0,
-    "tower_offset": (9.0, -7.0), "tower_roof_height": 3.5,
-    "tower_cross_height": 1.0, "tower_arch_width": 1.6,
-    "tower_arch_height": 3.2, "tower_arch_sill": 10.0,
-    "annex_width": 8.0, "annex_depth": 30.0, "annex_height": 5.0,
-    "annex_gap": 1.0, "annex_roof_rise": 2.0,
-    "arch_segments": 16,
-}
-
 ROOT = Path(__file__).resolve().parents[2]
-BLEND = ROOT / "spike/blend/gergeti_church.blend"
-FBX = ROOT / "spike/export/gergeti_church.fbx"
-COMPACT = "--compact" in (sys.argv[sys.argv.index("--") + 1:]
-                             if "--" in sys.argv else [])
+BLEND = ROOT / 'spike/blend/gergeti_church.blend'
+FBX = ROOT / 'spike/export/gergeti_church.fbx'
+VIEWS = BLEND.parent / 'views'
+ARCH_SEGMENTS = 64
 
 
 def activate(obj):
-    bpy.ops.object.select_all(action="DESELECT")
+    bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
 
 
-def material(name, hex_color):
-    rgb = [int(hex_color[i:i + 2], 16) / 255 for i in (0, 2, 4)]
-    linear = [v / 12.92 if v <= 0.04045 else ((v + .055) / 1.055) ** 2.4
-              for v in rgb]
+def normals(obj):
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
+def material(name, color):
+    rgb = [int(color[i:i+2], 16) / 255 for i in (0, 2, 4)]
+    rgb = [v / 12.92 if v <= .04045 else ((v+.055)/1.055)**2.4 for v in rgb]
     mat = bpy.data.materials.new(name)
-    mat.diffuse_color = (*linear, 1)
+    mat.diffuse_color = (*rgb, 1)
     mat.use_nodes = True
-    shader = mat.node_tree.nodes.get("Principled BSDF")
-    shader.inputs["Base Color"].default_value = (*linear, 1)
-    shader.inputs["Roughness"].default_value = .85
-    mat["source_srgb"] = "#" + hex_color
+    bsdf = mat.node_tree.nodes.get('Principled BSDF')
+    bsdf.inputs['Base Color'].default_value = (*rgb, 1)
+    bsdf.inputs['Roughness'].default_value = .85
+    mat['source_srgb'] = '#' + color
     return mat
 
 
-def mesh(name, vertices, faces, mat):
+def mesh(name, vertices, faces, mat=None):
     data = bpy.data.meshes.new(name)
     data.from_pydata(vertices, [], faces)
     data.update()
@@ -70,6 +57,7 @@ def mesh(name, vertices, faces, mat):
     bpy.context.scene.collection.objects.link(obj)
     if mat:
         data.materials.append(mat)
+    normals(obj)
     return obj
 
 
@@ -86,30 +74,26 @@ def box(name, centre, size, mat):
 
 def cone(name, xy, bottom, height, radius, sides, mat, top_radius=0):
     bpy.ops.mesh.primitive_cone_add(vertices=sides, radius1=radius,
-                                   radius2=top_radius, depth=height,
-                                   location=(*xy, bottom + height / 2),
-                                   rotation=(0, 0, math.pi / sides))
+        radius2=top_radius, depth=height, location=(*xy, bottom+height/2),
+        rotation=(0, 0, math.pi/sides))
     obj = bpy.context.object
     obj.name = name
     obj.data.materials.append(mat)
     return obj
 
 
-def arch(name, centre, width, height, depth, mat=None, rotation=0):
-    """Closed semicircular arch prism, local X width/Y depth/Z height."""
-    r = width / 2
-    spring = height - r
-    profile = [(-r, 0), (r, 0)]
-    profile += [(r * math.cos(a), spring + r * math.sin(a))
-                for a in [math.pi * i / PARAMS["arch_segments"]
-                          for i in range(PARAMS["arch_segments"] + 1)]]
+def arch(name, centre, width, height, depth, rotation=0):
+    """Watertight outward-facing cutter: semicircle + vertical jambs."""
+    r = width/2
+    profile = [(-r, 0), (r, 0)] + [
+        (r*math.cos(math.pi*i/ARCH_SEGMENTS),
+         height-r+r*math.sin(math.pi*i/ARCH_SEGMENTS))
+        for i in range(ARCH_SEGMENTS+1)]
     n = len(profile)
-    vertices = [(x, y, z) for y in (-depth / 2, depth / 2)
-                for x, z in profile]
-    faces = [tuple(range(n)), tuple(reversed(range(n, 2 * n)))]
-    faces += [(i, i + n, (i + 1) % n + n, (i + 1) % n)
-              for i in range(n)]
-    obj = mesh(name, vertices, faces, mat)
+    vertices = [(x,y,z) for y in (-depth/2, depth/2) for x,z in profile]
+    faces = [tuple(range(n)), tuple(range(n,2*n))]
+    faces += [(i,(i+1)%n,(i+1)%n+n,i+n) for i in range(n)]
+    obj = mesh(name,vertices,faces)
     obj.location = centre
     obj.rotation_euler.z = rotation
     return obj
@@ -117,263 +101,285 @@ def arch(name, centre, width, height, depth, mat=None, rotation=0):
 
 def subtract(target, cutter):
     activate(target)
-    mod = target.modifiers.new("Applied_arch_cut", "BOOLEAN")
-    mod.operation = "DIFFERENCE"
-    mod.solver = "EXACT"
+    mod = target.modifiers.new('True_arch_DIFFERENCE','BOOLEAN')
+    mod.operation = 'DIFFERENCE'
+    mod.solver = 'EXACT'
     mod.object = cutter
     bpy.ops.object.modifier_apply(modifier=mod.name)
-    bpy.data.objects.remove(cutter, do_unlink=True)
-    # Boolean may append an empty cutter material slot in Blender 5.x.
+    bpy.data.objects.remove(cutter,do_unlink=True)
     assigned = target.data.materials[0]
     target.data.materials.clear()
     target.data.materials.append(assigned)
     for face in target.data.polygons:
         face.material_index = 0
+    normals(target)
+    assert len(target.data.polygons), target.name
+    target['applied_boolean_count'] = target.get('applied_boolean_count',0)+1
 
 
-def gable(name, cx, cy, width, depth, eave, rise, mat):
-    # Solid triangular prism, ridge parallel to Y.
-    verts = [(cx + x, cy + y, z)
-             for y in (-depth / 2, depth / 2)
-             for x, z in [(-width / 2, eave), (width / 2, eave),
-                          (0, eave + rise)]]
-    return mesh(name, verts, [(0, 1, 2), (5, 4, 3), (0, 3, 4, 1),
-                              (1, 4, 5, 2), (2, 5, 3, 0)], mat)
+def bevel(obj, amount=.035):
+    activate(obj)
+    mod = obj.modifiers.new('Stone_edge_highlights','BEVEL')
+    mod.width = amount
+    mod.segments = 2
+    mod.limit_method = 'ANGLE'
+    mod.angle_limit = math.radians(25)
+    bpy.ops.object.modifier_apply(modifier=mod.name)
 
 
 def cross(name, xy, bottom, height, mat):
-    box(name + "_Stem", (*xy, bottom + height / 2),
-        (height * .13, height * .13, height), mat)
-    box(name + "_Arms", (*xy, bottom + height * .69),
-        (height * .65, height * .13, height * .13), mat)
-
-
-def prepare_meshes():
-    objects = sorted(bpy.context.scene.objects, key=lambda o: o.name)
-    for obj in objects:
-        assert obj.type == "MESH" and len(obj.data.materials) == 1, obj.name
-        activate(obj)
-        # Baking location too makes every exported object share the entrance origin.
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-        bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.mesh.select_all(action="SELECT")
-        bpy.ops.mesh.dissolve_degenerate(threshold=.000001)
-        bpy.ops.mesh.normals_make_consistent(inside=False)
-        bpy.ops.mesh.quads_convert_to_tris(quad_method="BEAUTY", ngon_method="BEAUTY")
-        bpy.ops.uv.smart_project(angle_limit=math.radians(66),
-                                 island_margin=.02)
-        bpy.ops.object.mode_set(mode="OBJECT")
-        assert obj.data.uv_layers.active is not None
-        assert len(obj.modifiers) == 0
-        assert all(math.isfinite(v) for vert in obj.data.vertices for v in vert.co)
-    return objects
+    box(name+'_Stem',(*xy,bottom+height/2),(.13*height,.13*height,height),mat)
+    box(name+'_Arms',(*xy,bottom+.7*height),(.65*height,.13*height,.13*height),mat)
 
 
 def bounds(objects):
-    pts = [obj.matrix_world @ Vector(p) for obj in objects for p in obj.bound_box]
+    pts = [o.matrix_world @ Vector(p) for o in objects for p in o.bound_box]
     lo = Vector([min(p[i] for p in pts) for i in range(3)])
     hi = Vector([max(p[i] for p in pts) for i in range(3)])
-    return lo, hi
+    return lo,hi
+
+
+def triangle_count(obj):
+    obj.data.calc_loop_triangles()
+    return len(obj.data.loop_triangles)
+
+
+def openings_check():
+    """Ray tests sample jamb-height and curved head, plus solid arch shoulders.
+    Test only the relevant wall, so opposite walls cannot mask a true opening.
+    Objects have baked identity transforms before this function runs.
+    """
+    scene = bpy.context.scene
+    def probe(name,centre,width,height,normal,depth):
+        obj = scene.objects[name]
+        normal = Vector(normal)
+        tangent = Vector((-normal.y,normal.x,0))
+        centre = Vector(centre)
+        inverse = obj.matrix_world.inverted()
+        def hit(start):
+            end = start + normal*(depth+.2)
+            local_start = inverse @ start
+            local_delta = inverse @ end - local_start
+            return obj.ray_cast(local_start,local_delta.normalized(),
+                                distance=local_delta.length)[0]
+        r = width/2
+        for u,z in [(0,.2),(0,height-.08),(.75*r,height-r+.35*r),
+                    (-.75*r,height-r+.35*r),(.8*r,.5)]:
+            start = centre + tangent*u + Vector((0,0,z)) - normal*(depth/2+.1)
+            assert not hit(start), (name,u,z,'blocked')
+        # Outside the circular head must remain solid: catches rectangular cuts.
+        start = centre+tangent*(.9*r)+Vector((0,0,height-.05))-normal*(depth/2+.1)
+        assert hit(start), (name,'missing shoulder')
+    probe('Nave_Front',(0,-6.2,0),2.6,3.6,(0,1,0),.6)
+    for name,x in [('Nave_West',-8.7),('Nave_East',8.7)]:
+        for y in (-3.8,-1,1.8):
+            probe(name,(x,y,5),1.2,2.4,(1,0,0),.6)
+    probe('Nave_Back',(0,4.2,5),1.2,2.4,(0,1,0),.6)
+    for nx,ny in ((0,1),(1,0),(0,-1),(-1,0)):
+        probe('BellTower_8',(10+nx*1.65,-6+ny*1.65,9.4),
+              1.6,3,(nx,ny,0),1.0)
+    print('[VERIFY] 12 real arched openings: 60 clear rays + 12 solid shoulders PASS')
+
+
+def prepare():
+    objects = [o for o in bpy.context.scene.objects if o.type=='MESH']
+    for obj in objects:
+        activate(obj)
+        # Actual edge geometry, not a face-count subdivision, gives stone silhouettes.
+        bevel(obj,.025 if 'Cross' in obj.name else .035)
+        bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
+        normals(obj)
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY',ngon_method='BEAUTY')
+        bpy.ops.uv.smart_project(angle_limit=math.radians(66),island_margin=.02)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        assert obj.data.uv_layers.active and not obj.modifiers
+        assert len(obj.data.materials)==1
+        bm=bmesh.new()
+        bm.from_mesh(obj.data)
+        assert all(e.is_manifold for e in bm.edges), obj.name
+        bm.free()
+    return objects
+
+
+def render_views(objects):
+    scene=bpy.context.scene
+    scene.render.engine='BLENDER_WORKBENCH'
+    shade=scene.display.shading
+    shade.light='STUDIO'
+    shade.studio_light='paint.sl'
+    shade.color_type='MATERIAL'
+    shade.show_shadows=True
+    shade.show_cavity=True
+    shade.cavity_type='BOTH'
+    shade.show_specular_highlight=False
+    shade.background_type='WORLD'
+    scene.world.color=(.18,.18,.18)
+    scene.display.render_aa='32'
+    scene.view_settings.view_transform='Standard'
+    scene.render.resolution_x=1024
+    scene.render.resolution_y=1024
+    scene.render.resolution_percentage=100
+    scene.render.image_settings.file_format='PNG'
+    scene.render.film_transparent=False
+    VIEWS.mkdir(parents=True,exist_ok=True)
+    lo,hi=bounds(objects)
+    target=(lo+hi)/2
+    directions={'front':(0,-1,0),'side':(1,0,0),'top':(0,0,1),'iso':(1,-1,.8)}
+    cameras=[]
+    for name,direction in directions.items():
+        data=bpy.data.cameras.new('View_'+name)
+        cam=bpy.data.objects.new('View_'+name,data)
+        scene.collection.objects.link(cam)
+        cam.location=target+Vector(direction).normalized()*90
+        cam.rotation_euler=(target-cam.location).to_track_quat('-Z','Y').to_euler()
+        data.type='ORTHO'
+        # Fit all corners in camera space, using the same centre in every view.
+        inv=cam.rotation_euler.to_matrix().transposed()
+        pts=[inv@(o.matrix_world@Vector(p)-target) for o in objects for p in o.bound_box]
+        data.ortho_scale=2*max(max(abs(p.x),abs(p.y)) for p in pts)*1.13
+        data.clip_end=300
+        scene.camera=cam
+        scene.render.filepath=str(VIEWS/(name+'.png'))
+        bpy.ops.render.render(write_still=True)
+        cameras.append(cam)
+    scene.camera=cameras[-1]
+    print('[VERIFY] 4 orthographic Workbench PNG views rendered at 1024x1024')
+
+
+def report(objects):
+    lo,hi=bounds(objects)
+    size=hi-lo
+    total=sum(triangle_count(o) for o in objects)
+    front=triangle_count(bpy.data.objects['Nave_Front'])
+    bell=triangle_count(bpy.data.objects['BellTower_8'])
+    valid=all(abs(a-b)<=3 for a,b in zip(size,(34,24,27)))
+    print('[CHURCH] triangles=%d bbox=%.3fx%.3fx%.3f objects=%d bbox_in_range=%s'
+          %(total,*size,len(objects),valid))
+    print('[CHURCH] nave_front_tris=%d bell_tower_tris=%d'%(front,bell))
+    assert valid and total>=3000 and front>=120
+    assert all(abs(a-b)<.001 for a,b in zip(size,(34,24,26.6))), tuple(size)
+    assert set(bpy.data.materials)=={bpy.data.materials[n] for n in ('Stone','Roof','Wood')}
+    return total,list(size)
 
 
 def build():
-    p = dict(PARAMS)
-    if COMPACT:
-        p.update(terrace_width=34.0, terrace_depth=24.0, annex_depth=24.0)
-    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
     for mat in list(bpy.data.materials):
         bpy.data.materials.remove(mat)
-    scene = bpy.context.scene
-    scene.unit_settings.system = "METRIC"
-    scene.unit_settings.scale_length = 1.0
-    scene.unit_settings.length_unit = "METERS"
-    scene.render.engine = "BLENDER_EEVEE"
-    scene["origin_convention"] = "Entrance centre, terrace surface Z=0, front=-Y"
-    scene["dimension_policy"] = "compact" if COMPACT else "component_dimensions"
-    for key, value in p.items():
-        scene["param_" + key] = value
-    stone = material("Stone", "C9A87C")
-    roof = material("Roof", "A06B4A")
-    wood = material("Wood", "6B4A32")
-    cy = p["nave_depth"] / 2
-    wh, t = p["wall_height"], p["wall_thickness"]
-    box("Terrace", (0, cy, -p["terrace_height"] / 2),
-        (p["terrace_width"], p["terrace_depth"], p["terrace_height"]), stone)
-    front_edge = cy - p["terrace_depth"] / 2
-    for i in range(p["step_count"]):
-        # Five equal risers; highest tread meets the terrace.
-        rise = p["terrace_height"] * (i + 1) / p["step_count"]
-        run = p["step_run"] * (p["step_count"] - i)
-        box("Entrance_Step_%02d" % (i + 1),
-            (0, front_edge - run / 2, -p["terrace_height"] + rise / 2),
-            (p["step_width"], run, rise), stone)
-    w, d = p["nave_width"], p["nave_depth"]
-    front = box("Nave_Front", (0, t / 2, wh / 2), (w, t, wh), stone)
-    box("Nave_Back", (0, d - t / 2, wh / 2), (w, t, wh), stone)
-    subtract(front, arch("Door_Cutter", (0, t / 2, -.01), p["door_width"],
-                         p["door_height"] + .01, t + 1))
-    door = arch("Entrance_Wood_Door", (0, .4, .02), p["door_width"] - .08,
-                p["door_height"] - .06, .12, wood)
-    door["note"] = "Recessed door inside a true arched opening"
-    for side in (-1, 1):
-        wall = box("Nave_" + ("West" if side < 0 else "East"),
-                   (side * (w / 2 - t / 2), cy, wh / 2), (t, d - 2 * t, wh), stone)
-        for index, y in enumerate((d / 3, d * 2 / 3)):
-            subtract(wall, arch("Nave_Window_Cutter", (side * (w / 2 - t / 2),
-                               y, p["window_sill"]), p["window_width"],
-                               p["window_height"], t + 1, rotation=math.pi / 2))
-    gable("Nave_Gabled_Roof", 0, cy, w + .4, d + .4, wh,
-          p["nave_roof_rise"], roof)
-    drum_base = wh + p["nave_roof_rise"]
-    box("Drum_Square_Support", (0, cy, wh + p["nave_roof_rise"] / 2),
-        (p["drum_radius"] * 2, p["drum_radius"] * 2,
-         p["nave_roof_rise"]), stone)
-    cone("Drum_12", (0, cy), drum_base, p["drum_height"], p["drum_radius"],
-         p["drum_sides"], stone, p["drum_radius"])
-    dome_base = drum_base + p["drum_height"]
-    cone("Dome_12", (0, cy), dome_base, p["dome_height"], p["drum_radius"] + .2,
-         p["drum_sides"], roof)
-    cross("Dome_Cross", (0, cy), dome_base + p["dome_height"],
-          p["main_cross_height"], stone)
-    tx, ty = p["tower_offset"][0], cy + p["tower_offset"][1]
-    tower = cone("BellTower_8", (tx, ty), 0, p["tower_height"],
-                 p["tower_radius"], p["tower_sides"], stone, p["tower_radius"])
-    # Remove the core in the belfry; four independent cutters open its cardinal faces.
-    core_radius = p["tower_radius"] - .55
-    core = cone("Belfry_Core_Cutter", (tx, ty), p["tower_arch_sill"],
-                p["tower_height"] - p["tower_arch_sill"] + .1,
-                core_radius, p["tower_sides"], stone, core_radius)
-    subtract(tower, core)
-    for side in range(4):
-        a = side * math.pi / 2
-        radius = p["tower_radius"] * .8
-        subtract(tower, arch("Belfry_Arch_Cutter",
-                  (tx + radius * math.sin(a), ty - radius * math.cos(a),
-                   p["tower_arch_sill"]), p["tower_arch_width"],
-                  p["tower_arch_height"], 2.0, rotation=a))
-    cone("BellTower_Roof_8", (tx, ty), p["tower_height"],
-         p["tower_roof_height"], p["tower_radius"] + .2, p["tower_sides"], roof)
-    cross("BellTower_Cross", (tx, ty), p["tower_height"] + p["tower_roof_height"],
-          p["tower_cross_height"], stone)
-    ax = -w / 2 - p["annex_gap"] - p["annex_width"] / 2
-    aw, ad, ah = p["annex_width"], p["annex_depth"], p["annex_height"]
-    for side in (-1, 1):
-        wall = box("Annex_" + ("West" if side < 0 else "East"),
-                   (ax + side * (aw / 2 - t / 2), cy, ah / 2), (t, ad, ah), stone)
-        # Four arch windows total, on the exposed west wall.
-        if side < 0:
-            for i in range(4):
-                subtract(wall, arch("Annex_Window_Cutter",
-                    (ax + side * (aw / 2 - t / 2), cy + ad * ((i + .5) / 4 - .5), 1.2),
-                    1.4, 2.6, t + 1, rotation=math.pi / 2))
-    for label, y in (("Front", cy - ad / 2 + t / 2),
-                     ("Back", cy + ad / 2 - t / 2)):
-        box("Annex_" + label, (ax, y, ah / 2), (aw - 2 * t, t, ah), stone)
-    gable("Annex_Pitched_Roof", ax, cy, aw + .4, ad + .4, ah,
-          p["annex_roof_rise"], roof)
-    objects = prepare_meshes()
-    lo, hi = bounds(objects)
-    size = hi - lo
-    triangles = 0
-    for obj in objects:
-        obj.data.calc_loop_triangles()
-        triangles += len(obj.data.loop_triangles)
-    assert set(bpy.data.materials.keys()) == {"Stone", "Roof", "Wood"}
-    for obj in objects:
-        assert obj.matrix_world == obj.matrix_world.Identity(4), obj.name
-    in_bounds = all(abs(actual - target) <= 3 for actual, target in
-                    ((size.x, 34), (size.z, 27), (size.y, 24)))
-    if COMPACT:
-        assert in_bounds, tuple(size)
-    else:
-        print("[CHURCH] bbox_check=%s; component dimensions preserved; "
-              "40x32m terrace / 30m annex conflict with overall limit" % in_bounds)
-    print("[CHURCH] triangles=%d" % triangles)
-    print("[CHURCH] bbox=%.3fx%.3fx%.3f" % (size.x, size.z, size.y))
-    print("[CHURCH] objects=%d" % len(objects))
-    scene["triangle_count"] = triangles
-    scene["bbox_width_height_depth"] = [size.x, size.z, size.y]
-    BLEND.parent.mkdir(parents=True, exist_ok=True)
-    FBX.parent.mkdir(parents=True, exist_ok=True)
-    bpy.context.preferences.filepaths.save_version = 0
-    bpy.ops.object.select_all(action="SELECT")
+    scene=bpy.context.scene
+    scene.unit_settings.system='METRIC'
+    scene.unit_settings.scale_length=1
+    scene.unit_settings.length_unit='METERS'
+    scene['origin_convention']='Placement datum: nave (0,-1), front -Y; entrance ground (0,-6.5,0)'
+    stone=material('Stone','C9A87C')
+    roof=material('Roof','A06B4A')
+    wood=material('Wood','6B4A32')
+    box('Terrace',(0,-1,-.6),(34,24,1.2),stone)
+    front=box('Nave_Front',(0,-6.2,6.25),(18,.6,12.5),stone)
+    subtract(front,arch('Door_Cutter',(0,-6.2,-.01),2.6,3.61,1.4))
+    back=box('Nave_Back',(0,4.2,6.25),(18,.6,12.5),stone)
+    subtract(back,arch('Rear_Window_Cutter',(0,4.2,5),1.2,2.4,1.4))
+    for name,x in [('Nave_West',-8.7),('Nave_East',8.7)]:
+        wall=box(name,(x,-1,6.25),(.6,9.8,12.5),stone)
+        for y in (-3.8,-1,1.8):
+            subtract(wall,arch('Side_Window_Cutter',(x,y,5),1.2,2.4,1.4,math.pi/2))
+    # Thin low pitched roof: drum begins at wall top, without adding a storey.
+    mesh('Nave_Roof',[(x,y,z) for y in (-6.5,4.5)
+         for x,z in [(-9,12.35),(9,12.35),(0,13.5)]],
+         [(0,1,2),(3,5,4),(0,3,4,1),(1,4,5,2),(2,5,3,0)],roof)
+    cone('Drum_12',(0,-1),12.5,4.3,4.6,12,stone,4.6)
+    cone('Dome_12',(0,-1),16.8,7,4.6,12,roof)
+    cross('Dome_Cross',(0,-1),23.8,1.6,stone)
+    tower=cone('BellTower_8',(10,-6),0,13,2,8,stone,2)
+    core=cone('Belfry_Core',(10,-6),9.35,3.85,1.35,8,stone,1.35)
+    subtract(tower,core)
+    for nx,ny in ((0,1),(1,0),(0,-1),(-1,0)):
+        angle=math.atan2(-nx,ny)
+        subtract(tower,arch('Belfry_Cutter',(10+nx*1.65,-6+ny*1.65,9.4),
+                             1.6,3,1.8,angle))
+    cone('BellTower_Roof_8',(10,-6),13,3.2,2,8,roof)
+    cross('BellTower_Cross',(10,-6),16.2,1,stone)
+    # Annex x=-17..-10, y=-8..6, highest roof point z=5.
+    # Hollow walls, single slope roof; high side faces the nave.
+    mesh('Annex_West',[(-17,y,z) for y,z in [(-8,0),(6,0),(6,4.1),(-8,4.1)]]+
+         [(-16.4,y,z) for y,z in [(-8,0),(6,0),(6,4.1),(-8,4.1)]],
+         [(0,1,2,3),(4,7,6,5),(0,4,5,1),(1,5,6,2),(2,6,7,3),(3,7,4,0)],stone)
+    box('Annex_East',(-10.3,-1,2.4),(.6,14,4.8),stone)
+    for name,y in [('Front',-8),('Back',5.4)]:
+        mesh('Annex_'+name,[(x,yy,z) for yy in (y,y+.6)
+             for x,z in [(-16.4,0),(-10.6,0),(-10.6,4.74),(-16.4,4.16)]],
+             [(0,1,2,3),(4,7,6,5),(0,4,5,1),(1,5,6,2),(2,6,7,3),(3,7,4,0)],stone)
+    mesh('Annex_SingleSlope_Roof',[(x,y,z) for y in (-8,6)
+         for x,z in [(-17,4),(-10,4.7),(-10,5),(-17,4.3)]],
+         [(0,1,2,3),(4,7,6,5),(0,4,5,1),(1,5,6,2),(2,6,7,3),(3,7,4,0)],roof)
+    # Open door leaves stand against the inner jambs, preserving a visible passage.
+    for side in (-1,1):
+        box('Door_Open_'+str(side),(side*1.25,-5.65,1.25),(.1,1,2.5),wood)
+    for i in range(4):
+        height = .48+i*.24
+        box('Entrance_Step_%02d'%i,(0,-7.8+i*.3,-1.2+height/2),
+            (4.4,.6,height),stone)
+    # Stone courses/cornices add readable scale, with real bevelled geometry.
+    for z in (1,4.1,8.5,12.1):
+        # Front cornice is split around the doorway below its crown.
+        if z<3.6:
+            for side in (-1,1):
+                box('Front_Course', (side*5.25,-6.52,z),(7.3,.12,.16),stone)
+        else:
+            box('Front_Course',(0,-6.52,z),(18,.12,.16),stone)
+        box('Rear_Course',(0,4.52,z),(18,.12,.16),stone)
+    # Rear course at z=4.1 is below the window sill; others clear its head.
+    objects=prepare()
+    openings_check()
+    total,size=report(objects)
+    scene['triangle_count']=total
+    scene['bbox_xyz']=size
+    BLEND.parent.mkdir(parents=True,exist_ok=True)
+    FBX.parent.mkdir(parents=True,exist_ok=True)
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objects:
+        o.select_set(True)
+    bpy.ops.export_scene.fbx(filepath=str(FBX),use_selection=True,object_types={'MESH'},
+        global_scale=1,apply_unit_scale=True,apply_scale_options='FBX_SCALE_UNITS',
+        axis_forward='-Z',axis_up='Y',use_space_transform=True,bake_space_transform=True,
+        mesh_smooth_type='FACE',use_triangles=True,add_leaf_bones=False,bake_anim=False)
+    render_views(objects)
+    bpy.context.preferences.filepaths.save_version=0
     bpy.ops.wm.save_as_mainfile(filepath=str(BLEND))
-    bpy.ops.export_scene.fbx(filepath=str(FBX), use_selection=True,
-        object_types={"MESH"}, global_scale=1.0, apply_unit_scale=True,
-        apply_scale_options="FBX_SCALE_UNITS", axis_forward="-Z", axis_up="Y",
-        use_space_transform=True, bake_space_transform=True,
-        mesh_smooth_type="FACE", use_mesh_modifiers=True, use_triangles=True,
-        add_leaf_bones=False, bake_anim=False, path_mode="AUTO")
-    assert BLEND.is_file() and FBX.is_file()
-    print("[CHURCH] saved=%s" % BLEND)
-    print("[CHURCH] exported=%s" % FBX)
+    print('[CHURCH] saved=%s exported=%s'%(BLEND,FBX))
 
 
 def verify():
-    """Independent disk reload, opening probes, and FBX metre/UV round-trip."""
     bpy.ops.wm.open_mainfile(filepath=str(BLEND))
-    scene = bpy.context.scene
-    objects = list(scene.objects)
-    expected_count = len(objects)
-    expected_triangles = scene["triangle_count"]
-    expected_bounds = tuple(scene["bbox_width_height_depth"])
-    assert scene.unit_settings.scale_length == 1
-    assert set(bpy.data.materials.keys()) == {"Stone", "Roof", "Wood"}
-    for obj in objects:
-        assert obj.matrix_world.is_identity, obj.name
-        assert obj.data.uv_layers.active and len(obj.data.materials) == 1
-
-    def opening(name, start, direction, distance=1.5):
-        assert not scene.objects[name].ray_cast(
-            Vector(start), Vector(direction), distance=distance)[0], name
-
-    opening("Nave_Front", (0, -.1, 1.5), (0, 1, 0), .8)
-    for side in (-1, 1):
-        for y in (4, 8):
-            opening("Nave_West" if side < 0 else "Nave_East",
-                    (side * 10.1, y, 6), (-side, 0, 0), .9)
-    depth = scene["param_annex_depth"]
-    for i in range(4):
-        opening("Annex_West", (-19.1, 6 + depth * ((i + .5) / 4 - .5), 2),
-                (1, 0, 0), .9)
-    for start, direction in [((9, -3.4, 11), (0, 1, 0)),
-                             ((11.4, -1, 11), (-1, 0, 0)),
-                             ((9, 1.4, 11), (0, -1, 0)),
-                             ((6.6, -1, 11), (1, 0, 0))]:
-        opening("BellTower_8", start, direction)
-    print("[VERIFY] blend: transforms, UV, three materials, 13 openings PASS")
-    bpy.ops.object.select_all(action="SELECT")
+    objects=[o for o in bpy.context.scene.objects if o.type=='MESH']
+    expected,size=report(objects)
+    openings_check()
+    assert all(o.matrix_world.is_identity and o.data.uv_layers.active for o in objects)
+    for name in ('front','side','top','iso'):
+        img=bpy.data.images.load(str(VIEWS/(name+'.png')),check_existing=False)
+        assert tuple(img.size)==(1024,1024)
+        bpy.data.images.remove(img)
+    bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
     bpy.ops.import_scene.fbx(filepath=str(FBX))
-    objects = list(scene.objects)
-    assert len(objects) == expected_count
-    assert all(o.data.uv_layers.active and len(o.data.materials) == 1 for o in objects)
-    assert {o.data.materials[0].name.split(".")[0] for o in objects} == {
-        "Stone", "Roof", "Wood"}
-    lo, hi = bounds(objects)
-    size = hi - lo
-    assert all(abs(a - b) < .001 for a, b in zip(
-        (size.x, size.z, size.y), expected_bounds))
-    for obj in objects:
-        obj.data.calc_loop_triangles()
-    triangles = sum(len(o.data.loop_triangles) for o in objects)
-    assert triangles == expected_triangles, (triangles, expected_triangles)
-    print("[VERIFY] FBX round-trip: %d meshes, %d triangles, UV, metre bounds PASS"
-          % (len(objects), triangles))
+    objects=[o for o in bpy.context.scene.objects if o.type=='MESH']
+    lo,hi=bounds(objects)
+    assert all(abs(a-b)<.001 for a,b in zip(hi-lo,size))
+    assert sum(triangle_count(o) for o in objects)==expected
+    assert all(o.data.uv_layers.active for o in objects)
+    openings_check()
+    print('[VERIFY] saved BLEND + FBX metre/triangle/UV round-trip + four PNG sizes PASS')
 
 
-if __name__ == "__main__":
+if __name__=='__main__':
     try:
-        if "--verify" in sys.argv:
-            verify()
-        else:
-            build()
+        verify() if '--verify' in sys.argv else build()
     except Exception:
         import traceback
         traceback.print_exc()
-        # Blender normally returns zero for script errors unless --python-exit-code
-        # is supplied. Make the required plain invocation fail reliably too.
         sys.stdout.flush()
         sys.stderr.flush()
         sys.exit(1)

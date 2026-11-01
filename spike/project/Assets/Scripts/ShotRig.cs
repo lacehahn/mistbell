@@ -33,6 +33,12 @@ public class ShotRig : MonoBehaviour
         };
     }
 
+    public static ShotPose Look(string name, Vector3 eye, Vector3 target, float fov)
+    {
+        return new ShotPose { name = name, position = eye,
+            euler = Quaternion.LookRotation(target - eye).eulerAngles, fov = fov };
+    }
+
     public void Apply(int index)
     {
         if (poses == null || index < 0 || index >= poses.Count) return;

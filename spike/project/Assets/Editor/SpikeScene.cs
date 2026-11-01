@@ -6,16 +6,15 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 /// <summary>
-/// HD-2D 美术验证场景：URP + 体块教堂 + 像素 Billboard 角色 + 后期栈（Bloom/DoF/调色/暗角/颗粒）
+/// HD-2D 美术验证场景：URP + Blender 教堂 + 像素 Billboard 角色 + 后期栈（Bloom/DoF/调色/暗角/颗粒）
 /// 用法：Unity -batchmode -quit -projectPath . -executeMethod SpikeScene.Run -logFile out.log
 /// 机位表写进场景里的 ShotRig；正式证据由播放器 `-shots &lt;dir&gt;` 产出（编辑态的 cam.Render() 不跑 Volume）。
 /// </summary>
 public static class SpikeScene
 {
     const int W = 1920, H = 1080;
-    const float Fov = 28f;            // D03 方案 A：低透视
-    const float SlopeDeg = 4f;        // 坡地倾角
-    const float ChurchBaseY = 0.6f;   // 教堂坐在坡面上的抬高量
+    const float Fov = 35f;            // 揭示机位垂直视场
+    const float SlopeDeg = 6f;        // 坡地倾角
 
     public static void Run()
     {
@@ -29,44 +28,31 @@ public static class SpikeScene
 
         // ---------- 材质（程序化像素贴图 + 法线图；UV 以米计，tiling 按每张贴图覆盖的米数反推）----------
         const string TEX = "Assets/Art/Textures/";
-        var stone = SpikeArt.MakeTextured("Assets/Settings/M_Stone.mat", TEX + "stone_ashlar.png", TEX + "stone_ashlar_n.png",
-                                          2.4f, Hex("#C6A882"), 0.12f, 1.0f);
-        var roofMat = SpikeArt.MakeTextured("Assets/Settings/M_Roof.mat", TEX + "roof_slate.png", TEX + "roof_slate_n.png",
-                                            2.4f, Hex("#A06B4A"), 0.22f, 0.9f);
+        var stone = ChurchMaterial("stone", "#C9A87C");
+        var roofMat = ChurchMaterial("roof", "#A06B4A");
+        var wood = ChurchMaterial("wood", "#6B4A32");
         var ground = SpikeArt.MakeTextured("Assets/Settings/M_Ground.mat", TEX + "grass.png", TEX + "grass_n.png",
                                            3.2f, Hex("#5E7A2E"), 0.08f, 0.8f);
 
         // 使用指定色板作为材质基色，避免贴图工具的均值补偿产生 HDR 色值。
-        stone.SetColor("_BaseColor", Hex("#C6A882"));
-        roofMat.SetColor("_BaseColor", Hex("#A06B4A"));
         ground.SetColor("_BaseColor", Hex("#5E7A2E"));
         EditorUtility.SetDirty(stone);
         EditorUtility.SetDirty(roofMat);
         EditorUtility.SetDirty(ground);
 
         // ---------- 地形：一段上坡（坡面在 z 方向的解析式 y = GroundY(z)）----------
-        var slope = SpikeArt.Box(null, "Slope", new Vector3(70f, 2f, 90f),
-                                 new Vector3(0f, SlopeOriginY(), 18f), ground);
+        var slope = SpikeArt.Box(null, "Slope", new Vector3(200f, 2f, 260f),
+                                 new Vector3(0f, SlopeOriginY(), -30f), ground);
         slope.transform.localRotation = Quaternion.Euler(-SlopeDeg, 0f, 0f);
 
         Physics.SyncTransforms();
         BuildMountains();
         BuildStonePath(slope.GetComponent<Collider>(), stone);
 
-        // ---------- 体块教堂（主体 / 钟楼 / 门廊 / 屋顶）----------
-        var church = new GameObject("Church").transform;
-        church.position = new Vector3(0f, ChurchBaseY, 0f);
-
-        SpikeArt.Box(church, "Body", new Vector3(6.5f, 6.4f, 9f), new Vector3(0f, 3.2f, 0f), stone);
-        SpikeArt.Box(church, "Roof", new Vector3(7.4f, 1.1f, 10f), new Vector3(0f, 7.0f, 0f), roofMat);
-        SpikeArt.Box(church, "Tower", new Vector3(2.8f, 10f, 2.8f), new Vector3(-2.2f, 8.0f, -3.2f), stone);
-        SpikeArt.Box(church, "Spire", new Vector3(3.2f, 1.0f, 3.2f), new Vector3(-2.2f, 13.4f, -3.2f), roofMat, true, 45f);
-
-        // 门廊朝向来路（-z 侧）：玩家是自下坡上来的，看到的必须是正立面
-        foreach (var px in new[] { -1.6f, 1.6f })
-            SpikeArt.Box(church, "Pillar", new Vector3(0.55f, 4f, 0.55f), new Vector3(px, 2.0f, -5.2f), stone);
-
-        SpikeArt.Box(church, "Lintel", new Vector3(4.4f, 0.7f, 1.4f), new Vector3(0f, 4.3f, -5.2f), stone);
+        // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
+        var church = ImportChurch(stone, roofMat, wood);
+        var cameraRotation = Quaternion.Euler(8f, 6f, 0f);
+        var cameraPosition = new Vector3(0f, 13f, 0f) - cameraRotation * Vector3.forward * 110f;
 
         // ---------- 像素角色（Billboard）----------
         var sprite = ImportSprite("Assets/Art/Character/pilgrim.png");
@@ -77,14 +63,13 @@ public static class SpikeScene
             return;
         }
 
-        // 原机位偏移将角色放在 Slope 边界外；选取坡内、教堂左前方的可见落脚点。
-        var pilgrimPos = new Vector3(-4f, 0f, -6f);
-
+        // 角色在相机视轴前方 20 m 的地面上；落点只查询地形碰撞体。
+        var pilgrimPos = cameraPosition + cameraRotation * Vector3.forward * 20f;
         Physics.SyncTransforms();
         float terrainY = 0f;
-        if (Physics.Raycast(new Vector3(pilgrimPos.x, 100f, pilgrimPos.z), Vector3.down,
-                            out RaycastHit terrainHit, 200f, Physics.DefaultRaycastLayers,
-                            QueryTriggerInteraction.Ignore) && terrainHit.collider.gameObject == slope)
+        if (slope.GetComponent<Collider>().Raycast(
+                new Ray(new Vector3(pilgrimPos.x, 500f, pilgrimPos.z), Vector3.down),
+                out RaycastHit terrainHit, 1000f))
             terrainY = terrainHit.point.y;
         pilgrimPos.y = terrainY;
         Debug.Log($"[SPIKE] pilgrim y={pilgrimPos.y:F4} terrain y={terrainY:F4}");
@@ -154,12 +139,11 @@ public static class SpikeScene
         var rigGo = new GameObject("ShotRig");
         var rig = rigGo.AddComponent<ShotRig>();
 
-        // reveal：目标高 6 m，距离 45 m、俯仰 20°、偏航 22°，容纳教堂全高及前景角色。
-        rig.poses.Add(ShotRig.Make("art_runtime", new Vector3(0f, 6f, 0f), 20f, 45f, 22f, Fov));
-        // close：角色约 250px 屏高，门廊与教堂体量压在背后（塔顶出画属预期，近距离仰视必然切顶）
-        rig.poses.Add(ShotRig.Make("art_close", new Vector3(-1.6f, GroundY(-6.6f) + 1.4f, -6.6f), 14f, 14f, 12f, Fov));
-        // ground：贴地近景，用来量「草地的像素密度」是否真的看得出（PPU 与 tiling 是否匹配）
-        rig.poses.Add(ShotRig.Make("art_ground", new Vector3(2f, GroundY(-4f) + 0.05f, -4f), 26f, 7f, 15f, Fov));
+        rig.poses.Add(ShotRig.Look("art_runtime", cameraPosition, new Vector3(0f, 13f, 0f), Fov));
+        rig.poses.Add(ShotRig.Look("art_close", EyeAt(5f, -22f), new Vector3(0f, 6f, -10f), 36f));
+        var groundPose = ShotRig.Make("art_ground", Vector3.zero, 26f, 7f, 15f, 36f);
+        groundPose.position = EyeAt(0f, -14f);
+        rig.poses.Add(groundPose);
 
         rig.Apply(0);
 
@@ -178,17 +162,9 @@ public static class SpikeScene
         PlayerSettings.resizableWindow = false;
         PlayerSettings.runInBackground = true;
 
+        LogFrame(cam, church, pilgrimPos);
         EditorSceneManager.SaveScene(scene, scenePath);
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
-
-        // ---------- 构图自检：把关键点的视口坐标打进日志（不依赖看图的数值证据）----------
-        foreach (var go in new[] { "Church/Spire", "Church/Roof", "Church/Body" })
-        {
-            var t = GameObject.Find(go);
-            if (t != null) LogBounds(cam, t.transform, go);
-        }
-        LogPoint(cam, "pilgrim(feet)", pilgrimPos);
-        LogPoint(cam, "pilgrim(head)", pilgrimPos + Vector3.up * 1.75f);
 
         Directory.CreateDirectory("Shots");
         Capture(cam, "Shots/art_reveal_edit.png");
@@ -198,6 +174,103 @@ public static class SpikeScene
 
         Debug.Log("[SPIKE] EDIT-TIME CAPTURES DONE（正式证据用播放器 -shots 产出）");
         Debug.Log("[SPIKE] ART DONE");
+    }
+
+    static Material ChurchMaterial(string category, string fallbackColor)
+    {
+        string path = "Assets/Settings/M_" + char.ToUpperInvariant(category[0]) + category.Substring(1) + ".mat";
+        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (material != null) return material;
+        foreach (var guid in AssetDatabase.FindAssets("t:Material", new[] { "Assets/Settings" }))
+        {
+            var candidate = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+            if (candidate.name.ToLowerInvariant().Contains(category)) return candidate;
+        }
+        return MakeLit(path, Hex(fallbackColor), 0f, 0.15f);
+    }
+
+    static Transform ImportChurch(Material stone, Material roof, Material wood)
+    {
+        const string path = "Assets/Art/Church/gergeti_church.fbx";
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (prefab == null) throw new System.InvalidOperationException("Cannot import " + path);
+        var church = ((GameObject)PrefabUtility.InstantiatePrefab(prefab)).transform;
+        church.name = "Church";
+        church.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+        church.localScale = Vector3.one;
+        int stoneCount = 0, roofCount = 0, woodCount = 0;
+        long triangles = 0;
+        foreach (var filter in church.GetComponentsInChildren<MeshFilter>(true))
+        {
+            var mesh = filter.sharedMesh;
+            if (mesh == null) continue;
+            for (int i = 0; i < mesh.subMeshCount; i++)
+                triangles += (long)mesh.GetIndexCount(i) / 3;
+            var renderer = filter.GetComponent<Renderer>();
+            if (renderer == null) continue;
+            var materials = new Material[mesh.subMeshCount];
+            var original = renderer.sharedMaterials;
+            for (int i = 0; i < materials.Length; i++)
+            {
+                string names = (filter.name + " " + mesh.name + " " +
+                    (i < original.Length && original[i] != null ? original[i].name : "")).ToLowerInvariant();
+                if (names.Contains("roof")) { materials[i] = roof; roofCount++; }
+                else if (names.Contains("wood")) { materials[i] = wood; woodCount++; }
+                else { materials[i] = stone; stoneCount++; }
+            }
+            renderer.sharedMaterials = materials;
+        }
+        var bounds = ChurchBounds(church);
+        Debug.Log($"[SPIKE] church imported tris={triangles} bounds={bounds.size.x:F2}x{bounds.size.y:F2}");
+        Debug.Log($"[SPIKE] church bounds min={bounds.min} max={bounds.max} root scale={church.localScale} rotation={church.eulerAngles}");
+        Debug.Log($"[SPIKE] church materials stone={stoneCount} roof={roofCount} wood={woodCount} (submesh assignments; unclassified=stone)");
+        if (triangles <= 5000) throw new System.InvalidOperationException("Church must exceed 5000 triangles");
+        return church;
+    }
+
+    static Bounds ChurchBounds(Transform church)
+    {
+        var renderers = church.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0) throw new System.InvalidOperationException("Church has no meshes");
+        var bounds = renderers[0].bounds;
+        foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
+        return bounds;
+    }
+
+    static void LogFrame(Camera cam,Transform church,Vector3 pilgrim)
+    {
+        cam.aspect=(float)W/H;
+        var renderers=church.GetComponentsInChildren<Renderer>();
+        var bounds=renderers[0].bounds;
+        foreach(var r in renderers) bounds.Encapsulate(r.bounds);
+        float left=float.PositiveInfinity,right=float.NegativeInfinity;
+        float low=float.PositiveInfinity,high=float.NegativeInfinity;
+        for(int i=0;i<8;i++)
+        {
+            var p=cam.WorldToViewportPoint(bounds.center+Vector3.Scale(bounds.extents,
+                new Vector3((i&1)==0?-1:1,(i&2)==0?-1:1,(i&4)==0?-1:1)));
+            left=Mathf.Min(left,p.x); right=Mathf.Max(right,p.x);
+            low=Mathf.Min(low,p.y); high=Mathf.Max(high,p.y);
+        }
+        Debug.Log($"[SPIKE] proj church_top py={(1-high)*H:F1} church_bottom py={(1-low)*H:F1} (占比 {(high-low)*100:F1}%)");
+        Debug.Log($"[SPIKE] frame church top={(1-high)*H:F1} bottom={(1-low)*H:F1} heightPct={(high-low)*100:F1} widthPct={(right-left)*100:F1} centerX={(left+right)*.5f*W:F1}");
+        var feet=cam.WorldToViewportPoint(pilgrim); var head=cam.WorldToViewportPoint(pilgrim+Vector3.up*1.75f);
+        Debug.Log($"[SPIKE] proj pilgrim px_height={(head.y-feet.y)*H:F1}");
+        Debug.Log($"[SPIKE] pilgrim viewport feet={feet} head={head}");
+        Debug.Log($"[SPIKE] frame pilgrim heightPct={(head.y-feet.y)*100:F1}");
+        Debug.Log($"[SPIKE] frame pitch={Mathf.Asin(Mathf.Abs(cam.transform.forward.y))*Mathf.Rad2Deg:F1}");
+        for(int layer=1;layer<=3;layer++)
+        {
+            var ridge=GameObject.Find("Mountain_"+layer).transform;
+            var verts=ridge.GetComponent<MeshFilter>().sharedMesh.vertices;
+            var peak=ridge.TransformPoint(verts[1]);
+            for(int i=3;i<verts.Length;i+=2)
+            {
+                var p=ridge.TransformPoint(verts[i]); if(p.y>peak.y) peak=p;
+            }
+            Debug.Log($"[SPIKE] frame ridge{layer} linePct={(1-cam.WorldToViewportPoint(peak).y)*100:F1}");
+        }
     }
 
     static Color Hex(string value)
@@ -210,8 +283,8 @@ public static class SpikeScene
     static void BuildMountains()
     {
         const int samples = 81;
-        var forward = Quaternion.Euler(0f, 22f, 0f) * Vector3.forward;
-        var right = Quaternion.Euler(0f, 22f, 0f) * Vector3.right;
+        var forward = Quaternion.Euler(0f, -2.632f, 0f) * Vector3.forward;
+        var right = Quaternion.Euler(0f, -2.632f, 0f) * Vector3.right;
         float[] distances = { 250f, 450f, 700f };
         string[] colors = { "#4E6478", "#6E8399", "#93A6B8" };
         var root = new GameObject("Mountain Ridges").transform;
@@ -237,8 +310,8 @@ public static class SpikeScene
             }
             var ridge = SaveMountainMesh(root, "Mountain_" + (layer + 1), vertices, triangles,
                                          Hex(colors[layer]));
-            // 当前机位俯视 20°，山体基底沉入谷底，让锯齿山脊进入画面而非整面遮天。
-            float[] valleyDepths = { 300f, 340f, 400f };
+            // 贴地仰视约 13°；山体基底沉入谷底，使三层山脊进入上半幅。
+            float[] valleyDepths = { 275f, 215f, 90f };
             ridge.position = forward * distances[layer] + Vector3.down * valleyDepths[layer];
             Debug.Log($"[SPIKE] ridge {layer + 1} vertices={vertices.Length} distance={distances[layer]:F0}");
             if (layer == 2)
@@ -282,13 +355,13 @@ public static class SpikeScene
 
     static void BuildStonePath(Collider terrain, Material stone)
     {
-        // 7 段连接精确端点，中心线左右摆动形成 S；每段顶面贴合实际坡面。
-        Vector3[] points = {
-            new Vector3(0f, 0f, 25f), new Vector3(-1.3f, 0f, 22f),
-            new Vector3(-1.9f, 0f, 19f), new Vector3(-0.9f, 0f, 16f),
-            new Vector3(0.9f, 0f, 13f), new Vector3(1.9f, 0f, 10f),
-            new Vector3(1.3f, 0f, 7f), new Vector3(0f, 0f, 4f)
-        };
+        // 12 段 S 形石板路，自下坡连接正面台阶。
+        var points = new Vector3[13];
+        for (int i = 0; i < points.Length; i++)
+        {
+            float t = i / 12f;
+            points[i] = new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI), 0f, Mathf.Lerp(-70f, -13.25f, t));
+        }
         for (int i = 0; i < points.Length; i++)
             if (terrain.Raycast(new Ray(points[i] + Vector3.up * 100f, Vector3.down),
                                 out RaycastHit hit, 200f))
@@ -298,26 +371,20 @@ public static class SpikeScene
         {
             var delta = points[i + 1] - points[i];
             var segment = SpikeArt.Box(root, "Paving_" + (i + 1),
-                new Vector3(2.8f, 0.07f, delta.magnitude + 0.08f),
+                new Vector3(3.2f, 0.07f, delta.magnitude + 0.08f),
                 (points[i] + points[i + 1]) * 0.5f - Vector3.up * 0.035f, stone);
             segment.transform.rotation = Quaternion.LookRotation(delta, terrain.transform.up);
         }
         Debug.Log($"[SPIKE] stone path segments={points.Length - 1} material=existing M_Stone (stone_ashlar; no Substance material available)");
     }
 
-    /// <summary>坡面解析式：4° 上坡，z=0 处地面 y=0。</summary>
+    /// <summary>坡面解析式：6° 上坡，z=0 处地面 y=0。</summary>
     static float GroundY(float z) => Mathf.Tan(SlopeDeg * Mathf.Deg2Rad) * z;
 
-    /// <summary>
-    /// 坡体 Cube 的位置：让顶面正好穿过 y=0、z=0。
-    /// 顶面局部点 (·, +1, z_l) 绕 X 转 -SlopeDeg 后 y' = c + s·z_l（c=cos, s=sin）；
-    /// 世界 z=0 对应 z_l = -posZ = -18，令 y = posY + c - 18s = 0 → posY = 18s - c。
-    /// </summary>
-    static float SlopeOriginY()
-    {
-        float rad = SlopeDeg * Mathf.Deg2Rad;
-        return 18f * Mathf.Sin(rad) - Mathf.Cos(rad);
-    }
+    // 顶面：y = posY + tan(a)*(z-posZ) + 1/cos(a)。
+    // posZ=-30；半深 130 只控制覆盖范围，不能作为中心偏移代入。
+    static float SlopeOriginY() => GroundY(-30f) - 1f / Mathf.Cos(SlopeDeg * Mathf.Deg2Rad);
+    static Vector3 EyeAt(float x, float z) => new Vector3(x, GroundY(z) + 1.9f, z);
 
     static void LogPoint(Camera cam, string label, Vector3 world)
     {
