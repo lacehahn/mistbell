@@ -159,54 +159,76 @@ def make_grass(rnd):
 def make_bush(rnd):
     import math
 
+    size = 256
+
     palette = ((18, 28, 17), (30, 42, 24), (44, 58, 34),
                (60, 76, 44), (84, 100, 62))
-    noise = fbm([32, 16, 8], rnd)
-    img = new_img()
-    # 低频仅作底明度（0.35 权重），不能支配叶簇；高度与颜色分别绘制。
-    height = [[0.0] * SZ for _ in range(SZ)]
-    for y in range(SZ):
-        for x in range(SZ):
-            shade = 0.65 * 0.60 + 0.35 * noise[y][x]
-            img[y][x] = palette[min(4, int(shade * 5))]
-            height[y][x] = 0.10 + 0.035 * noise[y][x]
+    def st_noise(cell):
+        count = size // cell
+        lattice = [[rnd.random() for _ in range(count)] for _ in range(count)]
+        out = []
+        for y in range(size):
+            iy, fy = divmod(y, cell)
+            row = []
+            for x in range(size):
+                ix, fx = divmod(x, cell)
+                tx, ty = smooth(fx / cell), smooth(fy / cell)
+                top = lerp(lattice[iy][ix], lattice[iy][(ix + 1) % count], tx)
+                bot = lerp(lattice[(iy + 1) % count][ix], lattice[(iy + 1) % count][(ix + 1) % count], tx)
+                row.append(lerp(top, bot, ty))
+            out.append(row)
+        return out
 
-    # 恰好 520 个旋转椭圆，长短径均为 6–11 px；环绕写点，跨边叶片不截断。
-    for _ in range(520):
-        cx, cy = rnd.randrange(SZ), rnd.randrange(SZ)
-        w, h = rnd.randint(6, 11), rnd.randint(6, 11)
+    octaves = [st_noise(cell) for cell in (32, 16, 8)]
+    noise = [[sum(n[y][x] * w for n, w in zip(octaves, (1, .5, .25))) / 1.75
+              for x in range(size)] for y in range(size)]
+    img = [[(0, 0, 0)] * size for _ in range(size)]
+    # 低频仅作底明度（0.3 权重），不能支配叶簇；高度与颜色分别绘制。
+    height = [[0.0] * size for _ in range(size)]
+    for y in range(size):
+        for x in range(size):
+            shade = 0.70 * 0.60 + 0.30 * noise[y][x]
+            img[y][x] = palette[min(4, int(shade * 5))]
+            height[y][x] = 0.10 + 0.03 * noise[y][x]
+
+    # 恰好 1100 个旋转椭圆，长短径均为 10–18 px；环绕写点，跨边叶片不截断。
+    for _ in range(1100):
+        cx, cy = rnd.randrange(size), rnd.randrange(size)
+        w, h = rnd.randint(10, 18), rnd.randint(10, 18)
         angle = rnd.uniform(0, math.tau)
         co, si = math.cos(angle), math.sin(angle)
         tier = rnd.choices((1, 2, 3, 4), weights=(5, 15, 24, 56))[0]
-        for dy in range(-8, 9):
-            for dx in range(-8, 9):
+        if noise[cy][cx] < 0.40:
+            tier = max(1, tier - 2)
+        for dy in range(-13, 14):
+            for dx in range(-13, 14):
                 u, v = co * dx + si * dy, -si * dx + co * dy
-                outer = (u / (w * 0.5)) ** 2 + (v / (h * 0.5)) ** 2
+                outer = math.sqrt((u / (w * 0.5)) ** 2 + (v / (h * 0.5)) ** 2)
                 if outer > 1:
                     continue
                 inner = ((u + 0.35) / (w * 0.5 - 1)) ** 2 + ((v + 0.35) / (h * 0.5 - 1)) ** 2
-                yy, xx = (cy + dy) % SZ, (cx + dx) % SZ
-                img[yy][xx] = palette[tier if inner <= 1 else tier - 1]
-                height[yy][xx] = 0.18 + 0.36 * max(0.0, 1.0 - outer)
+                yy, xx = (cy + dy) % size, (cx + dx) % size
+                img[yy][xx] = palette[tier if inner <= 1 else max(0, tier - 2)]
+                height[yy][xx] = 0.35 + 0.45 * max(0.0, 1.0 - outer)
 
-    # 18 条枝条，各 3–5 段 1px 折线，自下部向上偏斜；不以大色块覆盖叶面。
-    for _ in range(18):
-        x, y = rnd.randrange(SZ), rnd.randint(85, 127)
+    # 40 条枝条，各 3–5 段 1px 折线，自下部向上偏斜；不以大色块覆盖叶面。
+    for _ in range(40):
+        x, y = rnd.randrange(size), rnd.randint(170, 255)
         for _ in range(rnd.randint(3, 5)):
-            nx, ny = x + rnd.randint(-4, 4), y - rnd.randint(4, 8)
+            nx, ny = x + rnd.randint(-7, 7), y - rnd.randint(8, 14)
             steps = max(abs(nx - x), abs(ny - y))
             for step in range(steps + 1):
-                xx = round(x + (nx - x) * step / steps) % SZ
-                yy = round(y + (ny - y) * step / steps) % SZ
+                xx = round(x + (nx - x) * step / steps) % size
+                yy = round(y + (ny - y) * step / steps) % size
                 img[yy][xx] = (46, 38, 28)
-                height[yy][xx] = 0.08
+                height[yy][xx] = 0.02
             x, y = nx, ny
-    # 恰好 36 个不同位置的单像素亮缝，独立于叶色高度，不制造发亮的法线脊。
-    for pos in rnd.sample(range(SZ * SZ), 36):
-        y, x = divmod(pos, SZ)
+    # 恰好 72 个不同位置的单像素亮缝，独立于叶色高度，不制造发亮的法线脊。
+    for pos in rnd.sample(range(size * size), 72):
+        y, x = divmod(pos, size)
         img[y][x] = (110, 124, 84)
-        height[y][x] = 0.06
-    return img, 1.2, height
+        height[y][x] = 0.0
+    return img, 1.0, height
 
 
 # ---------------------------------------------------------------- 石砌墙面

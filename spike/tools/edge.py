@@ -102,15 +102,44 @@ def analyse(path, skip=None):
         lgrnd = lum(rows, bpp, x, y0 + 3)
         lnear = lum(rows, bpp, x, y0 + 40)
         lsky = lum(rows, bpp, x, max(0, y0 - 30))
+        # 有效性检查（2026-11-02 round 24 加）：前景灌木长到 1.2 m 后会插进采样列，
+        # 此时 `green_row` 找到的是**灌木顶边**而不是天地交界（x=320 的 Lsky 掉到 29.2、
+        # x=480 的 jump 154.2 都是这么来的）。要求该列「上方是天空、下方是草地」：
+        #   天空像天空 = 偏蓝（b-r ≥ 10）；草地像草地 = 够亮且很绿（luma ≥ 90 且 g-r ≥ 30）。
+        # 不满足就跳过该列，不参与 mean（这是采样有效性，不是门槛）。
+        if lsky is not None:
+            r, g, b = rows[max(0, y0 - 30)][x * bpp], rows[max(0, y0 - 30)][x * bpp + 1], rows[max(0, y0 - 30)][x * bpp + 2]
+            sky_like = (b - r) >= 10
+            r2, g2, b2 = rows[min(h - 1, y0 + 3)][x * bpp], rows[min(h - 1, y0 + 3)][x * bpp + 1], rows[min(h - 1, y0 + 3)][x * bpp + 2]
+            ground_like = lum(rows, bpp, x, y0 + 3) >= 90 and (g2 - r2) >= 15 and (g2 - b2) >= 20
+            # 地平线上方 2..40 px 必须是**平滑**的天空/雾带：灌木顶边会插进这条带，
+            # 那时会出现 60–150 的单行亮度跌落（x=480 灌木顶边 295→147）。真正的
+            # 天地雾过渡在这条带里每行只变 3–7（art_ground x=120：553→347 共 30 行）。
+            band_clear = True
+            prev = None
+            for yy in range(max(0, y0 - 40), max(0, y0 - 2)):
+                v = lum(rows, bpp, x, yy)
+                if v is None:
+                    continue
+                if prev is not None and prev - v > 25:
+                    band_clear = False
+                    break
+                prev = v
+        else:
+            sky_like = ground_like = band_clear = False
         window = [lum(rows, bpp, x, y) for y in range(max(0, y0 - 3), min(h, y0 + 16))]
         window = [v for v in window if v is not None]
         jump = max(abs(window[i + 1] - window[i]) for i in range(len(window) - 1))
+        valid = sky_like and ground_like and band_clear
+        print("   col x=%4d horizon=%4d Lgrnd=%6.1f Lnear=%6.1f Lsky=%6.1f jump=%5.1f%s" %
+              (x, y0, lgrnd, lnear if lnear is not None else -1,
+               lsky if lsky is not None else -1, jump,
+               "" if valid else "   ← 跳过：该列不满足「上方天空 / 下方草地」"))
+        if not valid:
+            continue
         jumps.append(jump)
         if lnear is not None:
             lifts.append(lgrnd - lnear)
-        print("   col x=%4d horizon=%4d Lgrnd=%6.1f Lnear=%6.1f Lsky=%6.1f jump=%5.1f" %
-              (x, y0, lgrnd, lnear if lnear is not None else -1,
-               lsky if lsky is not None else -1, jump))
     if jumps:
         mj = sum(jumps) / len(jumps)
         verdict = "硬边（问题）" if mj > 30 else ("偏硬" if mj > 12 else "软过渡（合格）")

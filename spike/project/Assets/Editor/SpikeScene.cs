@@ -607,7 +607,7 @@ public static class SpikeScene
         // 在 TintFor 之后缩放 RGB，保留 alpha；不改贴图、门槛及其他保护范围。
         var bushTarget = new Color(0.10f, 0.14f, 0.06f, 1f);
         var bush = SpikeArt.MakeTextured("Assets/Settings/M_Bush.mat", TEX + "bush.png",
-            TEX + "bush_n.png", 1.0f, bushTarget, 0f, 0.35f);
+            TEX + "bush_n.png", 1.0f, bushTarget, 0f, 0.9f);
         bush.SetFloat("_SpecularHighlights", 0f);
         bush.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
         const float bushCorrection = 0.90f / 1.80f; // 唯一校正倍率 = 0.5。
@@ -621,7 +621,7 @@ public static class SpikeScene
         bushLight.SetColor("_BaseColor", lightTint);
         bushLight.SetFloat("_SpecularHighlights", 0f);
         bushLight.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
-        Debug.Log($"[SPIKE] bushAlbedo targetLinear=(0.100,0.140,0.060) measuredRatio=1.80 targetRatio=0.90 correction={bushCorrection:F1} correctionCount=1 tint=({bushTint.r:F4},{bushTint.g:F4},{bushTint.b:F4}) lightMultiplier=1.06 bushSpecular={bush.GetFloat("_SpecularHighlights")} bushKeywordOff={bush.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} lightSpecular={bushLight.GetFloat("_SpecularHighlights")} lightKeywordOff={bushLight.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} bump=0.35");
+        Debug.Log($"[SPIKE] bushAlbedo targetLinear=(0.100,0.140,0.060) measuredRatio=1.80 targetRatio=0.90 correction={bushCorrection:F1} correctionCount=1 tint=({bushTint.r:F4},{bushTint.g:F4},{bushTint.b:F4}) lightMultiplier=1.06 bushSpecular={bush.GetFloat("_SpecularHighlights")} bushKeywordOff={bush.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} lightSpecular={bushLight.GetFloat("_SpecularHighlights")} lightKeywordOff={bushLight.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} bump=0.9");
         const string lightPath = "Assets/Settings/M_BushLight.mat";
         AssetDatabase.DeleteAsset(lightPath);
         AssetDatabase.CreateAsset(bushLight, lightPath);
@@ -629,13 +629,15 @@ public static class SpikeScene
         var bushSizes = new[] { new Vector3(1.25f, 0.65f, 1.35f), new Vector3(1.5f, 0.75f, 1.2f),
             new Vector3(0.75f, 0.48f, 0.85f), new Vector3(0.9f, 0.55f, 0.7f) };
         for (int i = 0; i < bushMeshes.Length; i++)
-            bushMeshes[i] = SpikeArt.Blob(bushSizes[i / 2], 0.22f, 1, false, 6100 + i);
+            bushMeshes[i] = SpikeArt.Blob(bushSizes[i / 2], 0.34f, 2, false, 6100 + i);
         var bushLeafMeshes = new Mesh[6];
         var leafSizes = new[] { new Vector3(0.20f, 0.17f, 0.20f),
             new Vector3(0.27f, 0.22f, 0.25f), new Vector3(0.34f, 0.27f, 0.31f) };
         for (int i = 0; i < bushLeafMeshes.Length; i++)
             bushLeafMeshes[i] = SpikeArt.Blob(leafSizes[i / 2], 0.40f, 1, false, 9100 + i);
         int leavesTotal = 0, leavesMin = 8, leavesMax = 0;
+        int exposedMin = 8, exposedMax = 0;
+        float exposureSum = 0f, bodyRadiusMin = float.PositiveInfinity, bodyRadiusMax = 0f;
         float bushHeightMin = float.PositiveInfinity, bushHeightMax = 0f;
         var rockMeshes = new Mesh[4];
         for (int i = 0; i < rockMeshes.Length; i++)
@@ -681,6 +683,7 @@ public static class SpikeScene
                 upperY + upper.bounds.max.y * scale);
             float heightScale = Mathf.Clamp(top, 0.7f, 1.1f) / top;
             float bodyMin = float.PositiveInfinity, bodyTop = float.NegativeInfinity, bodyRadius = 0f;
+            var bodyVertices = new System.Collections.Generic.List<Vector3>();
             for (int j = 0; j < 2; j++)
             {
                 var leaf = new GameObject("Leaves_" + j);
@@ -695,64 +698,115 @@ public static class SpikeScene
                 leaf.AddComponent<MeshRenderer>().sharedMaterial = j % 2 == 0 ? bush : bushLight;
                 foreach (var v in leaf.GetComponent<MeshFilter>().sharedMesh.vertices)
                 {
-                    var q = leaf.transform.localPosition + leaf.transform.localRotation * Vector3.Scale(v, leaf.transform.localScale);
+                    // 世界变换后的顶点，以丛中心为水平原点、保留世界米制。
+                    var q = leaf.transform.TransformPoint(v) - p;
+                    bodyVertices.Add(q);
                     bodyMin = Mathf.Min(bodyMin, q.y); bodyTop = Mathf.Max(bodyTop, q.y);
                     bodyRadius = Mathf.Max(bodyRadius, new Vector2(q.x, q.z).magnitude);
                 }
             }
-            // 不消耗 shape / rnd：保留主体与所有其它道具的随机序列及几何位置。
+            var radii = new float[8];
+            var occupied = new bool[8];
+            foreach (var q in bodyVertices)
+            {
+                int bin = Mathf.Clamp(Mathf.FloorToInt((q.y - bodyMin) / (bodyTop - bodyMin) * 8f), 0, 7);
+                radii[bin] = Mathf.Max(radii[bin], new Vector2(q.x, q.z).magnitude);
+                occupied[bin] = true;
+            }
+            for (int bin = 0; bin < 8; bin++)
+            {
+                if (occupied[bin]) continue;
+                int lo = bin - 1, hi = bin + 1;
+                while (lo >= 0 && !occupied[lo]) lo--;
+                while (hi < 8 && !occupied[hi]) hi++;
+                radii[bin] = lo < 0 ? radii[hi] : hi == 8 ? radii[lo] :
+                    Mathf.Lerp(radii[lo], radii[hi], (bin - lo) / (float)(hi - lo));
+            }
+            float BodyRadiusAtY(float y)
+            {
+                float t = Mathf.Clamp((y - bodyMin) / (bodyTop - bodyMin) * 8f - 0.5f, 0f, 7f);
+                int lo = Mathf.FloorToInt(t);
+                return Mathf.Lerp(radii[lo], radii[Mathf.Min(lo + 1, 7)], t - lo);
+            }
+            // 独立序列，不消耗 shape / rnd，保持所有其它道具落点不变。
             var leaves = new System.Random(9200 + index);
             float LeafRange(float lo, float hi) => Mathf.Lerp(lo, hi, (float)leaves.NextDouble());
-            int count = leaves.Next(5, 9);
+            int count = leaves.Next(5, 9), exposed = 0;
             float clumpHeight = bodyTop - bodyMin;
             float maxTop = Mathf.Min(bodyTop + 0.10f, bodyMin + 1.20f);
-            float allTop = bodyTop;
+            float allTop = bodyTop, diameterMin = float.PositiveInfinity, diameterMax = 0f;
+            var exposedAngles = new System.Collections.Generic.List<float>();
+            var exposures = new System.Collections.Generic.List<float>();
             for (int j = 0; j < count; j++)
             {
-                var mesh = bushLeafMeshes[leaves.Next(bushLeafMeshes.Length)];
-                float yaw = LeafRange(0f, 360f);
-                float radius = LeafRange(0.42f, 0.62f) * bodyRadius;
-                var center = new Vector3(Mathf.Sin(yaw * Mathf.Deg2Rad) * radius,
-                    bodyMin + LeafRange(j < 2 ? 0.70f : 0.30f, 0.95f) * clumpHeight,
-                    Mathf.Cos(yaw * Mathf.Deg2Rad) * radius);
-                var rotation = Quaternion.Euler(LeafRange(-20f, 20f), yaw, LeafRange(-20f, 20f));
-                float minY = 0f, maxY = 0f, radialExtent = 0f;
-                foreach (var v in mesh.vertices)
+                bool accepted = false;
+                for (int attempt = 0; attempt < 4000 && !accepted; attempt++)
                 {
-                    var q = rotation * v;
-                    minY = Mathf.Min(minY, q.y); maxY = Mathf.Max(maxY, q.y);
-                    radialExtent = Mathf.Max(radialExtent, new Vector2(q.x, q.z).magnitude);
+                    var mesh = bushLeafMeshes[leaves.Next(bushLeafMeshes.Length)];
+                    float yaw = LeafRange(0f, 360f);
+                    if (j < 3 && exposedAngles.Exists(a => Mathf.Abs(Mathf.DeltaAngle(a, yaw)) < 55f)) continue;
+                    float y = bodyMin + LeafRange(j < 3 ? 0.70f : 0.30f, 0.95f) * clumpHeight;
+                    float radiusAtY = BodyRadiusAtY(y);
+                    float radius = LeafRange(0.62f, 0.92f) * radiusAtY;
+                    var center = new Vector3(Mathf.Sin(yaw * Mathf.Deg2Rad) * radius, y,
+                        Mathf.Cos(yaw * Mathf.Deg2Rad) * radius);
+                    var rotation = Quaternion.Euler(LeafRange(-20f, 20f), yaw, LeafRange(-20f, 20f));
+                    float minY = 0f, maxY = 0f, radialExtent = 0f;
+                    foreach (var v in mesh.vertices)
+                    {
+                        var q = rotation * v;
+                        minY = Mathf.Min(minY, q.y); maxY = Mathf.Max(maxY, q.y);
+                        radialExtent = Mathf.Max(radialExtent, new Vector2(q.x, q.z).magnitude);
+                    }
+                    // 尺寸重抽；包络超限只缩 fit，不移动中心。
+                    float fit = Mathf.Min(LeafRange(1f, 4f), (bodyRadius * 1.35f - radius) / radialExtent);
+                    fit = Mathf.Min(fit, (maxTop - center.y) / maxY, (center.y - bodyMin) / -minY);
+                    float maxRad = 0f, minRad = float.PositiveInfinity, leafTop = bodyTop;
+                    var vertices = mesh.vertices;
+                    float diameter = 0f;
+                    for (int k = 0; k < vertices.Length; k++)
+                    {
+                        var q = center + rotation * (vertices[k] * fit);
+                        float radial = new Vector2(q.x, q.z).magnitude;
+                        minRad = Mathf.Min(minRad, radial); maxRad = Mathf.Max(maxRad, radial);
+                        leafTop = Mathf.Max(leafTop, q.y);
+                        if (q.y < bodyMin - 0.0001f || q.y > maxTop + 0.0001f || radial > bodyRadius * 1.35f + 0.0001f)
+                            throw new System.InvalidOperationException("Bush leaf vertex outside envelope");
+                        for (int k2 = 0; k2 < k; k2++)
+                            diameter = Mathf.Max(diameter, Vector3.Distance(vertices[k], vertices[k2]) * fit);
+                    }
+                    float exposure = (maxRad - radiusAtY) / Mathf.Max(maxRad - minRad, 1e-4f);
+                    if (j < 3 && (exposure < 0.40f || leafTop - bodyMin < 0.70f)) continue;
+                    var leaf = new GameObject("LeafCluster_" + j);
+                    leaf.transform.SetParent(clump, false);
+                    leaf.transform.localPosition = center;
+                    leaf.transform.localRotation = rotation;
+                    leaf.transform.localScale = Vector3.one * fit;
+                    leaf.AddComponent<MeshFilter>().sharedMesh = mesh;
+                    leaf.AddComponent<MeshRenderer>().sharedMaterial = j % 2 == 0 ? bush : bushLight;
+                    allTop = Mathf.Max(allTop, leafTop);
+                    diameterMin = Mathf.Min(diameterMin, diameter); diameterMax = Mathf.Max(diameterMax, diameter);
+                    exposures.Add(exposure); exposureSum += exposure;
+                    if (exposure >= 0.40f) exposed++;
+                    if (j < 3) exposedAngles.Add(yaw);
+                    accepted = true;
                 }
-                // 三角不等式约束所有旋转顶点的半径，实际顶点约束上下界；不依赖未旋转 bounds。
-                float fit = Mathf.Min(1f, (bodyRadius * 1.35f - radius) / radialExtent);
-                fit = Mathf.Min(fit, (maxTop - center.y) / maxY, (center.y - bodyMin) / -minY);
-                // 最矮主体也用第一片补足 0.70m；中心仍保持顶部区间且不移动主体。
-                if (j == 0 && allTop < bodyMin + 0.70f)
-                    center.y = Mathf.Max(center.y, bodyMin + 0.70f - maxY * fit);
-                fit = Mathf.Min(fit, (maxTop - center.y) / maxY);
-                var leaf = new GameObject("LeafCluster_" + j);
-                leaf.transform.SetParent(clump, false);
-                leaf.transform.localPosition = center;
-                leaf.transform.localRotation = rotation;
-                leaf.transform.localScale = Vector3.one * fit;
-                leaf.AddComponent<MeshFilter>().sharedMesh = mesh;
-                leaf.AddComponent<MeshRenderer>().sharedMaterial = j % 2 == 0 ? bush : bushLight;
-                foreach (var v in mesh.vertices)
-                {
-                    var q = center + rotation * (v * fit);
-                    allTop = Mathf.Max(allTop, q.y);
-                    if (q.y < bodyMin - 0.0001f || q.y > maxTop + 0.0001f ||
-                        new Vector2(q.x, q.z).magnitude > bodyRadius * 1.35f + 0.0001f)
-                        throw new System.InvalidOperationException("Bush leaf vertex outside envelope");
-                }
+                if (!accepted) throw new System.InvalidOperationException("Bush exposure retries exhausted: " + index);
             }
+            exposures.Sort((a, b) => b.CompareTo(a));
+            exposedMin = Mathf.Min(exposedMin, exposed); exposedMax = Mathf.Max(exposedMax, exposed);
+            bodyRadiusMin = Mathf.Min(bodyRadiusMin, bodyRadius); bodyRadiusMax = Mathf.Max(bodyRadiusMax, bodyRadius);
+            Debug.Log($"[SPIKE] bushMeasure index={index} bodyR={bodyRadius:F4} leafDiameter=[{diameterMin:F4},{diameterMax:F4}] top3=[{exposures[0]:F4},{exposures[1]:F4},{exposures[2]:F4}] qualifiedYaw=[{exposedAngles[0]:F2},{exposedAngles[1]:F2},{exposedAngles[2]:F2}]");
             float actualHeight = allTop - bodyMin;
             if (actualHeight < 0.6999f || actualHeight > 1.2001f)
                 throw new System.InvalidOperationException("Bush height outside 0.7–1.2m");
             leavesTotal += count; leavesMin = Mathf.Min(leavesMin, count); leavesMax = Mathf.Max(leavesMax, count);
             bushHeightMin = Mathf.Min(bushHeightMin, actualHeight); bushHeightMax = Mathf.Max(bushHeightMax, actualHeight);
             if (bushIndex == 22)
+            {
+                Debug.Log($"[SPIKE] bushExposure clumps=22 exposedMin={exposedMin} exposedMax={exposedMax} meanExposure={exposureSum / leavesTotal:F3} bodyR=[{bodyRadiusMin:F4},{bodyRadiusMax:F4}] byHeight=true");
                 Debug.Log($"[SPIKE] bushLeaves total={leavesTotal} min={leavesMin} max={leavesMax} meshes=6 height=[{bushHeightMin:F3},{bushHeightMax:F3}]");
+            }
         }
         void Rock(Transform parent, string name, Vector3 p)
         {
