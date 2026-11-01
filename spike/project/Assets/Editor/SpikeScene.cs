@@ -36,14 +36,14 @@ public static class SpikeScene
         var stoneTiling = stone.GetTextureScale("_BaseMap");
         Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
             "[SPIKE] stone tiling=({0:F8}, {1:F8})", (double)stoneTiling.x, (double)stoneTiling.y));
-        // 固定曝光补偿：原石材 tint × (目标反照率 0.30 / 原目标 0.36)，重复生成不累乘。
-        stone.SetColor("_BaseColor", new Color(0.675f, 0.63f, 0.575f, 1f));
+        // 固定石材乘色：恢复暖色受光面；不动曝光、灯位和教堂网格。
+        stone.SetColor("_BaseColor", new Color(1.12f, 1.02f, .88f, 1f));
         var roofMat = ChurchMaterial("roof", "#A06B4A");
         // 屋顶：贴图本身已是深石板冷灰（meanRGB 75,81,89）；_BaseColor 是乘性归一系数，
         // 必须写死在代码里——Assets/Settings/M_Roof.mat 被 .gitignore 忽略，写进 .mat 等于不可复现。
         roofMat.SetColor("_BaseColor", new Color(0.50f, 0.47f, 0.43f, 1f));
         var wood = ChurchMaterial("wood", "#6B4A32");
-        var ground = MakeLit("Assets/Settings/M_Ground.mat", Hex("#DCE6EE"), 0f, 0.05f);
+        var ground = MakeLit("Assets/Settings/M_Ground.mat", Hex("#EDF3F8"), 0f, 0.05f);
 
         EditorUtility.SetDirty(stone);
         EditorUtility.SetDirty(roofMat);
@@ -55,8 +55,9 @@ public static class SpikeScene
         Physics.SyncTransforms();
         BuildMountains();
         BuildMist();
-        BuildTerrainEdgeMist();
+        // Ground fog is evaluated by world height in the terrain/ridge shaders.
         BuildStonePath(terrainCollider, stone);
+        BuildFootprints(terrainCollider);
         BuildProps(terrainCollider, stone, wood);
 
         // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
@@ -221,6 +222,8 @@ public static class SpikeScene
         material.SetFloat("_NormalScale", ground.GetFloat("_BumpScale"));
         if (ground.GetTexture("_BumpMap") != null) material.EnableKeyword("_NORMALMAP");
         else material.DisableKeyword("_NORMALMAP");
+        material.SetFloat("_SnowAlbedo", .86f);
+        material.SetColor("_SnowShadowColor", Hex("#B7C9DC"));
         material.SetColor("_HazeColor", Hex("#DCE2E6"));
         material.SetFloat("_HazeStart", 140f);
         material.SetFloat("_HazeEnd", 300f);
@@ -296,6 +299,8 @@ public static class SpikeScene
         var glow = MakeLit("Assets/Settings/M_WindowGlow.mat", Hex("#FFAA42"), 0f, 0f);
         glow.EnableKeyword("_EMISSION");
         glow.SetColor("_EmissionColor", new Color(4.5f, 1.5f, .15f));
+        var windowFrame = MakeLit("Assets/Settings/M_WindowInset.mat", Hex("#252C35"), 0f, 0f);
+        windowFrame.SetFloat("_Cull", 0);
         void Window(string name, Vector3 position, float width, float height, float yaw)
         {
             var vs = new System.Collections.Generic.List<Vector3> { Vector3.zero };
@@ -304,6 +309,16 @@ public static class SpikeScene
             { float a=i*Mathf.PI/16; vs.Add(new Vector3(Mathf.Cos(a)*width/2,height-width/2+Mathf.Sin(a)*width/2,0)); }
             var ts = new System.Collections.Generic.List<int>();
             for(int i=2;i<vs.Count-1;i++) ts.AddRange(new[]{1,i+1,i});
+            // A narrow dark reveal isolates the luminous opening from warm stonework.
+            float outerWidth = width + .26f, outerHeight = height + .22f;
+            var rim = new System.Collections.Generic.List<Vector3> { Vector3.zero,
+                new Vector3(-outerWidth/2,0,0), new Vector3(outerWidth/2,0,0) };
+            for (int i=0;i<=16;i++)
+            { float a=i*Mathf.PI/16; rim.Add(new Vector3(Mathf.Cos(a)*outerWidth/2,
+                outerHeight-outerWidth/2+Mathf.Sin(a)*outerWidth/2,0)); }
+            var frame = SaveMountainMesh(root,name+"_Reveal",rim.ToArray(),ts.ToArray(),new Material(windowFrame));
+            frame.rotation=Quaternion.Euler(0,yaw,0);
+            frame.position=position+frame.rotation*new Vector3(0,-.09f,.025f);
             var mat = new Material(glow);
             var tr=SaveMountainMesh(root,name,vs.ToArray(),ts.ToArray(),mat);
             tr.position=position; tr.rotation=Quaternion.Euler(0,yaw,0);
@@ -327,8 +342,10 @@ public static class SpikeScene
             fire.transform.SetParent(root); fire.transform.position=p+Vector3.up*1.25f;
             fire.transform.localScale=new Vector3(.65f,.8f,.65f); fire.GetComponent<Renderer>().sharedMaterial=glow;
             var light=new GameObject("BrazierPoint_"+i).AddComponent<Light>();
-            light.transform.position=p+Vector3.up*.65f; light.transform.SetParent(root);
-            light.type=LightType.Point; light.color=Hex("#FFB45B"); light.range=24; light.intensity=24;
+            light.transform.position=p+Vector3.up*1.8f; light.transform.SetParent(root);
+            light.type=LightType.Spot; light.color=Hex("#FFB45B"); light.range=24; light.intensity=40;
+            light.transform.rotation=Quaternion.Euler(90,0,0);
+            light.spotAngle=155; light.innerSpotAngle=110;
             light.renderMode=LightRenderMode.ForcePixel;
             var ps=new GameObject("BrazierFlames_"+i).AddComponent<ParticleSystem>();
             ps.transform.SetParent(root); ps.transform.position=p+Vector3.up*1.35f;
@@ -420,7 +437,15 @@ public static class SpikeScene
         float crestZ = 28f + 10f * Mathf.Sin(x / 38f);
         float height = z <= crestZ ? GroundY(z)
             : GroundY(crestZ) - 0.32f * (z - crestZ);
-        return height
+        // 前景低频积雪起伏：局部振幅 .1–.3m，波长约 33–52m。
+        // z>=-18（含整个教堂基座）与远景均保持原高度；边界平滑淡出。
+        float mask = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-140f, -110f, z))
+            * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-30f, -18f, z)))
+            * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(65f, 90f, Mathf.Abs(x))));
+        float amplitude = Mathf.Lerp(.1f, .3f, Mathf.PerlinNoise(x / 48f + 7f, z / 48f + 11f));
+        float snowDrift = amplitude * (.65f * Mathf.Sin(x * .15f + z * .12f)
+            + .35f * Mathf.Cos(z * .19f - x * .08f));
+        return height + mask * snowDrift
             + 7f * Mathf.Sin(x / 37f + 0.9f)
                 * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(8f, 50f, z))
             + 3f * Mathf.Sin(x / 13f - 1.1f)
@@ -474,6 +499,7 @@ public static class SpikeScene
         var collider = terrain.AddComponent<MeshCollider>();
         collider.convex = false;
         collider.sharedMesh = mesh;
+        Debug.Log("[SNOW] albedo=0.86 color=#EDF3F8 shadow=#B7C9DC drift_amplitude_m=0.1..0.3 protected_z_min=-18 far_terrain_unchanged=true");
         Debug.Log($"[SPIKE] terrain mesh verts={vertices.Length} tris={triangleCount} extent=x150 z-160..560");
         // 直接读取 x=0 的网格顶点（含横向起伏），而非简报中的近似参考值。
         float z100 = vertices[rows.IndexOf(100f) * columns + xCells / 2].y;
@@ -482,33 +508,6 @@ public static class SpikeScene
         float z560 = vertices[rows.IndexOf(560f) * columns + xCells / 2].y;
         Debug.Log($"[SPIKE] terrain edge sample z100={z100:F4} z200={z200:F4} z400={z400:F4} z560={z560:F4}");
         return collider;
-    }
-
-    static void BuildTerrainEdgeMist()
-    {
-        var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "M_Mist_TerrainEdge" };
-        mat.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/mist.png"));
-        var tint = Hex("#DCE2E6");
-        tint.a = 0.45f;
-        mat.SetColor("_BaseColor", tint);
-        mat.SetTextureScale("_BaseMap", new Vector2(6f, 1f));
-        mat.SetFloat("_Surface", 1f);
-        mat.SetFloat("_Blend", 0f);
-        mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-        mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-        mat.SetFloat("_ZWrite", 0f);
-        mat.SetFloat("_Cull", 0f);
-        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        mat.SetOverrideTag("RenderType", "Transparent");
-        mat.renderQueue = (int)RenderQueue.Transparent;
-        // 水平 900×220 m，中心 z=95，落在地形上方 5 m。
-        var vertices = new[] { new Vector3(-450f, 0f, -110f), new Vector3(450f, 0f, -110f),
-                               new Vector3(-450f, 0f, 110f), new Vector3(450f, 0f, 110f) };
-        var band = SaveMountainMesh(null, "Mist_TerrainEdge", vertices, new[] { 0, 2, 1, 1, 2, 3 }, mat);
-        var mesh = band.GetComponent<MeshFilter>().sharedMesh;
-        mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
-        EditorUtility.SetDirty(mesh);
-        band.position = new Vector3(0f, TerrainHeight(0f, 95f) + 5f, 95f);
     }
 
     // 沿揭示机位视轴横向展开；指定色板与远距薄雾共同形成层次。
@@ -607,54 +606,38 @@ public static class SpikeScene
 
     static void BuildMist()
     {
-        const string texturePath = "Assets/Art/Textures/mist.png";
-        var importer = AssetImporter.GetAtPath(texturePath) as TextureImporter;
-        if (importer == null) throw new System.InvalidOperationException("Generate mist.png first");
-        importer.wrapMode = TextureWrapMode.Repeat;
-        importer.filterMode = FilterMode.Bilinear;
-        importer.alphaSource = TextureImporterAlphaSource.FromInput;
-        importer.textureCompression = TextureImporterCompression.Uncompressed;
-        importer.mipmapEnabled = true;
-        importer.SaveAndReimport();
-        var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
-        var root = new GameObject("Mist Bands").transform;
-        var eye = EyeAt(28f, -100f);
-        var view = Quaternion.LookRotation(new Vector3(0f,13f,0f)-eye);
-        float[] depths = { 300f, 370f };
-        float[] screenYs = { .34f, .43f };
-        for (int i = 0; i < 2; i++)
+        // No camera-facing sheets: fog exists only at world Y 0..15m in the surface shaders.
+        Debug.Log("[SPIKE] mist height=0..15m terrain/ridge fragments only; screen bands=0");
+    }
+
+    static void BuildFootprints(MeshCollider terrain)
+    {
+        var root = new GameObject("Snow Footprints").transform;
+        var material = new Material(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat"))
+            { name = "M_Footprint" };
+        material.SetFloat("_Footprint", 1f);
+        AssetDatabase.DeleteAsset("Assets/Settings/M_Footprint.mat");
+        AssetDatabase.CreateAsset(material, "Assets/Settings/M_Footprint.mat");
+        for (int i = 0; i < 20; i++)
         {
-            var mat = new Material(Shader.Find("Mistbell/RidgeFog")) { name = "M_Mist_" + i };
-            mat.SetTexture("_NoiseTex", texture);
-            mat.SetFloat("_CloudBand", 1f);
-            mat.SetFloat("_DepthWrite", 0f);
-            mat.SetFloat("_StencilComp", (float)CompareFunction.Equal);
-            mat.SetFloat("_StencilPass", (float)StencilOp.Keep);
-            var tint = Hex("#B5C1CD");
-            tint.a = i == 0 ? .92f : .82f;
-            mat.SetColor("_CloudColor", tint);
-            mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-            mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-            mat.SetOverrideTag("RenderType", "Transparent");
-            mat.renderQueue = (int)RenderQueue.Transparent;
-            string name = "Mist_" + (i == 0 ? "Near" : "Far");
-            // 正对主视角的水平云带，透明纹理的上下软边避免山天交界硬线。
-            var mesh = new Mesh { name = name };
-            float halfHeight = i == 0 ? 12f : 14f;
-            mesh.vertices = new[] { new Vector3(-800f, -halfHeight, 0f), new Vector3(800f, -halfHeight, 0f),
-                                    new Vector3(-800f, halfHeight, 0f), new Vector3(800f, halfHeight, 0f) };
-            mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
-            mesh.triangles = new[] { 0, 2, 1, 1, 2, 3 };
-            mesh.RecalculateBounds();
-            var band = SaveMountainMesh(root, name, mesh.vertices, mesh.triangles, mat);
-            band.GetComponent<MeshFilter>().sharedMesh.uv = mesh.uv;
-            EditorUtility.SetDirty(band.GetComponent<MeshFilter>().sharedMesh);
-            UnityEngine.Object.DestroyImmediate(mesh);
-            band.rotation = view;
-            band.position = eye + view * new Vector3(0f,
-                depths[i] * Mathf.Tan(Fov * .5f * Mathf.Deg2Rad) * (1f-2f*screenYs[i]), depths[i]);
+            float t = i / 19f;
+            float z = Mathf.Lerp(-32f, -16f, t);
+            float x = 2.1f + 2f * (1f-t) * (1f-t) + (i % 2 == 0 ? -.18f : .18f);
+            var vertices = new Vector3[25];
+            for (int v = 0; v < vertices.Length; v++)
+            {
+                float angle = (v - 1) * Mathf.PI * 2 / 24f;
+                var point = new Vector3(x, 0, z) + (v == 0 ? Vector3.zero :
+                    new Vector3(Mathf.Cos(angle) * .15f, 0, Mathf.Sin(angle) * .25f));
+                terrain.Raycast(new Ray(point + Vector3.up * 100, Vector3.down), out var hit, 200);
+                vertices[v] = new Vector3(point.x, hit.point.y + .012f, point.z);
+            }
+            var triangles = new int[72];
+            for (int v = 0; v < 24; v++)
+            { triangles[v*3]=0; triangles[v*3+1]=1+(v+1)%24; triangles[v*3+2]=v+1; }
+            SaveMountainMesh(root, "Footprint_"+i, vertices, triangles, new Material(material));
         }
-        Debug.Log("[SPIKE] mist screenY=.34/.43 bands=2 texture-alpha stencil=mountains-only");
+        Debug.Log("[SNOW] footprints=20 ellipse=.3x.5m darken=.08 curve_z=-32..-16");
     }
 
     static void BuildStonePath(MeshCollider terrainCollider, Material stone)
@@ -690,12 +673,14 @@ public static class SpikeScene
         var root = new GameObject("Props").transform;
         var roadside = new GameObject("Roadside Props").transform;
         roadside.SetParent(root, false);
-        var rockMat = MakeLit("Assets/Settings/M_WinterRock.mat", Hex("#8E877D"), 0f, .05f);
-        // Local rock skylight fill keeps back faces readable under the low sun.
-        rockMat.EnableKeyword("_EMISSION");
-        rockMat.SetColor("_EmissionColor", new Color(.065f,.075f,.085f));
-        EditorUtility.SetDirty(rockMat);
-        var snowMat = MakeLit("Assets/Settings/M_RockSnow.mat", Hex("#DCE6EE"), 0f, .05f);
+        var rockMat = MakeLit("Assets/Settings/M_WinterRock.mat", Hex("#6B6157"), 0f, .02f);
+        var rockShade = MakeLit("Assets/Settings/M_WinterRockShade.mat", Hex("#4E463E"), 0f, .02f);
+        var snowMat = new Material(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat"))
+            { name = "M_RockSnow" };
+        snowMat.SetColor("_BaseColor", Hex("#E7EDF4"));
+        snowMat.SetFloat("_SnowAlbedo", .76f);
+        AssetDatabase.DeleteAsset("Assets/Settings/M_RockSnow.mat");
+        AssetDatabase.CreateAsset(snowMat, "Assets/Settings/M_RockSnow.mat");
         var fenceWood = new Material(wood) { name = "M_FenceWood" };
         fenceWood.SetColor("_BaseColor", Hex("#827767"));
         AssetDatabase.DeleteAsset("Assets/Settings/M_FenceWood.mat");
@@ -708,9 +693,6 @@ public static class SpikeScene
                 throw new System.InvalidOperationException("Prop ray missed terrain: " + p);
             return hit.point;
         }
-        var meshes = new Mesh[6];
-        for (int i = 0; i < meshes.Length; i++)
-            meshes[i] = SpikeArt.Blob(Vector3.one, .20f, 1, true, 7200 + i);
         var centers = new System.Collections.Generic.List<Vector2>();
         // Two foreground groups, followed by irregularly spaced groups across the slope.
         var eye = EyeAt(28f, -100f);
@@ -721,51 +703,56 @@ public static class SpikeScene
             var p = eye + forward * 23f + right * (side * 7.5f);
             centers.Add(new Vector2(p.x, p.z));
         }
-        for (int attempt = 0; attempt < 3000 && centers.Count < 18; attempt++)
+        for (int attempt = 0; attempt < 3000 && centers.Count < 16; attempt++)
         {
             var candidate = new Vector2(Range(-40f, 48f), Range(-90f, 24f));
             float nearest = float.PositiveInfinity;
             foreach (var center in centers) nearest = Mathf.Min(nearest, Vector2.Distance(center, candidate));
-            if (nearest < Range(6f, 20f) || nearest > 20f) continue;
+            if (nearest < 8f || nearest > 25f) continue;
             if (Mathf.Abs(candidate.x) < 18f && candidate.y > -18f) continue;
             centers.Add(candidate);
         }
-        int rocks = 0;
+        int rocks = 0, halfBuried = 0, minFaces = int.MaxValue, maxFaces = 0;
+        var minSize = Vector3.one * float.PositiveInfinity;
+        var maxSize = Vector3.one * float.NegativeInfinity;
         foreach (var center in centers)
         {
-            float radius = Range(1.2f, 2.0f);
-            int count = rnd.Next(5, 8);
-            for (int j = 0; j < count && rocks < 108; j++)
+            float radius = Range(.65f, 1.1f);
+            int count = rnd.Next(3, 6);
+            for (int j = 0; j < count && rocks < 80; j++)
             {
                 float angle = Range(0f, Mathf.PI * 2f), offset = radius * Mathf.Sqrt(Range(0f, 1f));
-                var p = Snap(new Vector3(center.x + Mathf.Cos(angle) * offset, 0f, center.y + Mathf.Sin(angle) * offset));
-                float size = Range(.95f, 1.9f);
-                var rock = new GameObject("ClusterRock_" + rocks++);
+                var location = new Vector3(center.x + Mathf.Cos(angle) * offset, 0f,
+                    center.y + Mathf.Sin(angle) * offset);
+                // 散布半径也不可侵入基座保护区。
+                if (Mathf.Abs(location.x) < 18f && location.z > -18f) continue;
+                var p = Snap(location);
+                int faces = 32; // irregular block: broad top, vertical broken sides; no apex.
+                var mesh = BuildWinterRock(rnd, 6);
+                var rock = new GameObject("ClusterRock_" + rocks);
                 rock.transform.SetParent(root, false);
-                rock.transform.position = p + Vector3.up * size * .18f;
-                rock.transform.rotation = Quaternion.Euler(0f, Range(0f, 360f), 0f);
-                rock.transform.localScale = new Vector3(size, size * Range(.55f, .85f), size * Range(.7f, 1f));
-                var mesh = UnityEngine.Object.Instantiate(meshes[rnd.Next(meshes.Length)]);
-                // Split the top faces into a snow submesh; no floating duplicate shell.
-                var stoneTris = new System.Collections.Generic.List<int>();
-                var snowTris = new System.Collections.Generic.List<int>();
-                var vertices = mesh.vertices;
-                var triangles = mesh.triangles;
-                for (int t = 0; t < triangles.Length; t += 3)
-                {
-                    var a = vertices[triangles[t]]; var b = vertices[triangles[t+1]]; var c = vertices[triangles[t+2]];
-                    var target = Vector3.Cross(b-a, c-a).normalized.y > .45f ? snowTris : stoneTris;
-                    target.AddRange(new[] {triangles[t], triangles[t+1], triangles[t+2]});
-                }
-                mesh.subMeshCount = 2;
-                mesh.SetTriangles(stoneTris, 0); mesh.SetTriangles(snowTris, 1);
-                string path = "Assets/Settings/ClusterRock_" + rocks + ".asset";
+                // yaw 已烘入网格，按实际世界轴包围盒规范化；绝不拿缩放参数冒充尺寸。
+                var size = mesh.bounds.size;
+                float burial = .70f;
+                float bottomAtGround = p.y - mesh.bounds.min.y;
+                rock.transform.position = new Vector3(p.x, bottomAtGround - burial * size.y, p.z);
+                if (Mathf.Approximately(burial, .7f)) halfBuried++;
+                minSize = Vector3.Min(minSize, size); maxSize = Vector3.Max(maxSize, size);
+                minFaces = Mathf.Min(minFaces, faces); maxFaces = Mathf.Max(maxFaces, faces);
+                string path = "Assets/Settings/ClusterRock_" + (rocks + 1) + ".asset";
                 AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(mesh, path);
                 rock.AddComponent<MeshFilter>().sharedMesh = mesh;
-                rock.AddComponent<MeshRenderer>().sharedMaterials = new[] {rockMat, snowMat};
+                rock.AddComponent<MeshRenderer>().sharedMaterials = new[] {rockMat, snowMat, rockShade};
+                Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "[ROCK] id={0} actual_size_m={1:F4},{2:F4},{3:F4} faces={4} burial_height_ratio={5:F4} flat_normals=true",
+                    rocks, size.x, size.y, size.z, faces, burial));
+                rocks++;
             }
         }
-        Debug.Log($"[SPIKE] ground clusters={centers.Count} rocks={rocks} members=5..7 radius=1.2..2 spacing=6..20 size=.95..1.9 color=#8E877D snowCaps=true");
+        float halfBuriedRatio = rocks == 0 ? 0f : halfBuried / (float)rocks;
+        if (rocks < 40 || rocks > 80 || halfBuried != rocks)
+            throw new System.InvalidOperationException("Winter rock specification violated");
+        Debug.Log($"[ROCKS] count={rocks} clusters={centers.Count} per_cluster=3..6 spacing=8..25m size=.3..1.2m burial=.70 body=#6B6157 shade=#4E463E snow=#E7EDF4 block=true");
         Vector3 RoadPoint(float t, float offset) => new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI) + offset, 0f,
             Mathf.Lerp(-70f, -13.25f, t));
         int posts = 0, rails = 0;
@@ -789,6 +776,50 @@ public static class SpikeScene
             previous = p;
         }
         Debug.Log($"[SPIKE] fence posts={posts} rails={rails}");
+    }
+
+    // Broad irregular prism with a thin snow layer on its horizontal top only.
+    static Mesh BuildWinterRock(System.Random random, int sides)
+    {
+        float Range(float a, float b) => Mathf.Lerp(a, b, (float)random.NextDouble());
+        var yaw = Quaternion.Euler(Range(-4,4), Range(0,360), Range(-4,4));
+        var points = new Vector3[sides*2];
+        for (int i=0; i<sides; i++)
+        {
+            float angle = Mathf.PI*2*i/sides;
+            float radius = Range(.44f,.55f);
+            var p = new Vector3(Mathf.Cos(angle)*radius, 0, Mathf.Sin(angle)*radius);
+            points[i] = yaw * (p + Vector3.down*.5f);
+            points[i+sides] = yaw * (p*Range(.78f,.94f) + Vector3.up*.5f);
+        }
+        var bounds = new Bounds(points[0],Vector3.zero);
+        foreach(var p in points) bounds.Encapsulate(p);
+        var target = new Vector3(Range(.3f,1.2f),Range(.3f,.8f),Range(.3f,1.2f));
+        for(int i=0;i<points.Length;i++) points[i]=Vector3.Scale(points[i]-bounds.center,
+            new Vector3(target.x/bounds.size.x,target.y/bounds.size.y,target.z/bounds.size.z));
+        var vertices = new System.Collections.Generic.List<Vector3>();
+        var groups = new System.Collections.Generic.List<int>[] {
+            new System.Collections.Generic.List<int>(),new System.Collections.Generic.List<int>(),new System.Collections.Generic.List<int>() };
+        void Face(Vector3 a,Vector3 b,Vector3 c,int material)
+        {
+            if(Vector3.Dot(Vector3.Cross(b-a,c-a),(a+b+c)/3)<0) { var swap=b;b=c;c=swap; }
+            int start=vertices.Count; vertices.Add(a);vertices.Add(b);vertices.Add(c);
+            groups[material].AddRange(new[]{start,start+1,start+2});
+        }
+        for(int i=0;i<sides;i++)
+        {
+            int j=(i+1)%sides;
+            var a=points[i];var b=points[j];var c=points[i+sides];var d=points[j+sides];
+            int material=Vector3.Dot(Vector3.Cross(c-a,b-a).normalized,new Vector3(-.6f,.34f,-.72f))>0 ? 0:2;
+            Face(a,b,c,material);Face(b,d,c,material);
+            // Only the horizontal top gets snow, preserving the exposed .3-height stone rim.
+            Face(Vector3.up*(target.y*.5f+.012f),c+Vector3.up*.012f,d+Vector3.up*.012f,1);
+            Face(Vector3.down*target.y*.5f,b,a,0);
+        }
+        var mesh=new Mesh {name="WinterRock_Block",vertices=vertices.ToArray(),subMeshCount=3};
+        for(int i=0;i<3;i++) mesh.SetTriangles(groups[i],i);
+        mesh.RecalculateNormals();mesh.RecalculateBounds();
+        return mesh;
     }
 
     /// <summary>坡面解析式：6° 上坡，z=0 处地面 y=0。</summary>

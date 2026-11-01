@@ -4,6 +4,11 @@ Shader "Mistbell/TerrainHaze"
     {
         [MainTexture] _BaseMap ("Grass", 2D) = "white" {}
         [MainColor] _BaseColor ("Tint", Color) = (1,1,1,1)
+        _SnowAlbedo ("Snow linear albedo", Range(0,1)) = 0.86
+        _SnowShadowColor ("Snow shadow tint", Color) = (0.472,0.584,0.716,1)
+        _Footprint ("Footprint darkening", Range(0,1)) = 0
+        _RockSnowCap ("Rock snow cap", Range(0,1)) = 0
+        _RockColor ("Rock below snow cap", Color) = (0.1946,0.1683,0.1329,1)
         [Normal] _NormalMap ("Normal", 2D) = "bump" {}
         _NormalScale ("Normal strength", Float) = 1
         _Metallic ("Metallic", Range(0,1)) = 0
@@ -36,7 +41,8 @@ Shader "Mistbell/TerrainHaze"
             TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
             TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap);
             CBUFFER_START(UnityPerMaterial)
-                float4 _BaseMap_ST, _BaseColor, _HazeColor;
+                float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor;
+                float _SnowAlbedo, _RockSnowCap, _Footprint;
                 float _NormalScale, _Metallic, _Smoothness;
                 float _HazeStart, _HazeEnd, _HazePower, _HazeStrength;
             CBUFFER_END
@@ -55,6 +61,7 @@ Shader "Mistbell/TerrainHaze"
                 half4 tangentWS : TEXCOORD2;
                 float2 uv : TEXCOORD3;
                 half3 vertexLighting : TEXCOORD4;
+                float capHeight : TEXCOORD5;
             };
             Varyings Vert(Attributes input)
             {
@@ -65,6 +72,7 @@ Shader "Mistbell/TerrainHaze"
                 output.normalWS = normals.normalWS;
                 output.tangentWS = half4(normals.tangentWS, input.tangentOS.w * GetOddNegativeScale());
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+                output.capHeight = input.uv.y;
                 output.vertexLighting = VertexLighting(output.positionWS, normals.normalWS);
                 return output;
             }
@@ -77,6 +85,11 @@ Shader "Mistbell/TerrainHaze"
                     normalWS = NormalizeNormalPerPixel(TransformTangentToWorld(normalTS,
                         half3x3(input.tangentWS.xyz, bitangent, input.normalWS)));
                 #endif
+                // Wind-packed snow: oblique ripples, broken by slower drift lobes (world metres).
+                float2 p = input.positionWS.xz;
+                float wave = p.x * 3.1 + p.y * 1.2 + sin(p.y * .31) * 1.4 + sin(p.x*.47+p.y*.19)*2.1;
+                float ripple = sin(wave);
+                normalWS = normalize(normalWS + half3(cos(wave)*.022, 0, cos(wave)*.009));
                 InputData lighting = (InputData)0;
                 lighting.positionWS = input.positionWS;
                 lighting.normalWS = normalWS;
@@ -87,8 +100,12 @@ Shader "Mistbell/TerrainHaze"
                 lighting.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
                 lighting.shadowMask = half4(1,1,1,1);
                 SurfaceData surface = (SurfaceData)0;
-                // Snow albedo 0.75 in linear light, tinted #DCE6EE (normalised by blue).
-                surface.albedo = .75 * _BaseColor.rgb / max(_BaseColor.b, .001);
+                // Linear albedo .86, tinted #EDF3F8 (normalised by blue).
+                half snowCoverage = lerp(1.0h, smoothstep(.70h, .76h, input.capHeight), _RockSnowCap);
+                half3 snowAlbedo = _SnowAlbedo * _BaseColor.rgb / max(_BaseColor.b, .001);
+                float detail = .975 + ripple*.009 + sin(p.x*.37+p.y*.24)*.012;
+                surface.albedo = lerp(_RockColor.rgb, snowAlbedo * detail, snowCoverage);
+                surface.emission = (1.0h - snowCoverage) * half3(.065h, .075h, .085h);
                 surface.metallic = _Metallic;
                 surface.smoothness = _Smoothness;
                 surface.normalTS = half3(0,0,1);
@@ -99,13 +116,14 @@ Shader "Mistbell/TerrainHaze"
                 half3 color = UniversalFragmentPBR(lighting, surface).rgb;
                 // Cool skylight remains in the actual cast shadow; never fill it with white albedo.
                 Light sun = GetMainLight(lighting.shadowCoord);
-                half3 shadowTint = half3(.392, .503, .644); // #A8BCD2 linear
+                half3 shadowTint = lerp(half3(1,1,1), _SnowShadowColor.rgb, snowCoverage); // #B7C9DC, material supplies linear color
                 color *= lerp(shadowTint, half3(1,1,1), sun.shadowAttenuation);
-                half3 heightFog=lerp(half3(.79,.77,.73),half3(.67,.75,.84),saturate((input.positionWS.y+12)/50));
-                color = MixFogColor(color,heightFog,ComputeFogFactor(TransformWorldToHClip(input.positionWS).z));
+                // Ground mist is bounded in WORLD height, so no layer can cross a mountainside.
                 float d = distance(input.positionWS.xz, _WorldSpaceCameraPos.xz);
                 float t = saturate((d - _HazeStart) / max(1e-3, _HazeEnd - _HazeStart));
-                float f = pow(t, _HazePower) * _HazeStrength;
+                float low = (1-smoothstep(0,15,input.positionWS.y)) * step(0,input.positionWS.y);
+                float f = pow(t, _HazePower) * _HazeStrength * low;
+                color = max(0, color - _Footprint * .08);
                 return half4(lerp(color, _HazeColor.rgb, f), 1);
             }
             ENDHLSL

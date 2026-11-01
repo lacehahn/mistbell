@@ -74,14 +74,14 @@ Shader "Mistbell/RidgeFog"
                     float2 uv=input.ridge.xy;
                     float edge=pow(saturate(sin(uv.y*PI)),2.0);
                     float textureAlpha=SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,float2(uv.x*3,uv.y)).a;
-                    float alpha=edge*textureAlpha*_CloudColor.a;
+                    float alpha=edge*saturate(textureAlpha*3.0)*_CloudColor.a;
                     half3 tint=_CloudColor.rgb;
                     return half4(tint,alpha);
                 }
                 float3 n=normalize(input.normalWS);
                 float face=saturate(dot(n,GetMainLight().direction));
                 // Explicit warm/cool face colours in linear light, independent of exposure.
-                float lightFace=smoothstep(.12,.78,face);
+                float lightFace=smoothstep(.62,.94,face);
                 float breakup=sin(input.positionWS.x*.22+sin(input.positionWS.z*.11)*2)*.012;
                 float snow=smoothstep(_SnowHeight-_SnowSoftness, _SnowHeight+_SnowSoftness, input.ridge.x+breakup);
                 half3 rock=lerp(_RockShade.rgb,_ColorBottom.rgb,lightFace);
@@ -89,7 +89,7 @@ Shader "Mistbell/RidgeFog"
                 half3 color=lerp(rock,ice,snow);
                 float grain=sin(input.positionWS.x*.65+sin(input.positionWS.y*.43)*3)*sin(input.positionWS.y*.81)*.025;
                 color*=1+grain;
-                float foot=(1-smoothstep(-10,25,input.positionWS.y))*.08;
+                float foot=(1-smoothstep(0,15,input.positionWS.y))*step(0,input.positionWS.y)*.18;
                 color=lerp(color,_AirColor.rgb,saturate(_Aerial+_FogFloor+foot));
                 return half4(color, 1);
             }
