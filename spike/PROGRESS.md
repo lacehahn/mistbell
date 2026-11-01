@@ -80,3 +80,5 @@
 | 00:00 | 人工验收（读图） | `Shots/art_runtime.png` | 教堂全高入画 ✓、曝光提亮 ✓、像素材质已上（草/砖/瓦）✓；**角色悬空** ✗、无雾无纵深 ✗、调色偏灰 ✗ |
 | 00:03 | 收入概念图参考 | 用户提供 Gergeti 晴日概念图 | 存为 `art-ref/concept-gergeti-sunny.jpg`，规格写入 `art-ref/notes.md`（构图/光照/色板/待修 5 项） |
 | 00:05 | 派发 Codex 第 2 轮 | `codex.sh -i art-ref/concept-gergeti-sunny.jpg` | 任务：角色地形吸附、3 层远山、石板路、暖补光、色板对齐；进行中 |
+| 00:20 | 收入三张目标风格参考 | 用户提供设定画 + 两张成片 | 存 `art-ref/concept-sheet-hd2d.jpg`、`target-front-hd2d.jpg`、`target-path-hd2d.jpg`；规格写入 `art-ref/notes-winter-hd2d.md` |
+| 00:21 | 关键发现 | 设定画标注尺寸 | **教堂真实尺寸 34 m 宽 × 27 m 高 × 24 m 深**（此前按 14 m 建，是构图反复切顶的根因）；穹顶 12 边形、钟楼 8 边形开敞且独立 |

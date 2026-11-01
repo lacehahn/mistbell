@@ -30,16 +30,28 @@ public static class SpikeScene
         // ---------- 材质（程序化像素贴图 + 法线图；UV 以米计，tiling 按每张贴图覆盖的米数反推）----------
         const string TEX = "Assets/Art/Textures/";
         var stone = SpikeArt.MakeTextured("Assets/Settings/M_Stone.mat", TEX + "stone_ashlar.png", TEX + "stone_ashlar_n.png",
-                                          2.4f, new Color(0.36f, 0.34f, 0.30f), 0.12f, 1.0f);
+                                          2.4f, Hex("#C6A882"), 0.12f, 1.0f);
         var roofMat = SpikeArt.MakeTextured("Assets/Settings/M_Roof.mat", TEX + "roof_slate.png", TEX + "roof_slate_n.png",
-                                            2.4f, new Color(0.24f, 0.14f, 0.11f), 0.22f, 0.9f);
+                                            2.4f, Hex("#A06B4A"), 0.22f, 0.9f);
         var ground = SpikeArt.MakeTextured("Assets/Settings/M_Ground.mat", TEX + "grass.png", TEX + "grass_n.png",
-                                           3.2f, new Color(0.12f, 0.16f, 0.07f), 0.08f, 0.8f);
+                                           3.2f, Hex("#5E7A2E"), 0.08f, 0.8f);
+
+        // 使用指定色板作为材质基色，避免贴图工具的均值补偿产生 HDR 色值。
+        stone.SetColor("_BaseColor", Hex("#C6A882"));
+        roofMat.SetColor("_BaseColor", Hex("#A06B4A"));
+        ground.SetColor("_BaseColor", Hex("#5E7A2E"));
+        EditorUtility.SetDirty(stone);
+        EditorUtility.SetDirty(roofMat);
+        EditorUtility.SetDirty(ground);
 
         // ---------- 地形：一段上坡（坡面在 z 方向的解析式 y = GroundY(z)）----------
         var slope = SpikeArt.Box(null, "Slope", new Vector3(70f, 2f, 90f),
                                  new Vector3(0f, SlopeOriginY(), 18f), ground);
         slope.transform.localRotation = Quaternion.Euler(-SlopeDeg, 0f, 0f);
+
+        Physics.SyncTransforms();
+        BuildMountains();
+        BuildStonePath(slope.GetComponent<Collider>(), stone);
 
         // ---------- 体块教堂（主体 / 钟楼 / 门廊 / 屋顶）----------
         var church = new GameObject("Church").transform;
@@ -65,10 +77,17 @@ public static class SpikeScene
             return;
         }
 
-        // 揭示机位前方约 10 m、视轴下方 1.5 m：角色落在画面中下部，避免教堂遮挡。
-        var revealRotation = Quaternion.Euler(20f, 22f, 0f);
-        var pilgrimPos = new Vector3(0f, 6f, 0f) - revealRotation * Vector3.forward * 35f
-                         - revealRotation * Vector3.up * 1.5f;
+        // 原机位偏移将角色放在 Slope 边界外；选取坡内、教堂左前方的可见落脚点。
+        var pilgrimPos = new Vector3(-4f, 0f, -6f);
+
+        Physics.SyncTransforms();
+        float terrainY = 0f;
+        if (Physics.Raycast(new Vector3(pilgrimPos.x, 100f, pilgrimPos.z), Vector3.down,
+                            out RaycastHit terrainHit, 200f, Physics.DefaultRaycastLayers,
+                            QueryTriggerInteraction.Ignore) && terrainHit.collider.gameObject == slope)
+            terrainY = terrainHit.point.y;
+        pilgrimPos.y = terrainY;
+        Debug.Log($"[SPIKE] pilgrim y={pilgrimPos.y:F4} terrain y={terrainY:F4}");
 
         var bbMat = new Material(bbShader) { name = "M_Pilgrim" };
         bbMat.SetTexture("_MainTex", sprite != null ? sprite.texture : null);
@@ -97,13 +116,20 @@ public static class SpikeScene
         sun.shadows = LightShadows.Soft;
         sun.shadowStrength = 0.75f;
 
+        var fill = new GameObject("Warm Fill").AddComponent<Light>();
+        fill.type = LightType.Directional;
+        fill.intensity = 0.6f;
+        fill.color = Hex("#FFD9A0");
+        fill.transform.rotation = Quaternion.Euler(40f, 205f, 0f);
+        fill.shadows = LightShadows.None;
+
         RenderSettings.ambientMode = AmbientMode.Flat;
         RenderSettings.ambientLight = new Color(0.45f, 0.45f, 0.49f);
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Linear;
         RenderSettings.fogColor = new Color(0.62f, 0.68f, 0.74f);
-        RenderSettings.fogStartDistance = 30f;
-        RenderSettings.fogEndDistance = 160f;
+        RenderSettings.fogStartDistance = 80f;
+        RenderSettings.fogEndDistance = 1800f; // 远景薄雾保留 250–700 m 山脊的色阶。
 
         // ---------- 后期 Volume ----------
         var profile = BuildProfile("Assets/Settings/MistbellPost.asset");
@@ -169,6 +195,111 @@ public static class SpikeScene
 
         Debug.Log("[SPIKE] EDIT-TIME CAPTURES DONE（正式证据用播放器 -shots 产出）");
         Debug.Log("[SPIKE] ART DONE");
+    }
+
+    static Color Hex(string value)
+    {
+        ColorUtility.TryParseHtmlString(value, out Color color);
+        return color;
+    }
+
+    // 沿揭示机位视轴横向展开；指定色板与远距薄雾共同形成层次。
+    static void BuildMountains()
+    {
+        const int samples = 81;
+        var forward = Quaternion.Euler(0f, 22f, 0f) * Vector3.forward;
+        var right = Quaternion.Euler(0f, 22f, 0f) * Vector3.right;
+        float[] distances = { 250f, 450f, 700f };
+        string[] colors = { "#4E6478", "#6E8399", "#93A6B8" };
+        var root = new GameObject("Mountain Ridges").transform;
+        for (int layer = 0; layer < 3; layer++)
+        {
+            var random = new System.Random(7301 + layer * 101);
+            var heights = new float[samples];
+            for (int i = 0; i < samples; i++)
+                heights[i] = Mathf.Clamp(290f + 52f * Mathf.Sin(i * 0.21f + layer)
+                    + 36f * Mathf.Sin(i * 0.57f + layer * 2f)
+                    + (float)random.NextDouble() * 42f - 21f, 200f, 400f);
+            var vertices = new Vector3[samples * 2];
+            var triangles = new int[(samples - 1) * 6];
+            for (int i = 0; i < samples; i++)
+            {
+                var lateral = right * (-600f + 1200f * i / (samples - 1));
+                vertices[i * 2] = lateral + Vector3.down * 150f;
+                vertices[i * 2 + 1] = lateral + Vector3.up * heights[i];
+                if (i == samples - 1) continue;
+                int t = i * 6, v = i * 2;
+                triangles[t] = v; triangles[t + 1] = v + 1; triangles[t + 2] = v + 2;
+                triangles[t + 3] = v + 2; triangles[t + 4] = v + 1; triangles[t + 5] = v + 3;
+            }
+            var ridge = SaveMountainMesh(root, "Mountain_" + (layer + 1), vertices, triangles,
+                                         Hex(colors[layer]));
+            // 当前机位俯视 20°，山体基底沉入谷底，让锯齿山脊进入画面而非整面遮天。
+            float[] valleyDepths = { 300f, 340f, 400f };
+            ridge.position = forward * distances[layer] + Vector3.down * valleyDepths[layer];
+            Debug.Log($"[SPIKE] ridge {layer + 1} vertices={vertices.Length} distance={distances[layer]:F0}");
+            if (layer == 2)
+            {
+                var snowVertices = (Vector3[])vertices.Clone();
+                for (int i = 0; i < samples; i++)
+                {
+                    snowVertices[i * 2] = vertices[i * 2 + 1] - Vector3.up * 9f;
+                    snowVertices[i * 2 + 1] = vertices[i * 2 + 1];
+                }
+                var snow = SaveMountainMesh(ridge, "Mountain_Snow", snowVertices, triangles, Hex("#EAF1F6"));
+                snow.localPosition = -forward * 0.1f;
+            }
+        }
+    }
+
+    static Transform SaveMountainMesh(Transform parent, string name, Vector3[] vertices,
+                                      int[] triangles, Color color)
+    {
+        var mesh = new Mesh { name = name, vertices = vertices, triangles = triangles };
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        string meshPath = "Assets/Settings/" + name + ".asset";
+        AssetDatabase.DeleteAsset(meshPath);
+        AssetDatabase.CreateAsset(mesh, meshPath);
+        var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "M_" + name };
+        mat.SetColor("_BaseColor", color);
+        mat.SetFloat("_Cull", 0f);
+        string matPath = "Assets/Settings/M_" + name + ".mat";
+        AssetDatabase.DeleteAsset(matPath);
+        AssetDatabase.CreateAsset(mat, matPath);
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var renderer = go.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = mat;
+        renderer.shadowCastingMode = ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        return go.transform;
+    }
+
+    static void BuildStonePath(Collider terrain, Material stone)
+    {
+        // 7 段连接精确端点，中心线左右摆动形成 S；每段顶面贴合实际坡面。
+        Vector3[] points = {
+            new Vector3(0f, 0f, 25f), new Vector3(-1.3f, 0f, 22f),
+            new Vector3(-1.9f, 0f, 19f), new Vector3(-0.9f, 0f, 16f),
+            new Vector3(0.9f, 0f, 13f), new Vector3(1.9f, 0f, 10f),
+            new Vector3(1.3f, 0f, 7f), new Vector3(0f, 0f, 4f)
+        };
+        for (int i = 0; i < points.Length; i++)
+            if (terrain.Raycast(new Ray(points[i] + Vector3.up * 100f, Vector3.down),
+                                out RaycastHit hit, 200f))
+                points[i].y = hit.point.y + 0.035f;
+        var root = new GameObject("Stone Path").transform;
+        for (int i = 0; i < points.Length - 1; i++)
+        {
+            var delta = points[i + 1] - points[i];
+            var segment = SpikeArt.Box(root, "Paving_" + (i + 1),
+                new Vector3(2.8f, 0.07f, delta.magnitude + 0.08f),
+                (points[i] + points[i + 1]) * 0.5f - Vector3.up * 0.035f, stone);
+            segment.transform.rotation = Quaternion.LookRotation(delta, terrain.transform.up);
+        }
+        Debug.Log($"[SPIKE] stone path segments={points.Length - 1} material=existing M_Stone (stone_ashlar; no Substance material available)");
     }
 
     /// <summary>坡面解析式：4° 上坡，z=0 处地面 y=0。</summary>
