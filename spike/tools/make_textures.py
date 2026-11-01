@@ -643,6 +643,14 @@ def seam_score(img):
     return diff_col(w - 1, 0) / max(inner_c, 0.01), diff_row(h - 1, 0) / max(inner_r, 0.01)
 
 
+def make_snow_noise():
+    """128² 可平铺灰度；独立种子，避免重写其他资产。"""
+    noise = fbm([32, 16, 8, 4, 2], random.Random(271))
+    img = [[(clamp8((v - 0.5) * 400 + 128),) * 3 for v in row] for row in noise]
+    count = write_png(os.path.join(OUT, "snow.png"), img)
+    print("snow           RGB=128x128 bytes=%d periodic grayscale" % count)
+
+
 def make_mist():
     """1024×256 周期软噪声；两端零斜率渐隐，RGBA alpha 供雾带及雪线复用。"""
     import math
@@ -702,12 +710,15 @@ def main():
 
     write_png(os.path.join(OUT, "bush_card.png"), make_bushcard(), alpha=True)
     make_mist()
+    make_snow_noise()
     write_bushsprites()
 
 
 if __name__ == "__main__":
     import sys
-    if "--bush-sprite-only" in sys.argv:
+    if "--snow-only" in sys.argv:
+        make_snow_noise()
+    elif "--bush-sprite-only" in sys.argv:
         write_bushsprites()
     else:
         main()

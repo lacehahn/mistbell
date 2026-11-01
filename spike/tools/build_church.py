@@ -264,6 +264,26 @@ def report(objects):
     assert valid and total>=25000 and gap>=3 and depth>=1.2
     assert bpy.data.objects['BellTower_8']['applied_boolean_count']==3
     assert bpy.data.objects['Main_Shell']['nave_size']=='16x9'
+    # Measure the actual exposed apse masonry beyond the nave's south wall.
+    shell = bpy.data.objects['Main_Shell']
+    apse_overhang = max((shell.matrix_world @ v.co).y for v in shell.data.vertices) - 8.0
+    gables = [o for o in objects if o.name in ('Transept_Gable_L', 'Transept_Gable_R')]
+    buttresses = [o for o in objects if o.name.startswith('Buttress_')
+                  and o.get('structural_buttress', False)]
+    print('[CHURCH3] apse_overhang=%.3f gables=%d buttresses=%d bbox=%.3fx%.3fx%.3f tris=%d'
+          % (apse_overhang, len(gables), len(buttresses), *size, total), flush=True)
+    assert apse_overhang >= 2.5 and len(gables) == 2 and len(buttresses) >= 6
+    for obj in gables:
+        gl, gh = bounds([obj])
+        assert all(abs(a-b) < .08 for a,b in zip(gh-gl, (.5, 7, 3)))
+    for side in (-1, 1):
+        start = (-2 + side * 7.5, 0, 12)
+        assert ray_hit(bpy.data.objects['Transept_Gable_' + ('L' if side < 0 else 'R')],
+                       start, (-side, 0, 0), 1)
+        assert not ray_hit(bpy.data.objects['Cross_Roof'], start, (-side, 0, 0), .75)
+    for obj in buttresses:
+        bl, bh = bounds([obj])
+        assert all(abs(a-b) < .08 for a,b in zip(bh-bl, (.6, .9, 8)))
     return total,list(size)
 
 
@@ -322,12 +342,13 @@ def build():
     # A continuous hollow cross shell, with no solid intersecting internal walls.
     shell=box('Main_Shell',(-2,0,5.5),(9,16,11),stone)
     union(shell,box('Transept_Union',(-2,0,5.5),(14,7,11),stone))
-    apse=cone('Apse_Union',(-2,8),0,9.8,3.2,64,stone,3.2)
-    # Union overlap is the inner half circle; only the rear semicircle is exposed.
+    apse_y = 8.6  # nave south wall is Y=8; expose almost 3.8 m of round masonry.
+    apse=cone('Apse_Union',(-2,apse_y),0,9.8,3.2,64,stone,3.2)
+    # Keep a substantial overlap with the nave while exposing the curved rear volume.
     union(shell,apse)
     inside=box('Interior_Cross',(-2,0,6.1),(7.8,14.8,10.2),stone)
     union(inside,box('Interior_Transept',(-2,0,6.1),(12.8,5.8,10.2),stone))
-    union(inside,cone('Interior_Apse',(-2,8),1,8.2,2.6,64,stone,2.6))
+    union(inside,cone('Interior_Apse',(-2,apse_y),1,8.2,2.6,64,stone,2.6))
     subtract(shell,inside)
     shell['nave_size']='16x9'
     shell['transept_size']='14x7'
@@ -353,8 +374,13 @@ def build():
             subtract(shell,arch('Front_Window_Cut',(-2+side*3,-8,5.4),.85,2.4,1.5))
     # Crossed pitched roofs are united for a clean intersection.
     roofs=gable('Cross_Roof',-2,0,9.4,16.4,11,12.5,roof)
-    union(roofs,gable('Transept_Roof',-2,0,7.4,14.4,11,12.5,roof,True))
-    cone('Apse_Roof',(-2,8),9.8,2.2,3.4,64,roof)
+    union(roofs,gable('Transept_Roof',-2,0,7.4,13,11,14,roof,True))
+    # Stop the solid roof prism at the inner gable faces so it cannot bury them.
+    # Solid 0.5 m terminal gables, 7 m across Y, 3 m above the eave.
+    # Their outward triangle faces are at the two ends of the X-axis transept.
+    for label, x in (('L', -8.75), ('R', 4.75)):
+        gable('Transept_Gable_' + label, x, 0, 7, .5, 11, 14, stone, True)
+    cone('Apse_Roof',(-2,apse_y),9.8,2.2,3.4,64,roof)
     # Main tower exact requested stack: 12.5+4+6.5+1.5 = 24.5.
     drum=cone('Drum_12',(-2,0),12.5,4,4.2,12,stone,4.2)
     for i in range(12):
@@ -384,6 +410,13 @@ def build():
         box('Buttress',(x,y,5.1),(.38,.48,10.2),stone)
         for z in (1.1,4.6,8.4,10.2):
             box('Buttress_Capital',(x,y,z),(.54,.62,.18),stone)
+    # Three substantial buttresses on each nave long wall, clear of window openings.
+    # X is the outward projection (0.6 m); Y is the 0.9 m facade width.
+    for label, side in (('L', -1), ('R', 1)):
+        for index, y in enumerate((-6.7, -4.1, 6.7), 1):
+            obj = box('Buttress_%s_%02d' % (label, index),
+                      (-2 + side * 4.8, y, 4), (.6, .9, 8), stone)
+            obj['structural_buttress'] = True
     objects=prepare()
     openings_check()
     total,size=report(objects)
