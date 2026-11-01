@@ -1,6 +1,18 @@
 # Unity/Blender 工程与资产（可抛弃的 spike 产物）
-spike/project/
+# 注意：整目录忽略会让「spike 的 C# 源码 / 生成脚本只存在于磁盘」，一次重装工程就全丢。
+# 所以这里改成：忽略生成物（Library/Builds/Scene 等），只放行源码与美术脚本。
+spike/project/*
+!spike/project/Assets
+spike/project/Assets/*
+!spike/project/Assets/Editor
+!spike/project/Assets/Scripts
+!spike/project/Assets/Art
+spike/project/Assets/Art/*
+!spike/project/Assets/Art/Shaders
+spike/project/Assets/Art/Shaders/*
+!spike/project/Assets/Art/Shaders/*.shader
 spike/export/
+spike/scratch/
 spike/blend/*.blend1
 
 # Unity

@@ -1,0 +1,302 @@
+using System.IO;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+
+/// <summary>
+/// HD-2D 美术验证场景：URP + 体块教堂 + 像素 Billboard 角色 + 后期栈（Bloom/DoF/调色/暗角/颗粒）
+/// 用法：Unity -batchmode -quit -projectPath . -executeMethod SpikeScene.Run -logFile out.log
+/// 机位表写进场景里的 ShotRig；正式证据由播放器 `-shots &lt;dir&gt;` 产出（编辑态的 cam.Render() 不跑 Volume）。
+/// </summary>
+public static class SpikeScene
+{
+    const int W = 1920, H = 1080;
+    const float Fov = 28f;            // D03 方案 A：低透视
+    const float SlopeDeg = 4f;        // 坡地倾角
+    const float ChurchBaseY = 0.6f;   // 教堂坐在坡面上的抬高量
+
+    public static void Run()
+    {
+        if (GraphicsSettings.currentRenderPipeline == null)
+        {
+            Debug.LogError("[SPIKE] 当前不是 URP，先跑 SpikeURP.Run");
+            return;
+        }
+
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+        // ---------- 材质（程序化像素贴图 + 法线图；UV 以米计，tiling 按每张贴图覆盖的米数反推）----------
+        const string TEX = "Assets/Art/Textures/";
+        var stone = SpikeArt.MakeTextured("Assets/Settings/M_Stone.mat", TEX + "stone_ashlar.png", TEX + "stone_ashlar_n.png",
+                                          2.4f, new Color(0.36f, 0.34f, 0.30f), 0.12f, 1.0f);
+        var roofMat = SpikeArt.MakeTextured("Assets/Settings/M_Roof.mat", TEX + "roof_slate.png", TEX + "roof_slate_n.png",
+                                            2.4f, new Color(0.24f, 0.14f, 0.11f), 0.22f, 0.9f);
+        var ground = SpikeArt.MakeTextured("Assets/Settings/M_Ground.mat", TEX + "grass.png", TEX + "grass_n.png",
+                                           3.2f, new Color(0.12f, 0.16f, 0.07f), 0.08f, 0.8f);
+
+        // ---------- 地形：一段上坡（坡面在 z 方向的解析式 y = GroundY(z)）----------
+        var slope = SpikeArt.Box(null, "Slope", new Vector3(70f, 2f, 90f),
+                                 new Vector3(0f, SlopeOriginY(), 18f), ground);
+        slope.transform.localRotation = Quaternion.Euler(-SlopeDeg, 0f, 0f);
+
+        // ---------- 体块教堂（主体 / 钟楼 / 门廊 / 屋顶）----------
+        var church = new GameObject("Church").transform;
+        church.position = new Vector3(0f, ChurchBaseY, 0f);
+
+        SpikeArt.Box(church, "Body", new Vector3(6.5f, 6.4f, 9f), new Vector3(0f, 3.2f, 0f), stone);
+        SpikeArt.Box(church, "Roof", new Vector3(7.4f, 1.1f, 10f), new Vector3(0f, 7.0f, 0f), roofMat);
+        SpikeArt.Box(church, "Tower", new Vector3(2.8f, 10f, 2.8f), new Vector3(-2.2f, 8.0f, -3.2f), stone);
+        SpikeArt.Box(church, "Spire", new Vector3(3.2f, 1.0f, 3.2f), new Vector3(-2.2f, 13.4f, -3.2f), roofMat, true, 45f);
+
+        // 门廊朝向来路（-z 侧）：玩家是自下坡上来的，看到的必须是正立面
+        foreach (var px in new[] { -1.6f, 1.6f })
+            SpikeArt.Box(church, "Pillar", new Vector3(0.55f, 4f, 0.55f), new Vector3(px, 2.0f, -5.2f), stone);
+
+        SpikeArt.Box(church, "Lintel", new Vector3(4.4f, 0.7f, 1.4f), new Vector3(0f, 4.3f, -5.2f), stone);
+
+        // ---------- 像素角色（Billboard）----------
+        var sprite = ImportSprite("Assets/Art/Character/pilgrim.png");
+        var bbShader = Shader.Find("Mistbell/PixelBillboard");
+        if (bbShader == null)
+        {
+            Debug.LogError("[SPIKE] 找不到 Mistbell/PixelBillboard 着色器，检查 Assets/Art/Shaders/PixelBillboard.shader 是否编译通过");
+            return;
+        }
+
+        // 门前平台上的朝圣者：必须站在相机这一侧的教堂脚下，否则会被教堂体块挡住（上一版就不可见）
+        var pilgrimPos = new Vector3(-1.6f, GroundY(-6.6f) + 0.02f, -6.6f);
+
+        var bbMat = new Material(bbShader) { name = "M_Pilgrim" };
+        bbMat.SetTexture("_MainTex", sprite != null ? sprite.texture : null);
+        bbMat.SetFloat("_ScaleX", 1.0f);
+        bbMat.SetFloat("_ScaleY", 1.75f);
+        bbMat.SetFloat("_PivotY", 0f);
+        bbMat.SetFloat("_Cutoff", 0.5f);
+        bbMat.mainTextureScale = new Vector2(1f / 3f, 1f / 4f);      // 图集 3 列 × 4 行
+        bbMat.mainTextureOffset = new Vector2(0f, 0.75f);            // 顶行 = down
+        AssetDatabase.DeleteAsset("Assets/Settings/M_Pilgrim.mat");
+        AssetDatabase.CreateAsset(bbMat, "Assets/Settings/M_Pilgrim.mat");
+
+        var pilgrim = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        pilgrim.name = "Pilgrim";
+        UnityEngine.Object.DestroyImmediate(pilgrim.GetComponent<Collider>());
+        pilgrim.transform.position = pilgrimPos;
+        pilgrim.GetComponent<MeshRenderer>().sharedMaterial = bbMat;
+        pilgrim.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.On;
+
+        // ---------- 光与雾（曝光整体提亮：HD-2D 要能看清像素细节）----------
+        var sun = new GameObject("Sun").AddComponent<Light>();
+        sun.type = LightType.Directional;
+        sun.intensity = 1.2f;   // 贴图化后反照率降到 0.42 左右，1.2 让石墙落在中间调（1.5 时近景正面削顶）
+        sun.color = new Color(1f, 0.94f, 0.85f);
+        sun.transform.rotation = Quaternion.Euler(38f, 25f, 0f);   // 光从相机侧约 45° 打过来：相机可见的两个立面一亮一中，保留体积感
+        sun.shadows = LightShadows.Soft;
+        sun.shadowStrength = 0.75f;
+
+        RenderSettings.ambientMode = AmbientMode.Flat;
+        RenderSettings.ambientLight = new Color(0.40f, 0.43f, 0.49f);
+        RenderSettings.fog = true;
+        RenderSettings.fogMode = FogMode.Linear;
+        RenderSettings.fogColor = new Color(0.62f, 0.68f, 0.74f);
+        RenderSettings.fogStartDistance = 30f;
+        RenderSettings.fogEndDistance = 160f;
+
+        // ---------- 后期 Volume ----------
+        var profile = BuildProfile("Assets/Settings/MistbellPost.asset");
+        var volGo = new GameObject("Global Volume");
+        var vol = volGo.AddComponent<Volume>();
+        vol.isGlobal = true;
+        vol.priority = 1f;
+        vol.profile = profile;
+
+        // ---------- 相机 ----------
+        var camGo = new GameObject("Main Camera");
+        var cam = camGo.AddComponent<Camera>();
+        camGo.tag = "MainCamera";
+        cam.fieldOfView = Fov;
+        cam.nearClipPlane = 0.3f;
+        cam.farClipPlane = 1500f;
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0.66f, 0.72f, 0.80f);
+        camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = true;
+
+        // ---------- 机位表：几何算过，保证塔顶不切、基座留出前景地面 ----------
+        var rigGo = new GameObject("ShotRig");
+        var rig = rigGo.AddComponent<ShotRig>();
+
+        // reveal：教堂全高入画（塔顶 y≈95px、基座 y≈859px），前景留 ~1/4 地面；朝圣者站在门前 y≈922px
+        rig.poses.Add(ShotRig.Make("art_runtime", new Vector3(0f, 4.0f, 6f), 16f, 50f, 40f, Fov));
+        // close：角色约 250px 屏高，门廊与教堂体量压在背后（塔顶出画属预期，近距离仰视必然切顶）
+        rig.poses.Add(ShotRig.Make("art_close", new Vector3(-1.6f, GroundY(-6.6f) + 1.4f, -6.6f), 14f, 14f, 12f, Fov));
+        // ground：贴地近景，用来量「草地的像素密度」是否真的看得出（PPU 与 tiling 是否匹配）
+        rig.poses.Add(ShotRig.Make("art_ground", new Vector3(2f, GroundY(-4f) + 0.05f, -4f), 26f, 7f, 15f, Fov));
+
+        rig.Apply(0);
+
+        Directory.CreateDirectory("Assets/Scenes");
+        const string scenePath = "Assets/Scenes/ArtSpike.unity";
+
+        var shotter = new GameObject("Screenshotter");
+        shotter.AddComponent<Screenshotter>();
+
+        PlayerSettings.defaultScreenWidth = W;
+        PlayerSettings.defaultScreenHeight = H;
+        PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+        PlayerSettings.resizableWindow = false;
+        PlayerSettings.runInBackground = true;
+
+        EditorSceneManager.SaveScene(scene, scenePath);
+        EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
+
+        // ---------- 构图自检：把关键点的视口坐标打进日志（不依赖看图的数值证据）----------
+        foreach (var go in new[] { "Church/Spire", "Church/Roof", "Church/Body" })
+        {
+            var t = GameObject.Find(go);
+            if (t != null) LogBounds(cam, t.transform, go);
+        }
+        LogPoint(cam, "pilgrim(feet)", pilgrimPos);
+        LogPoint(cam, "pilgrim(head)", pilgrimPos + Vector3.up * 1.75f);
+
+        Directory.CreateDirectory("Shots");
+        Capture(cam, "Shots/art_reveal_edit.png");
+        rig.Apply(1);
+        Capture(cam, "Shots/art_close_edit.png");
+        rig.Apply(0);
+
+        Debug.Log("[SPIKE] EDIT-TIME CAPTURES DONE（正式证据用播放器 -shots 产出）");
+        Debug.Log("[SPIKE] ART DONE");
+    }
+
+    /// <summary>坡面解析式：4° 上坡，z=0 处地面 y=0。</summary>
+    static float GroundY(float z) => Mathf.Tan(SlopeDeg * Mathf.Deg2Rad) * z;
+
+    /// <summary>
+    /// 坡体 Cube 的位置：让顶面正好穿过 y=0、z=0。
+    /// 顶面局部点 (·, +1, z_l) 绕 X 转 -SlopeDeg 后 y' = c + s·z_l（c=cos, s=sin）；
+    /// 世界 z=0 对应 z_l = -posZ = -18，令 y = posY + c - 18s = 0 → posY = 18s - c。
+    /// </summary>
+    static float SlopeOriginY()
+    {
+        float rad = SlopeDeg * Mathf.Deg2Rad;
+        return 18f * Mathf.Sin(rad) - Mathf.Cos(rad);
+    }
+
+    static void LogPoint(Camera cam, string label, Vector3 world)
+    {
+        var vp = cam.WorldToViewportPoint(world);
+        Debug.Log(string.Format("[SPIKE] proj {0} world=({1:F1},{2:F1},{3:F1}) viewport=({4:F3},{5:F3}) px=({6:F0},{7:F0}) depth={8:F1}",
+            label, world.x, world.y, world.z, vp.x, vp.y, vp.x * W, (1f - vp.y) * H, vp.z));
+    }
+
+    static void LogBounds(Camera cam, Transform t, string label)
+    {
+        var r = t.GetComponent<Renderer>();
+        if (r == null) return;
+        var b = r.bounds;
+        LogPoint(cam, label + ".min", new Vector3(b.min.x, b.min.y, b.min.z));
+        LogPoint(cam, label + ".max", new Vector3(b.max.x, b.max.y, b.max.z));
+        LogPoint(cam, label + ".center", b.center);
+    }
+
+    static void Capture(Camera cam, string path)
+    {
+        var rt = new RenderTexture(W, H, 24, RenderTextureFormat.ARGB32) { antiAliasing = 1 };
+        cam.targetTexture = rt;
+        cam.Render();
+        RenderTexture.active = rt;
+        var tex = new Texture2D(W, H, TextureFormat.RGB24, false);
+        tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+        tex.Apply();
+        RenderTexture.active = null;
+        cam.targetTexture = null;
+        var png = tex.EncodeToPNG();
+        File.WriteAllBytes(Path.GetFullPath(path), png);
+        Debug.Log("[SPIKE] shot " + path + " bytes=" + png.Length);
+    }
+
+    static Material MakeLit(string path, Color color, float metallic, float smoothness)
+    {
+        var shader = Shader.Find("Universal Render Pipeline/Lit");
+        var mat = new Material(shader) { name = Path.GetFileNameWithoutExtension(path) };
+        mat.SetColor("_BaseColor", color);
+        mat.SetFloat("_Metallic", metallic);
+        mat.SetFloat("_Smoothness", smoothness);
+        AssetDatabase.DeleteAsset(path);
+        AssetDatabase.CreateAsset(mat, path);
+        return mat;
+    }
+
+    static Sprite ImportSprite(string path)
+    {
+        var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (ti == null)
+        {
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            ti = AssetImporter.GetAtPath(path) as TextureImporter;
+        }
+        if (ti == null)
+        {
+            Debug.LogError("[SPIKE] 无法导入 " + path);
+            return null;
+        }
+        ti.textureType = TextureImporterType.Sprite;
+        ti.spriteImportMode = SpriteImportMode.Single;
+        ti.spritePixelsPerUnit = 32f;
+        ti.filterMode = FilterMode.Point;
+        ti.textureCompression = TextureImporterCompression.Uncompressed;
+        ti.mipmapEnabled = false;
+        ti.alphaIsTransparency = true;
+        ti.wrapMode = TextureWrapMode.Clamp;
+        ti.SaveAndReimport();
+        return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+    }
+
+    static VolumeProfile BuildProfile(string path)
+    {
+        AssetDatabase.DeleteAsset(path);
+        var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+        AssetDatabase.CreateAsset(profile, path);
+
+        var tonemap = profile.Add<Tonemapping>(true);
+        tonemap.mode.Override(TonemappingMode.ACES);
+
+        var bloom = profile.Add<Bloom>(true);
+        bloom.threshold.Override(0.9f);
+        bloom.intensity.Override(0.75f);
+        bloom.scatter.Override(0.72f);
+        bloom.tint.Override(new Color(1f, 0.95f, 0.88f));
+
+        var dof = profile.Add<DepthOfField>(true);
+        dof.mode.Override(DepthOfFieldMode.Bokeh);
+        dof.focusDistance.Override(26f);
+        dof.aperture.Override(2.8f);
+        dof.focalLength.Override(50f);
+        dof.bladeCount.Override(6);
+
+        var color = profile.Add<ColorAdjustments>(true);
+        color.postExposure.Override(0.2f);
+        color.contrast.Override(14f);
+        color.saturation.Override(-6f);
+        color.colorFilter.Override(new Color(1f, 0.97f, 0.92f));
+
+        var vignette = profile.Add<Vignette>(true);
+        vignette.intensity.Override(0.28f);
+        vignette.smoothness.Override(0.45f);
+
+        var grain = profile.Add<FilmGrain>(true);
+        grain.type.Override(FilmGrainLookup.Thin2);
+        grain.intensity.Override(0.18f);
+        grain.response.Override(0.8f);
+
+        foreach (var comp in profile.components)
+        {
+            comp.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
+            AssetDatabase.AddObjectToAsset(comp, profile);
+        }
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        return profile;
+    }
+}
