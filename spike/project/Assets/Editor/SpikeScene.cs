@@ -29,6 +29,8 @@ public static class SpikeScene
         // ---------- 材质（程序化像素贴图 + 法线图；UV 以米计，tiling 按每张贴图覆盖的米数反推）----------
         const string TEX = "Assets/Art/Textures/";
         var stone = ChurchMaterial("stone", "#C9A87C");
+        // 固定曝光补偿：原石材 tint × (目标反照率 0.30 / 原目标 0.36)，重复生成不累乘。
+        stone.SetColor("_BaseColor", new Color(0.6470588f, 0.5490196f, 0.4248366f, 1f));
         var roofMat = ChurchMaterial("roof", "#A06B4A");
         var wood = ChurchMaterial("wood", "#6B4A32");
         var ground = SpikeArt.MakeTextured("Assets/Settings/M_Ground.mat", TEX + "grass.png", TEX + "grass_n.png",
@@ -95,7 +97,7 @@ public static class SpikeScene
         // ---------- 光与雾（曝光整体提亮：HD-2D 要能看清像素细节）----------
         var sun = new GameObject("Sun").AddComponent<Light>();
         sun.type = LightType.Directional;
-        sun.intensity = 2.2f;   // 提亮教堂立面与像素细节。
+        sun.intensity = 1.8f;   // 保留近景石材中间调，避免直射立面削顶。
         sun.color = new Color(1f, 0.94f, 0.85f);
         sun.transform.rotation = Quaternion.Euler(38f, 25f, 0f);   // 光从相机侧约 45° 打过来：相机可见的两个立面一亮一中，保留体积感
         sun.shadows = LightShadows.Soft;
@@ -148,8 +150,7 @@ public static class SpikeScene
         closeAim.y = closeEye.y + Mathf.Tan(8f * Mathf.Deg2Rad) *
             Vector2.Distance(new Vector2(closeEye.x, closeEye.z), new Vector2(closeAim.x, closeAim.z));
         rig.poses.Add(ShotRig.Look("art_close", closeEye, closeAim, 36f));
-        var groundPose = ShotRig.Make("art_ground", Vector3.zero, 26f, 7f, 15f, 36f);
-        groundPose.position = EyeAt(0f, -14f);
+        var groundPose = ShotRig.Look("art_ground", EyeAt(6f, -23f), new Vector3(0f, GroundY(-20f), -20f), 36f);
         rig.poses.Add(groundPose);
 
         rig.Apply(0);

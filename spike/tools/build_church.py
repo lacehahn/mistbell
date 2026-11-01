@@ -223,8 +223,15 @@ def prepare():
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
         bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY',ngon_method='BEAUTY')
-        bpy.ops.uv.smart_project(angle_limit=math.radians(66),island_margin=.02)
         bpy.ops.object.mode_set(mode='OBJECT')
+        # Dominant-axis box projection in world metres, including boolean faces.
+        uv = obj.data.uv_layers.active or obj.data.uv_layers.new(name='UVMap')
+        for face in obj.data.polygons:
+            axis = max(range(3), key=lambda i: abs(face.normal[i]))
+            axes = ((1, 2), (0, 2), (0, 1))[axis]
+            for loop_index in face.loop_indices:
+                point = obj.matrix_world @ obj.data.vertices[obj.data.loops[loop_index].vertex_index].co
+                uv.data[loop_index].uv = (point[axes[0]], point[axes[1]])
         assert obj.data.uv_layers.active and not obj.modifiers
         assert len(obj.data.materials)==1
         bm=bmesh.new()
@@ -419,12 +426,28 @@ def build():
     print('[CHURCH] saved=%s exported=%s'%(BLEND,FBX))
 
 
+def verify_uv_scale(objects):
+    for obj in objects:
+        uv = obj.data.uv_layers.active
+        assert uv and len(uv.data) == len(obj.data.loops), obj.name
+        assert all(math.isfinite(c) for item in uv.data for c in item.uv), obj.name
+        spans = [max(item.uv[i] for item in uv.data) -
+                 min(item.uv[i] for item in uv.data) for i in range(2)]
+        assert max(spans) <= 45, (obj.name, spans)
+        if obj.name == 'Terrace':
+            assert any(33 <= span <= 37 for span in spans), spans
+            print('[VERIFY] Terrace UV spans u=%.3f v=%.3f metres' % tuple(spans))
+    assert any(obj.name == 'Terrace' for obj in objects)
+    print('[VERIFY] UVSCALE OK: 1 UV unit = 1 metre; all object spans <= 45')
+
+
 def verify():
     bpy.ops.wm.open_mainfile(filepath=str(BLEND))
     objects=[o for o in bpy.context.scene.objects if o.type=='MESH']
     expected,size=report(objects)
     openings_check()
     facade_check()
+    verify_uv_scale(objects)
     assert all(o.matrix_world.is_identity and o.data.uv_layers.active for o in objects)
     for name in ('front','side','top','iso'):
         img=bpy.data.images.load(str(VIEWS/(name+'.png')),check_existing=False)
@@ -438,6 +461,7 @@ def verify():
     assert all(abs(a-b)<.001 for a,b in zip(hi-lo,size))
     assert sum(triangle_count(o) for o in objects)==expected
     assert all(o.data.uv_layers.active for o in objects)
+    verify_uv_scale(objects)
     # Undo the documented Unity-facing export half-turn for source-space ray tests.
     for o in objects:
         activate(o)

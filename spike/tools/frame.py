@@ -52,6 +52,7 @@ def read_png(path):
 
 def stat(rows, bpp, x0, y0, x1, y1, step=3):
     s, n, mx = [0, 0, 0], 0, 0
+    gray_sum = gray_sq_sum = 0.0
     for y in range(y0, y1, step):
         row = rows[y]
         for x in range(x0, x1, step):
@@ -60,8 +61,12 @@ def stat(rows, bpp, x0, y0, x1, y1, step=3):
             s[1] += g
             s[2] += b
             mx = max(mx, r, g, b)
+            gray = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            gray_sum += gray
+            gray_sq_sum += gray * gray
             n += 1
-    return tuple(v // max(n, 1) for v in s), mx, n
+    std = max(0.0, gray_sq_sum / max(n, 1) - (gray_sum / max(n, 1)) ** 2) ** 0.5
+    return tuple(v // max(n, 1) for v in s), mx, n, std
 
 
 REGIONS = {
@@ -76,8 +81,8 @@ def main():
         w, h, bpp, rows = read_png(path)
         print(path, w, "x", h, "bpp", bpp)
         for name, (x0, y0, x1, y1) in REGIONS.items():
-            mean, mx, n = stat(rows, bpp, x0, y0, x1, y1)
-            print("   %-12s mean=%s max=%d n=%d" % (name, mean, mx, n))
+            mean, mx, n, std = stat(rows, bpp, x0, y0, x1, y1)
+            print("   %-12s mean=%s max=%d n=%d std=%.2f" % (name, mean, mx, n, std))
         # 直方图：统计过曝（>=250）像素占比
         bright = total = 0
         for y in range(0, h, 5):

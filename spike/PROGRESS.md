@@ -35,10 +35,9 @@
 6. **带状移轴 RendererFeature**：URP 的 Bokeh DoF 是体积式，不是《歧路旅人》那种上下带状遮罩；需自定义 Pass（排除角色与 UI）
 7. **D03 的 12 张 A/B 截图**（低透视 vs 正交 × 6 机位 × 关/开后期）——`ShotRig` + `-shots` 机制已就绪，直接扩机位表即可
 8. ~~**Codex D1**：用 Blender 建真正的教堂外壳替换体块~~ ✅ 已完成（2026-11-02 00:31）：`tools/build_church.py` → FBX → `ImportChurch()`
-9. **补材质与坏机位**（小活，下一轮先做）：
-   - 台地/挡土墙是**纯色未贴图**的板（`art_close.png` 下三分之一那片平涂米色），要套 `M_Stone` 的米制 UV
-   - `art_ground` 机位落在挡土墙里（整帧平涂、削顶 48%），要挪到草地上
-   - 教堂正面被阳光直打到近削顶（`art_close` 削顶 23%），与雾/曝光同批回调
+9. ~~**补材质与坏机位**~~ ✅ 已完成（2026-11-02 01:06）：根因是 **UV 单位错**（`smart_project` 归一化 0..1 vs 材质约定「1 UV = 1 m」）→ `build_church.py` 改按面主导轴写入世界坐标（米）UV，`--verify` 新增 `UVSCALE OK` 断言；`art_ground` 挪到台地外草地；sun 2.2→1.8。削顶 art_runtime 1.41%→0.00%、art_close 23.20%→0.23%、art_ground 48.05%→0.10%
+   - 遗留（2026-11-02 01:10 目视）：**门洞/窗洞内部是平涂棕**（`wood` 材质没贴图）；台阶与台地同材质且无 AO，读不出级差；石材 tile 2 m 下块体偏大、「太新」缺脏污渐变 → 并入队列 4 一起调
+10. **wood 贴图 + AO 分离**（小活）：`M_Wood` 套一张 128×128 木纹/暗部贴图（`make_textures.py` 加一类），门洞内凹面与台阶侧面靠 AO/顶点色压暗，让台阶读得出 5 级
 
 ## 日志
 
@@ -98,3 +97,6 @@
 | 00:52 | 验收 Codex 第 5 轮（Unity 导入） | 读 50_scene.log + 自行补跑 | 数值全过：church tris=52384、bounds 34.00×26.60、占比 48.8%、pilgrim 156.5 px 且脚踏地形(-8.53=-8.53)、材质 stone37/roof6/wood8 |
 | 00:55 | **发现交付缺陷** | 运行 `capture_runtime.sh` | 运行时日志 `fov=28`，而脚本里 `Fov=35` → **场景里存在多个相机，`Camera.main` 抓到的不是揭示机位那台**；且 build 前必须先跑 SpikeScene.Run 重生成场景，否则用的是旧场景 |
 | 00:56 | 定性 | 两次 build 失败(exit 1)原因 | 竞态：僵尸 Unity 进程残留锁；重跑即成功（日志只有 28 行、无编译错误即此特征） |
+| 01:02 | 复核上轮「fov 28」缺陷 | 读 `logs/20_runtime_003140.log` | **假警报**：成功那趟 `camera=fov 35`、pose[0] fov=35.0；28 只出现在 00:30 那次**没重跑 SpikeScene.Run** 的旧场景截图里。结论仍是「build 前必须重生成场景」，不必找第二台相机 |
+| 01:05 | 派发 Codex 第 6 轮（队列 9） | `codex.sh` 读 `spike/brief-fix-terraces.md`（后台跑，日志 `logs/70_codex_terraces.log`） | 根因写成明文交代：台地平涂不是缺材质，是 `smart_project` 的 0..1 UV 与「1 UV=1 m」材质约定冲突（34 m 面只铺 1 块贴图 → mip 成纯色） |
+| 01:08 | 验收 Codex 第 6 轮（人工独立复跑） | `blender -b --python spike/tools/build_church.py -- --verify` / `frame.py` ×3 / `vision_analyze` ×3 | **通过**：`[VERIFY] Terrace UV spans u=33.979 v=23.979 metres`、`UVSCALE OK`、VERIFY=0、tris=52384（几何未动）；`60_scene.log` church heightPct 49.8 / porch centerX 924.6 / pitch 11.8 与上轮一致；运行时 `pose[0] fov=35.0`。削顶 0.00% / 0.23% / 0.10%（原 1.41 / 23.20 / 48.05）；`art_ground` 1241 KB（原 50 KB）`ground_near std=15.36`。目视：台地正面石砌块缝清晰、草地有像素颗粒、石板路与台地转角同框。**判断**：平涂消失，近景终于读得出「石头砌的墙」；但门洞/窗洞仍是平涂棕、台阶读不出级差、远山依旧纸片 → 队列 10 + 4 |
