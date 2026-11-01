@@ -9,7 +9,7 @@
 
 推荐 **Unity 6 LTS、URP 的 3D Renderer、单台场景相机**。角色作为 3D 空间中的 Billboard 像素贴片，与教堂共用深度和光雾；不用 2D Renderer 再拼接一套独立 3D 画面。理由是本项目的主要难点为受控相机、建筑近读、混合遮挡和外部文本，并非大规模动态光照。
 
-✅ **已定（2026-11-01）D01**：引擎与版本锁定为 **Unity 6.3 LTS（6000.3）**，补丁 **6000.3.27f1**（2026-10-20，LTS 支持至 2027-12-04），渲染管线 **URP 3D Renderer**。定稿理由：①团队无引擎经验，决定产能的是生态、教程密度与 Windows 打包成熟度，Unity 在这三项上优势最大；②本项目的技术难点是受控相机、建筑近读、混合遮挡与外部文本驱动，属于工程活而非光照活，Unity 的 C#／UI／数据读取链路最短；③UE 的体积光雾优势改用「3 层雾片 + 局部光雾缓冲」降级方案替代，M1 只给最多 8 人时验证，超时即降级、不切引擎。Godot 4 与 Unreal 5 作为记录保留，不再并行做原型。
+✅ **已定（2026-11-01）D01**：引擎与版本锁定为 **Unity 6.3 LTS（6000.3）**，补丁 **6000.3.27f2**（实现启动时由 27f1 原地升级一个补丁，2026-11-02 记录；LTS 支持至 2027-12-04），渲染管线 **URP 3D Renderer**；配套 **Blender 5.2.3 LTS**（2026-10-22 构建）。定稿理由：①团队无引擎经验，决定产能的是生态、教程密度与 Windows 打包成熟度，Unity 在这三项上优势最大；②本项目的技术难点是受控相机、建筑近读、混合遮挡与外部文本驱动，属于工程活而非光照活，Unity 的 C#／UI／数据读取链路最短；③UE 的体积光雾优势改用「3 层雾片 + 局部光雾缓冲」降级方案替代，M1 只给最多 8 人时验证，超时即降级、不切引擎。Godot 4 与 Unreal 5 作为记录保留，不再并行做原型。
 
 ⚠️ 版本纪律：Unity 6.0 LTS 已于 2026-10 EOL，**凡引用 6.0 手册的接口结论一律按 6000.3 手册复核**后才可开工；Unity 6.4–6.6 属于 Supported Update 流（生命期只到下个版本发布），不得用于生产分支。升级只允许发生在里程碑边界，并重跑混合遮挡与揭示镜头的回归。
 
@@ -217,9 +217,9 @@ Unity 未来启用可见 meta 与文本序列化，资产及 meta 一起移动�
 
 ### macOS 开发与 Windows 打包
 
-macOS 建议至少 16 GB 统一内存、可用 SSD 100 GB，用于编辑器、Blender、导入缓存和双平台输出；这是小团队工作空间假设，32 GB 可减少同时开工具的压力，不能把开发内存建议当玩家最低要求。Blender 选择实现启动时受支持的稳定版本，与 Unity／导出预设一起记录；本轮不安装。
+macOS 建议至少 16 GB 统一内存、可用 SSD 100 GB，用于编辑器、Blender、导入缓存和双平台输出；这是小团队工作空间假设，32 GB 可减少同时开工具的压力，不能把开发内存建议当玩家最低要求。**Blender 已锁定 5.2.3 LTS**（2026-10-22 构建，`/Applications/Blender.app`，CLI 为 `/opt/homebrew/bin/blender`）；导出预设须与该版本一起记录，升级 Blender 视为里程碑级变更并需重跑导入回归。
 
-日常用 Metal 开发与试玩；主发行包为 Windows x64／DX11，先统一采用 Mono 后端制作 MVP，减少跨平台构建变量。M1 就安排一台 Windows 机器产出并运行 Windows 包，不能以 Mac 编辑器截图代替发行平台验证。未来若改 IL2CPP，必须单独验证本机原生编译工具链；Windows IL2CPP 依赖 Visual Studio C++ 工具和 Windows SDK。[Unity Windows 工具要求](https://docs.unity3d.com/6000.0/Documentation/Manual/windows-requirements-and-compatibility.html)。
+日常用 Metal 开发与试玩；主发行包为 Windows x64／DX11，先统一采用 Mono 后端制作 MVP，减少跨平台构建变量。M1 就安排一台 Windows 机器产出并运行 Windows 包，不能以 Mac 编辑器截图代替发行平台验证。未来若改 IL2CPP，必须单独验证本机原生编译工具链；Windows IL2CPP 依赖 Visual Studio C++ 工具和 Windows SDK。[Unity Windows 工具要求](https://docs.unity3d.com/6000.3/Documentation/Manual/windows-requirements-and-compatibility.html)。
 
 每个里程碑生成 Windows x64 与 macOS arm64 两份包，资源版本相同，包含地点入口、设置、游戏内容与本地存档；内测不接商店 SDK、云存档或在线账号。构建标识记录版本、内容版本、源版本 ID 与引擎精确版本；正式验收关闭开发叠层，单独保留性能采样方式。最小流程是「校验外部数据 → 导入资产 → 打包 → 新存档走通 → 续玩／跳过／大字检查 → 性能采样」。
 
