@@ -310,8 +310,8 @@ public static class SpikeScene
             tr.GetComponent<Renderer>().sharedMaterial.SetFloat("_Cull",0);
             EditorUtility.SetDirty(tr.GetComponent<Renderer>().sharedMaterial);
         }
-        Window("WarmWindow_FrontL",new Vector3(-5,5.43f,-7.98f),.78f,2.3f,0);
-        Window("WarmWindow_FrontR",new Vector3(1,5.43f,-7.98f),.78f,2.3f,0);
+        Window("WarmWindow_FrontL",new Vector3(-5,5.43f,-8.24f),.68f,2.5f,0);
+        Window("WarmWindow_FrontR",new Vector3(1,5.43f,-8.24f),.68f,2.5f,0);
         for(int i=0;i<5;i++)
         {
             float a=(210+i*30)*Mathf.Deg2Rad;
@@ -327,8 +327,9 @@ public static class SpikeScene
             fire.transform.SetParent(root); fire.transform.position=p+Vector3.up*1.25f;
             fire.transform.localScale=new Vector3(.65f,.8f,.65f); fire.GetComponent<Renderer>().sharedMaterial=glow;
             var light=new GameObject("BrazierPoint_"+i).AddComponent<Light>();
-            light.transform.position=p+Vector3.up*1.8f; light.transform.SetParent(root);
-            light.type=LightType.Point; light.color=Hex("#FFB45B"); light.range=9; light.intensity=5;
+            light.transform.position=p+Vector3.up*.65f; light.transform.SetParent(root);
+            light.type=LightType.Point; light.color=Hex("#FFB45B"); light.range=24; light.intensity=24;
+            light.renderMode=LightRenderMode.ForcePixel;
             var ps=new GameObject("BrazierFlames_"+i).AddComponent<ParticleSystem>();
             ps.transform.SetParent(root); ps.transform.position=p+Vector3.up*1.35f;
             var main=ps.main; main.startLifetime=.8f; main.startSpeed=.9f; main.startSize=.22f;
@@ -517,23 +518,22 @@ public static class SpikeScene
         // Closed 3D ridges: front flank, broken crest, rear flank and end caps.
         for (int layer = 0; layer < 3; layer++)
         {
-            const int n = 65, rows = 9;
+            const int n = 120, rows = 14;
             float distance = 345f + layer * 190f;
-            var ridgeRandom = new System.Random(8431 + layer);
-            var peakJitter = new float[n];
-            for (int i = 0; i < n; i++) peakJitter[i] = Mathf.Lerp(.92f, 1.08f, (float)ridgeRandom.NextDouble());
+            var peakHeights = new float[n];
             var vertices = new Vector3[n * rows];
             var indices = new System.Collections.Generic.List<int>();
             for (int r = 0; r < rows; r++)
             for (int i = 0; i < n; i++)
             {
                 float x = -700f + i * 1400f / (n - 1);
-                float peak = 100f + layer * 60f + 35f * Mathf.Sin(i * .43f + layer * 2)
-                    + 23f * Mathf.Sin(i * 1.31f + layer) + 16f * Mathf.Cos(i * .79f);
-                peak = -10f + (peak + 10f) * peakJitter[i];
+                float peak = 130f + layer * 60f + 35f * Mathf.Sin(x * .011f + layer * 2)
+                    + 20f * Mathf.Sin(x * .027f + layer) + 10f * Mathf.Cos(x * .069f)
+                    + 4f * Mathf.Sin(x * .151f + layer);
+                peakHeights[i] = peak;
                 float t = r / (float)(rows - 1);
                 float h = -10f + (peak + 10f) * Mathf.Pow(1f - Mathf.Abs(t * 2f - 1f), .85f);
-                float z = distance + (t - .5f) * 170f + 12f * Mathf.Sin(i * 1.7f) * Mathf.Sin(t * Mathf.PI);
+                float z = distance + (t - .5f) * 170f + 9f * Mathf.Sin(x * .043f) * Mathf.Sin(t * Mathf.PI);
                 vertices[r * n + i] = new Vector3(x, h, z);
                 if (r < rows - 1 && i < n - 1)
                 {
@@ -546,28 +546,41 @@ public static class SpikeScene
                 indices.AddRange(new[] { 0, (r+1)*n, r*n, n-1, r*n+n-1, (r+1)*n+n-1 });
             }
             indices.AddRange(new[] { 0, n-1, (rows-1)*n, n-1, rows*n-1, (rows-1)*n });
-            // Split vertices for real facet normals, never synthetic vertex colours.
+            // Share normals across the dense flank grid, retain a small facet component.
+            var smoothMesh = new Mesh { vertices = vertices, triangles = indices.ToArray() };
+            smoothMesh.RecalculateNormals();
+            var smoothNormals = smoothMesh.normals;
+            UnityEngine.Object.DestroyImmediate(smoothMesh);
             var flat = new Vector3[indices.Count];
             var tris = new int[indices.Count];
             for (int i = 0; i < flat.Length; i++) { flat[i] = vertices[indices[i]]; tris[i] = i; }
             var mat = new Material(Shader.Find("Mistbell/RidgeFog"));
-            mat.SetColor("_ColorBottom", Hex("#5C6B7A"));
-            mat.SetColor("_SnowColor", Hex("#DCE6EE"));
+            mat.SetColor("_ColorBottom", Hex("#A8A29A"));
+            mat.SetColor("_RockShade", Hex("#5B6470"));
+            mat.SetColor("_SnowColor", Hex("#EAF1F7"));
+            mat.SetColor("_SnowShade", Hex("#B9C8D4"));
+            mat.SetColor("_AirColor", Hex("#7B97B4"));
             // Local height fraction follows each irregular crest, measured from the -10m foot.
-            mat.SetFloat("_SnowHeight", .55f);
+            mat.SetFloat("_SnowHeight", .72f);
             mat.SetFloat("_SnowSoftness", .025f);
-            mat.SetFloat("_FogFloor", new[] { .10f, .35f, .68f }[layer]);
+            mat.SetFloat("_FogFloor", 0f);
+            mat.SetFloat("_Aerial", new[] { .25f, .50f, .78f }[layer]);
             var ridge = SaveMountainMesh(root, "Mountain_" + (layer+1), flat, tris, mat);
+            var ridgeMesh = ridge.GetComponent<MeshFilter>().sharedMesh;
+            var normals = ridgeMesh.normals;
+            for (int i = 0; i < normals.Length; i++)
+                normals[i] = Vector3.Slerp(normals[i], smoothNormals[indices[i]], .88f).normalized;
+            ridgeMesh.normals = normals;
             var heights = new Vector2[flat.Length];
             for (int i = 0; i < flat.Length; i++)
             {
                 int column = indices[i] % n;
-                heights[i] = new Vector2((flat[i].y + 10f) / (vertices[4*n + column].y + 10f), 0f);
+                heights[i] = new Vector2((flat[i].y + 10f) / (peakHeights[column] + 10f), 0f);
             }
             ridge.GetComponent<MeshFilter>().sharedMesh.uv = heights;
             EditorUtility.SetDirty(ridge.GetComponent<MeshFilter>().sharedMesh);
         }
-        Debug.Log("[SCENE] mountains=3 closed solid meshes normal-lit snowline white no vertex colours");
+        Debug.Log("[SCENE] mountains=3 grid=120x14 snowline=.72 aerial=.25/.50/.78 rock=#A8A29A/#5B6470 snow=#EAF1F7/#B9C8D4");
     }
 
     static Transform SaveMountainMesh(Transform parent, string name, Vector3[] vertices,
@@ -605,18 +618,20 @@ public static class SpikeScene
         importer.SaveAndReimport();
         var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
         var root = new GameObject("Mist Bands").transform;
-        float[] centers = { 85f, 145f };
-        float[] offsets = { 25f, 47f };
+        var eye = EyeAt(28f, -100f);
+        var view = Quaternion.LookRotation(new Vector3(0f,13f,0f)-eye);
+        float[] depths = { 300f, 370f };
+        float[] screenYs = { .34f, .43f };
         for (int i = 0; i < 2; i++)
         {
             var mat = new Material(Shader.Find("Mistbell/RidgeFog")) { name = "M_Mist_" + i };
             mat.SetTexture("_NoiseTex", texture);
             mat.SetFloat("_CloudBand", 1f);
             mat.SetFloat("_DepthWrite", 0f);
-            mat.SetFloat("_StencilComp", (float)CompareFunction.Always);
+            mat.SetFloat("_StencilComp", (float)CompareFunction.Equal);
             mat.SetFloat("_StencilPass", (float)StencilOp.Keep);
-            var tint = Hex("#DCE2E6");
-            tint.a = i == 0 ? 0.56f : 0.65f;
+            var tint = Hex("#B5C1CD");
+            tint.a = i == 0 ? .92f : .82f;
             mat.SetColor("_CloudColor", tint);
             mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
             mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
@@ -625,7 +640,7 @@ public static class SpikeScene
             string name = "Mist_" + (i == 0 ? "Near" : "Far");
             // 正对主视角的水平云带，透明纹理的上下软边避免山天交界硬线。
             var mesh = new Mesh { name = name };
-            float halfHeight = i == 0 ? 12f : 18f;
+            float halfHeight = i == 0 ? 12f : 14f;
             mesh.vertices = new[] { new Vector3(-800f, -halfHeight, 0f), new Vector3(800f, -halfHeight, 0f),
                                     new Vector3(-800f, halfHeight, 0f), new Vector3(800f, halfHeight, 0f) };
             mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
@@ -635,9 +650,11 @@ public static class SpikeScene
             band.GetComponent<MeshFilter>().sharedMesh.uv = mesh.uv;
             EditorUtility.SetDirty(band.GetComponent<MeshFilter>().sharedMesh);
             UnityEngine.Object.DestroyImmediate(mesh);
-            band.position = new Vector3(0f, offsets[i], centers[i]);
+            band.rotation = view;
+            band.position = eye + view * new Vector3(0f,
+                depths[i] * Mathf.Tan(Fov * .5f * Mathf.Deg2Rad) * (1f-2f*screenYs[i]), depths[i]);
         }
-        Debug.Log("[SPIKE] mist near z=85 y=25 far z=145 y=47 bands=2 blend=alpha");
+        Debug.Log("[SPIKE] mist screenY=.34/.43 bands=2 texture-alpha stencil=mountains-only");
     }
 
     static void BuildStonePath(MeshCollider terrainCollider, Material stone)
@@ -673,7 +690,11 @@ public static class SpikeScene
         var root = new GameObject("Props").transform;
         var roadside = new GameObject("Roadside Props").transform;
         roadside.SetParent(root, false);
-        var rockMat = MakeLit("Assets/Settings/M_WinterRock.mat", Hex("#6E6255"), 0f, .05f);
+        var rockMat = MakeLit("Assets/Settings/M_WinterRock.mat", Hex("#8E877D"), 0f, .05f);
+        // Local rock skylight fill keeps back faces readable under the low sun.
+        rockMat.EnableKeyword("_EMISSION");
+        rockMat.SetColor("_EmissionColor", new Color(.065f,.075f,.085f));
+        EditorUtility.SetDirty(rockMat);
         var snowMat = MakeLit("Assets/Settings/M_RockSnow.mat", Hex("#DCE6EE"), 0f, .05f);
         var fenceWood = new Material(wood) { name = "M_FenceWood" };
         fenceWood.SetColor("_BaseColor", Hex("#827767"));
@@ -697,10 +718,10 @@ public static class SpikeScene
         var right = new Vector3(forward.z, 0f, -forward.x).normalized;
         for (int side = -1; side <= 1; side += 2)
         {
-            var p = eye + forward * 11f + right * (side * 4.8f);
+            var p = eye + forward * 23f + right * (side * 7.5f);
             centers.Add(new Vector2(p.x, p.z));
         }
-        for (int attempt = 0; attempt < 3000 && centers.Count < 22; attempt++)
+        for (int attempt = 0; attempt < 3000 && centers.Count < 18; attempt++)
         {
             var candidate = new Vector2(Range(-40f, 48f), Range(-90f, 24f));
             float nearest = float.PositiveInfinity;
@@ -712,13 +733,13 @@ public static class SpikeScene
         int rocks = 0;
         foreach (var center in centers)
         {
-            float radius = Range(1.5f, 3f);
-            int count = rnd.Next(3, 9);
-            for (int j = 0; j < count && rocks < 150; j++)
+            float radius = Range(1.2f, 2.0f);
+            int count = rnd.Next(5, 8);
+            for (int j = 0; j < count && rocks < 108; j++)
             {
                 float angle = Range(0f, Mathf.PI * 2f), offset = radius * Mathf.Sqrt(Range(0f, 1f));
                 var p = Snap(new Vector3(center.x + Mathf.Cos(angle) * offset, 0f, center.y + Mathf.Sin(angle) * offset));
-                float size = Range(.4f, 1.6f);
+                float size = Range(.95f, 1.9f);
                 var rock = new GameObject("ClusterRock_" + rocks++);
                 rock.transform.SetParent(root, false);
                 rock.transform.position = p + Vector3.up * size * .18f;
@@ -733,7 +754,7 @@ public static class SpikeScene
                 for (int t = 0; t < triangles.Length; t += 3)
                 {
                     var a = vertices[triangles[t]]; var b = vertices[triangles[t+1]]; var c = vertices[triangles[t+2]];
-                    var target = Vector3.Cross(b-a, c-a).normalized.y > .65f && (a.y+b.y+c.y)/3f > .16f ? snowTris : stoneTris;
+                    var target = Vector3.Cross(b-a, c-a).normalized.y > .45f ? snowTris : stoneTris;
                     target.AddRange(new[] {triangles[t], triangles[t+1], triangles[t+2]});
                 }
                 mesh.subMeshCount = 2;
@@ -744,7 +765,7 @@ public static class SpikeScene
                 rock.AddComponent<MeshRenderer>().sharedMaterials = new[] {rockMat, snowMat};
             }
         }
-        Debug.Log($"[SPIKE] ground clusters={centers.Count} rocks={rocks} members=3..8 radius=1.5..3 spacing=6..20 size=.4..1.6 color=#6E6255 snowCaps=true");
+        Debug.Log($"[SPIKE] ground clusters={centers.Count} rocks={rocks} members=5..7 radius=1.2..2 spacing=6..20 size=.95..1.9 color=#8E877D snowCaps=true");
         Vector3 RoadPoint(float t, float offset) => new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI) + offset, 0f,
             Mathf.Lerp(-70f, -13.25f, t));
         int posts = 0, rails = 0;

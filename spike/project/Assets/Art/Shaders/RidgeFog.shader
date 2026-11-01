@@ -18,7 +18,11 @@ Shader "Mistbell/RidgeFog"
         [HideInInspector] _DepthWrite ("Depth write", Float) = 1
         [HideInInspector] _StencilComp ("Stencil compare", Float) = 8
         [HideInInspector] _StencilPass ("Stencil pass", Float) = 2
-        _FogFloor ("Additional foot fog", Range(0,1)) = 0.58
+        _FogFloor ("Additional foot fog", Range(0,1)) = 0
+        _Aerial ("Distance air", Range(0,1)) = 0.25
+        _RockShade ("Rock shadow", Color) = (.105,.127,.162,1)
+        _SnowShade ("Snow shadow", Color) = (.485,.578,.658,1)
+        _AirColor ("Sky air", Color) = (.198,.309,.456,1)
     }
     SubShader
     {
@@ -41,6 +45,8 @@ Shader "Mistbell/RidgeFog"
             SAMPLER(sampler_NoiseTex);
             CBUFFER_START(UnityPerMaterial)
                 float4 _ColorBottom, _ColorTop, _SnowColor, _CloudColor;
+                float4 _RockShade, _SnowShade, _AirColor;
+                float _Aerial;
                 float _CloudBand;
                 float _GradLow, _GradHigh, _GradPow;
                 float _SnowHeight, _SnowSoftness, _FogFloor;
@@ -67,22 +73,24 @@ Shader "Mistbell/RidgeFog"
                 {
                     float2 uv=input.ridge.xy;
                     float edge=pow(saturate(sin(uv.y*PI)),2.0);
-                    float noise=.72+.28*sin(uv.x*65+sin(uv.x*127)*.7+uv.y*4);
-                    float alpha=edge*noise*_CloudColor.a;
-                    half3 tint=lerp(half3(.83,.79,.73),half3(.64,.74,.84),uv.y);
+                    float textureAlpha=SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,float2(uv.x*3,uv.y)).a;
+                    float alpha=edge*textureAlpha*_CloudColor.a;
+                    half3 tint=_CloudColor.rgb;
                     return half4(tint,alpha);
                 }
                 float3 n=normalize(input.normalWS);
                 float face=saturate(dot(n,GetMainLight().direction));
-                // 22% light/back contrast from actual triangle normals.
-                float shade=.78+.22*face;
-                float snow=smoothstep(_SnowHeight-_SnowSoftness, _SnowHeight+_SnowSoftness, input.ridge.x);
-                half3 color=lerp(_ColorBottom.rgb, _SnowColor.rgb, snow)*shade;
-                float grain=frac(sin(dot(floor(input.positionWS.xz*.4),float2(127.1,311.7)))*43758.5453)-.5;
-                color*=1+grain*.025;
-                // Mountains are atmospheric scenery beyond the local 80..120m fog volume.
-                float foot=(1-smoothstep(-10,30,input.positionWS.y))*.20;
-                color=lerp(color,half3(.81,.85,.89),saturate(_FogFloor+foot));
+                // Explicit warm/cool face colours in linear light, independent of exposure.
+                float lightFace=smoothstep(.12,.78,face);
+                float breakup=sin(input.positionWS.x*.22+sin(input.positionWS.z*.11)*2)*.012;
+                float snow=smoothstep(_SnowHeight-_SnowSoftness, _SnowHeight+_SnowSoftness, input.ridge.x+breakup);
+                half3 rock=lerp(_RockShade.rgb,_ColorBottom.rgb,lightFace);
+                half3 ice=lerp(_SnowShade.rgb,_SnowColor.rgb,lightFace);
+                half3 color=lerp(rock,ice,snow);
+                float grain=sin(input.positionWS.x*.65+sin(input.positionWS.y*.43)*3)*sin(input.positionWS.y*.81)*.025;
+                color*=1+grain;
+                float foot=(1-smoothstep(-10,25,input.positionWS.y))*.08;
+                color=lerp(color,_AirColor.rgb,saturate(_Aerial+_FogFloor+foot));
                 return half4(color, 1);
             }
             ENDHLSL
