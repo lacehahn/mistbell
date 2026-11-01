@@ -45,12 +45,12 @@ Shader "Mistbell/RidgeFog"
                 float _GradLow, _GradHigh, _GradPow;
                 float _SnowHeight, _SnowSoftness, _FogFloor;
             CBUFFER_END
-            struct Attributes { float4 positionOS : POSITION; float2 slopeCrest : TEXCOORD0; };
+            struct Attributes { float4 positionOS : POSITION; float2 slopeCrest : TEXCOORD0; float3 normalOS : NORMAL; };
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
                 float3 positionWS : TEXCOORD0;
-                float3 ridge : TEXCOORD1;
+                float3 ridge : TEXCOORD1; float3 normalWS : TEXCOORD2;
             };
             Varyings Vert(Attributes input)
             {
@@ -58,44 +58,31 @@ Shader "Mistbell/RidgeFog"
                 output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 output.positionCS = TransformWorldToHClip(output.positionWS);
                 output.ridge = float3(input.slopeCrest, input.positionOS.y);
+                output.normalWS = TransformObjectToWorldNormal(input.normalOS);
                 return output;
             }
             half4 Frag(Varyings input) : SV_Target
             {
                 if (_CloudBand > 0.5)
                 {
-                    float alpha = SAMPLE_TEXTURE2D(_NoiseTex, sampler_NoiseTex,
-                        input.ridge.xy * float2(3, 1)).a;
-                    return half4(_CloudColor.rgb, alpha * _CloudColor.a);
+                    float2 uv=input.ridge.xy;
+                    float edge=pow(saturate(sin(uv.y*PI)),2.0);
+                    float noise=.72+.28*sin(uv.x*65+sin(uv.x*127)*.7+uv.y*4);
+                    float alpha=edge*noise*_CloudColor.a;
+                    half3 tint=lerp(half3(.83,.79,.73),half3(.64,.74,.84),uv.y);
+                    return half4(tint,alpha);
                 }
-                float t = saturate((input.positionWS.y - _GradLow) / max(1, _GradHigh - _GradLow));
-                half3 color = lerp(_ColorBottom.rgb, _ColorTop.rgb, pow(t, _GradPow));
-                // 两段邻域斜率已在 CPU 平滑；插值后再 smoothstep，形成宽块面。
-                float slope = input.ridge.x;
-                float3 normal = normalize(float3(slope, 0.65, -0.75));
-                float ndotl = saturate(dot(normal, GetMainLight().direction));
-                float face = smoothstep(0.25, 0.85, ndotl);
-                float noise = SAMPLE_TEXTURE2D(_NoiseTex, sampler_NoiseTex,
-                    input.positionWS.xy / float2(115, 85)).r;
-                float fine = SAMPLE_TEXTURE2D(_NoiseTex, sampler_NoiseTex,
-                    input.positionWS.xy / float2(28, 43)).r;
-                float crestDepth = input.ridge.y - input.ridge.z;
-                float snowLine = smoothstep(_SnowHeight - _SnowSoftness * 0.5,
-                    _SnowHeight + _SnowSoftness * 0.5,
-                    input.positionWS.y + (noise - 0.5) * 125 + (fine - 0.5) * 28);
-                float crest = 1 - smoothstep(20, 120, crestDepth);
-                float snow = snowLine * lerp(0.20, 1.0, face) * lerp(0.25, 1.0, crest);
-                color = lerp(color, _SnowColor.rgb, snow);
-                color *= 1 + (fine - 0.5) * 0.08;
-                // URP fog variants use FOG_LINEAR / FOG_EXP / FOG_EXP2.
-                float fog = ComputeFogFactor(TransformWorldToHClip(input.positionWS).z);
-                color = MixFog(color, fog);
-                // 额外雾化只覆盖渐变高度范围底部 1/3。
-                float footFog = 1 - smoothstep(0, 1.0 / 3.0, t);
-                color = lerp(color, unity_FogColor.rgb, _FogFloor * footFog);
-                // 色彩上限低于天空，雪保持灰蓝而非发光白。
-                color *= lerp(0.84, 1.0, face);
-                color = min(color, unity_FogColor.rgb * 0.94);
+                float3 n=normalize(input.normalWS);
+                float face=saturate(dot(n,GetMainLight().direction));
+                // 22% light/back contrast from actual triangle normals.
+                float shade=.78+.22*face;
+                float snow=smoothstep(_SnowHeight-_SnowSoftness, _SnowHeight+_SnowSoftness, input.ridge.x);
+                half3 color=lerp(_ColorBottom.rgb, _SnowColor.rgb, snow)*shade;
+                float grain=frac(sin(dot(floor(input.positionWS.xz*.4),float2(127.1,311.7)))*43758.5453)-.5;
+                color*=1+grain*.025;
+                // Mountains are atmospheric scenery beyond the local 80..120m fog volume.
+                float foot=(1-smoothstep(-10,30,input.positionWS.y))*.20;
+                color=lerp(color,half3(.81,.85,.89),saturate(_FogFloor+foot));
                 return half4(color, 1);
             }
             ENDHLSL

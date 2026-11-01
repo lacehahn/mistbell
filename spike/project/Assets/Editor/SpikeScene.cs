@@ -43,11 +43,8 @@ public static class SpikeScene
         // 必须写死在代码里——Assets/Settings/M_Roof.mat 被 .gitignore 忽略，写进 .mat 等于不可复现。
         roofMat.SetColor("_BaseColor", new Color(0.50f, 0.47f, 0.43f, 1f));
         var wood = ChurchMaterial("wood", "#6B4A32");
-        var ground = SpikeArt.MakeTextured("Assets/Settings/M_Ground.mat", TEX + "grass.png", TEX + "grass_n.png",
-                                           3.2f, Hex("#5E7A2E"), 0.08f, 0.8f);
+        var ground = MakeLit("Assets/Settings/M_Ground.mat", Hex("#DCE6EE"), 0f, 0.05f);
 
-        // 使用指定色板作为材质基色，避免贴图工具的均值补偿产生 HDR 色值。
-        ground.SetColor("_BaseColor", Hex("#5E7A2E"));
         EditorUtility.SetDirty(stone);
         EditorUtility.SetDirty(roofMat);
         EditorUtility.SetDirty(ground);
@@ -64,6 +61,7 @@ public static class SpikeScene
 
         // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
         var church = ImportChurch(stone, roofMat);
+        BuildWarmDetails();
         var cameraPosition = EyeAt(28f, -100f);
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
 
@@ -110,27 +108,38 @@ public static class SpikeScene
         // ---------- 光与雾（曝光整体提亮：HD-2D 要能看清像素细节）----------
         var sun = new GameObject("Sun").AddComponent<Light>();
         sun.type = LightType.Directional;
-        sun.intensity = 1.8f;   // 保留近景石材中间调，避免直射立面削顶。
-        sun.color = new Color(1f, 0.94f, 0.85f);
-        sun.transform.rotation = Quaternion.Euler(38f, 25f, 0f);   // 光从相机侧约 45° 打过来：相机可见的两个立面一亮一中，保留体积感
+        sun.intensity = 1.6f;
+        sun.color = Hex("#FFD9A8");
+        // Source azimuth -40° from the front (-Z), elevation 20°; light forward is the incoming ray.
+        var source = new Vector3(Mathf.Sin(-40f * Mathf.Deg2Rad) * Mathf.Cos(20f * Mathf.Deg2Rad),
+            Mathf.Sin(20f * Mathf.Deg2Rad), -Mathf.Cos(-40f * Mathf.Deg2Rad) * Mathf.Cos(20f * Mathf.Deg2Rad));
+        sun.transform.rotation = Quaternion.LookRotation(-source);
         sun.shadows = LightShadows.Soft;
-        sun.shadowStrength = 0.75f;
-
-        var fill = new GameObject("Warm Fill").AddComponent<Light>();
-        fill.type = LightType.Directional;
-        fill.intensity = 0.6f;
-        fill.color = Hex("#FFD9A0");
-        fill.transform.rotation = Quaternion.Euler(40f, 205f, 0f);
-        fill.shadows = LightShadows.None;
-
-        RenderSettings.ambientMode = AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.45f, 0.45f, 0.49f);
+        sun.shadowStrength = 0.85f;
+        sun.shadowBias = 0.025f;
+        sun.shadowNormalBias = 0.15f;
+        var pipeline = (UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline;
+        var rendererData=AssetDatabase.LoadAssetAtPath<UniversalRendererData>("Assets/Settings/MistbellRenderer.asset");
+        rendererData.postProcessData=AssetDatabase.LoadAssetAtPath<PostProcessData>("Packages/com.unity.render-pipelines.universal/Runtime/Data/PostProcessData.asset");
+        EditorUtility.SetDirty(rendererData);
+        var pipelineSettings = new SerializedObject(pipeline);
+        pipelineSettings.FindProperty("m_MainLightShadowsSupported").boolValue = true;
+        pipelineSettings.FindProperty("m_SoftShadowsSupported").boolValue = true;
+        pipelineSettings.ApplyModifiedPropertiesWithoutUndo();
+        pipeline.mainLightShadowmapResolution = 2048;
+        pipeline.shadowDistance = 120f;
+        pipeline.shadowCascadeCount = 4;
+        EditorUtility.SetDirty(pipeline);
+        RenderSettings.ambientMode = AmbientMode.Trilight;
+        RenderSettings.ambientSkyColor = Hex("#849DBB");
+        RenderSettings.ambientEquatorColor = Hex("#637D99");
+        RenderSettings.ambientGroundColor = Hex("#444E64");
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Linear;
-        RenderSettings.fogColor = Hex("#A7B7CB");
-        RenderSettings.fogStartDistance = 90f;
-        RenderSettings.fogEndDistance = 1500f;
-        Debug.Log($"[SPIKE] fog start=90 end=1500 color=#{ColorUtility.ToHtmlStringRGB(RenderSettings.fogColor)}");
+        RenderSettings.fogColor = Hex("#DCE2E6");
+        RenderSettings.fogStartDistance = 180f;
+        RenderSettings.fogEndDistance = 700f;
+        Debug.Log("[SCENE] sun sourceAzimuth=-40 elevation=20 intensity=1.6 color=#FFD9A8 shadows=120 resolution=2048 soft=true fog=180..700");
 
         // ---------- 后期 Volume ----------
         var profile = BuildProfile("Assets/Settings/MistbellPost.asset");
@@ -138,7 +147,7 @@ public static class SpikeScene
         var vol = volGo.AddComponent<Volume>();
         vol.isGlobal = true;
         vol.priority = 1f;
-        vol.profile = profile;
+        vol.sharedProfile = profile;
 
         // ---------- 相机 ----------
         var camGo = new GameObject("Main Camera");
@@ -148,7 +157,7 @@ public static class SpikeScene
         cam.nearClipPlane = 0.3f;
         cam.farClipPlane = 1500f;
         cam.clearFlags = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.66f, 0.72f, 0.80f);
+        cam.backgroundColor = new Color(0.48f, 0.59f, 0.71f);
         camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = true;
 
         // ---------- 机位表：几何算过，保证塔顶不切、基座留出前景地面 ----------
@@ -177,7 +186,8 @@ public static class SpikeScene
 
         // Spike 直接进入场景，避免 macOS 无人值守验收停在启动画面的渲染等待。
         PlayerSettings.SplashScreen.show = false;
-        PlayerSettings.MTRendering = false; // macOS Spike 截图使用单渲染线程，避免启动时线程等待。
+        PlayerSettings.MTRendering = true;
+        PlayerSettings.graphicsJobs = false; // Metal uses a dedicated render thread; no native graphics jobs.
         PlayerSettings.defaultScreenWidth = W;
         PlayerSettings.defaultScreenHeight = H;
         PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
@@ -211,17 +221,17 @@ public static class SpikeScene
         material.SetFloat("_NormalScale", ground.GetFloat("_BumpScale"));
         if (ground.GetTexture("_BumpMap") != null) material.EnableKeyword("_NORMALMAP");
         else material.DisableKeyword("_NORMALMAP");
-        material.SetColor("_HazeColor", Hex("#A7B7CB"));
-        material.SetFloat("_HazeStart", 45f);
-        material.SetFloat("_HazeEnd", 135f);
+        material.SetColor("_HazeColor", Hex("#DCE2E6"));
+        material.SetFloat("_HazeStart", 140f);
+        material.SetFloat("_HazeEnd", 300f);
         material.SetFloat("_HazePower", 1.4f);
-        material.SetFloat("_HazeStrength", 0.92f);
+        material.SetFloat("_HazeStrength", 0.45f);
         const string path = "Assets/Settings/M_GroundHaze.mat";
         var saved = AssetDatabase.LoadAssetAtPath<Material>(path);
         if (saved == null) { AssetDatabase.CreateAsset(material, path); saved = material; }
         else { EditorUtility.CopySerialized(material, saved); UnityEngine.Object.DestroyImmediate(material); }
         EditorUtility.SetDirty(saved);
-        Debug.Log("[SPIKE] terrain haze shader=TerrainHaze start=45 end=135 strength=0.92 color=#A7B7CB");
+        Debug.Log("[SPIKE] terrain haze shader=TerrainHaze start=140 end=300 strength=0.45 color=#DCE2E6");
         return saved;
     }
 
@@ -278,6 +288,56 @@ public static class SpikeScene
         if (triangles < 70000 || triangles > 78000 || Mathf.Abs(bounds.size.x - 28f) > 2f || Mathf.Abs(bounds.size.y - 24.5f) > 2f)
             throw new System.InvalidOperationException("Church v2 outside triangle/bounds acceptance limits");
         return church;
+    }
+
+    static void BuildWarmDetails()
+    {
+        var root = new GameObject("Winter Warm Lights").transform;
+        var glow = MakeLit("Assets/Settings/M_WindowGlow.mat", Hex("#FFAA42"), 0f, 0f);
+        glow.EnableKeyword("_EMISSION");
+        glow.SetColor("_EmissionColor", new Color(4.5f, 1.5f, .15f));
+        void Window(string name, Vector3 position, float width, float height, float yaw)
+        {
+            var vs = new System.Collections.Generic.List<Vector3> { Vector3.zero };
+            vs.Add(new Vector3(-width/2,0,0)); vs.Add(new Vector3(width/2,0,0));
+            for (int i=0;i<=16;i++)
+            { float a=i*Mathf.PI/16; vs.Add(new Vector3(Mathf.Cos(a)*width/2,height-width/2+Mathf.Sin(a)*width/2,0)); }
+            var ts = new System.Collections.Generic.List<int>();
+            for(int i=2;i<vs.Count-1;i++) ts.AddRange(new[]{1,i+1,i});
+            var mat = new Material(glow);
+            var tr=SaveMountainMesh(root,name,vs.ToArray(),ts.ToArray(),mat);
+            tr.position=position; tr.rotation=Quaternion.Euler(0,yaw,0);
+            tr.GetComponent<Renderer>().sharedMaterial.SetFloat("_Cull",0);
+            EditorUtility.SetDirty(tr.GetComponent<Renderer>().sharedMaterial);
+        }
+        Window("WarmWindow_FrontL",new Vector3(-5,5.43f,-7.98f),.78f,2.3f,0);
+        Window("WarmWindow_FrontR",new Vector3(1,5.43f,-7.98f),.78f,2.3f,0);
+        for(int i=0;i<5;i++)
+        {
+            float a=(210+i*30)*Mathf.Deg2Rad;
+            var pos=new Vector3(-2+Mathf.Cos(a)*4.38f,13.13f,Mathf.Sin(a)*4.38f);
+            Window("WarmWindow_Drum"+i,pos,.58f,2.38f,90f-(210+i*30));
+        }
+        var pedestal=MakeLit("Assets/Settings/M_BrazierStone.mat",Hex("#4C5360"),0,0);
+        for(int i=0;i<2;i++)
+        {
+            var p=new Vector3(i==0?-6f:3f,0,-14f); p.y=TerrainHeight(p.x,p.z);
+            SpikeArt.Box(root,"BrazierStone_"+i,new Vector3(.85f,1.1f,.85f),p+Vector3.up*.55f,pedestal);
+            var fire=GameObject.CreatePrimitive(PrimitiveType.Sphere); fire.name="BrazierEmber_"+i;
+            fire.transform.SetParent(root); fire.transform.position=p+Vector3.up*1.25f;
+            fire.transform.localScale=new Vector3(.65f,.8f,.65f); fire.GetComponent<Renderer>().sharedMaterial=glow;
+            var light=new GameObject("BrazierPoint_"+i).AddComponent<Light>();
+            light.transform.position=p+Vector3.up*1.8f; light.transform.SetParent(root);
+            light.type=LightType.Point; light.color=Hex("#FFB45B"); light.range=9; light.intensity=5;
+            var ps=new GameObject("BrazierFlames_"+i).AddComponent<ParticleSystem>();
+            ps.transform.SetParent(root); ps.transform.position=p+Vector3.up*1.35f;
+            var main=ps.main; main.startLifetime=.8f; main.startSpeed=.9f; main.startSize=.22f;
+            main.startColor=Hex("#FFB44D"); main.simulationSpace=ParticleSystemSimulationSpace.World;
+            var emission=ps.emission; emission.rateOverTime=16;
+            var shape=ps.shape; shape.shapeType=ParticleSystemShapeType.Cone; shape.radius=.2f; shape.angle=12;
+            ps.GetComponent<ParticleSystemRenderer>().sharedMaterial=glow;
+        }
+        Debug.Log("[SCENE] arched emissive inserts=7 braziers=2 particles=2");
     }
 
     static Bounds ChurchBounds(Transform church)
@@ -427,7 +487,7 @@ public static class SpikeScene
     {
         var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "M_Mist_TerrainEdge" };
         mat.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/mist.png"));
-        var tint = Hex("#A7B7CB");
+        var tint = Hex("#DCE2E6");
         tint.a = 0.45f;
         mat.SetColor("_BaseColor", tint);
         mat.SetTextureScale("_BaseMap", new Vector2(6f, 1f));
@@ -453,78 +513,61 @@ public static class SpikeScene
     // 沿揭示机位视轴横向展开；指定色板与远距薄雾共同形成层次。
     static void BuildMountains()
     {
-        const int samples = 81;
-        var forward = Quaternion.Euler(0f, -2.632f, 0f) * Vector3.forward;
-        var right = Quaternion.Euler(0f, -2.632f, 0f) * Vector3.right;
-        float[] distances = { 250f, 450f, 700f };
-        string[] bottoms = { "#44546A", "#647589", "#878298" };
-        string[] tops = { "#6C8399", "#8A9BAD", "#A39DAD" };
-        // 雪线按简报设置，仅最远两层启用。
-        float[] snowHeights = { 10000f, 50f, 150f };
-        // 渐变覆盖仰视画面里实际可见的山腰，而不是沉入谷底的网格基底。
-        float[] gradLows = { 35f, 65f, 105f };
-        float[] gradHighs = { 110f, 180f, 310f };
-        var shader = Shader.Find("Mistbell/RidgeFog");
-        if (shader == null) throw new System.InvalidOperationException("Missing Mistbell/RidgeFog");
-        const string snowPath = "Assets/Art/Textures/snow.png";
-        var snowImporter = (TextureImporter)AssetImporter.GetAtPath(snowPath);
-        snowImporter.wrapMode = TextureWrapMode.Repeat;
-        snowImporter.filterMode = FilterMode.Bilinear;
-        snowImporter.sRGBTexture = false;
-        snowImporter.textureCompression = TextureImporterCompression.Uncompressed;
-        snowImporter.SaveAndReimport();
-        var noise = AssetDatabase.LoadAssetAtPath<Texture2D>(snowPath);
         var root = new GameObject("Mountain Ridges").transform;
+        // Closed 3D ridges: front flank, broken crest, rear flank and end caps.
         for (int layer = 0; layer < 3; layer++)
         {
-            var random = new System.Random(7301 + layer * 101);
-            var heights = new float[samples];
-            for (int i = 0; i < samples; i++)
-                heights[i] = Mathf.Clamp(290f + 52f * Mathf.Sin(i * 0.21f + layer)
-                    + 36f * Mathf.Sin(i * 0.57f + layer * 2f)
-                    + (float)random.NextDouble() * 42f - 21f, 200f, 400f);
-            var vertices = new Vector3[samples * 2];
-            var triangles = new int[(samples - 1) * 6];
-            for (int i = 0; i < samples; i++)
+            const int n = 65, rows = 9;
+            float distance = 345f + layer * 190f;
+            var ridgeRandom = new System.Random(8431 + layer);
+            var peakJitter = new float[n];
+            for (int i = 0; i < n; i++) peakJitter[i] = Mathf.Lerp(.92f, 1.08f, (float)ridgeRandom.NextDouble());
+            var vertices = new Vector3[n * rows];
+            var indices = new System.Collections.Generic.List<int>();
+            for (int r = 0; r < rows; r++)
+            for (int i = 0; i < n; i++)
             {
-                var lateral = right * (-600f + 1200f * i / (samples - 1));
-                vertices[i * 2] = lateral + Vector3.down * 150f;
-                vertices[i * 2 + 1] = lateral + Vector3.up * heights[i];
-                if (i == samples - 1) continue;
-                int t = i * 6, v = i * 2;
-                triangles[t] = v; triangles[t + 1] = v + 1; triangles[t + 2] = v + 2;
-                triangles[t + 3] = v + 2; triangles[t + 4] = v + 1; triangles[t + 5] = v + 3;
+                float x = -700f + i * 1400f / (n - 1);
+                float peak = 100f + layer * 60f + 35f * Mathf.Sin(i * .43f + layer * 2)
+                    + 23f * Mathf.Sin(i * 1.31f + layer) + 16f * Mathf.Cos(i * .79f);
+                peak = -10f + (peak + 10f) * peakJitter[i];
+                float t = r / (float)(rows - 1);
+                float h = -10f + (peak + 10f) * Mathf.Pow(1f - Mathf.Abs(t * 2f - 1f), .85f);
+                float z = distance + (t - .5f) * 170f + 12f * Mathf.Sin(i * 1.7f) * Mathf.Sin(t * Mathf.PI);
+                vertices[r * n + i] = new Vector3(x, h, z);
+                if (r < rows - 1 && i < n - 1)
+                {
+                    int v = r * n + i;
+                    indices.AddRange(new[] { v, v+n, v+1, v+1, v+n, v+n+1 });
+                }
             }
-            var mat = new Material(shader) { name = "M_Mountain_" + (layer + 1) };
-            mat.SetColor("_ColorBottom", Hex(bottoms[layer]));
-            mat.SetColor("_ColorTop", Hex(tops[layer]));
-            mat.SetColor("_SnowColor", Hex("#BDC8D3"));
-            mat.SetFloat("_SnowHeight", snowHeights[layer]);
-            mat.SetFloat("_SnowSoftness", 52f);
-            mat.SetFloat("_GradPow", 1.65f);
-            mat.SetFloat("_FogFloor", 0.32f);
-            mat.SetTexture("_NoiseTex", noise);
-            var ridge = SaveMountainMesh(root, "Mountain_" + (layer + 1), vertices, triangles, mat);
-            // 只传递着色数据：顶点、索引、位置与轮廓保持原值。
-            var slopeCrest = new Vector2[vertices.Length];
-            for (int i = 0; i < samples; i++)
+            for (int r = 0; r < rows-1; r++)
             {
-                int lo = Mathf.Max(0, i - 1), hi = Mathf.Min(samples - 1, i + 1);
-                float slope = (heights[hi] - heights[lo]) / ((hi - lo) * 15f);
-                slopeCrest[i * 2] = new Vector2(slope, heights[i]);
-                slopeCrest[i * 2 + 1] = slopeCrest[i * 2];
+                indices.AddRange(new[] { 0, (r+1)*n, r*n, n-1, r*n+n-1, (r+1)*n+n-1 });
             }
-            var ridgeMesh = ridge.GetComponent<MeshFilter>().sharedMesh;
-            ridgeMesh.uv = slopeCrest;
-            EditorUtility.SetDirty(ridgeMesh);
-            // 贴地仰视约 13°；山体基底沉入谷底，使三层山脊进入上半幅。
-            float[] valleyDepths = { 275f, 215f, 90f };
-            ridge.position = forward * distances[layer] + Vector3.down * valleyDepths[layer];
-            mat.SetFloat("_GradLow", gradLows[layer]);
-            mat.SetFloat("_GradHigh", gradHighs[layer]);
-            EditorUtility.SetDirty(mat);
-            Debug.Log($"[SPIKE] ridge {layer + 1} shader=RidgeFog snowHeight={snowHeights[layer]:F0} vertices={vertices.Length} distance={distances[layer]:F0}");
+            indices.AddRange(new[] { 0, n-1, (rows-1)*n, n-1, rows*n-1, (rows-1)*n });
+            // Split vertices for real facet normals, never synthetic vertex colours.
+            var flat = new Vector3[indices.Count];
+            var tris = new int[indices.Count];
+            for (int i = 0; i < flat.Length; i++) { flat[i] = vertices[indices[i]]; tris[i] = i; }
+            var mat = new Material(Shader.Find("Mistbell/RidgeFog"));
+            mat.SetColor("_ColorBottom", Hex("#5C6B7A"));
+            mat.SetColor("_SnowColor", Hex("#DCE6EE"));
+            // Local height fraction follows each irregular crest, measured from the -10m foot.
+            mat.SetFloat("_SnowHeight", .55f);
+            mat.SetFloat("_SnowSoftness", .025f);
+            mat.SetFloat("_FogFloor", new[] { .10f, .35f, .68f }[layer]);
+            var ridge = SaveMountainMesh(root, "Mountain_" + (layer+1), flat, tris, mat);
+            var heights = new Vector2[flat.Length];
+            for (int i = 0; i < flat.Length; i++)
+            {
+                int column = indices[i] % n;
+                heights[i] = new Vector2((flat[i].y + 10f) / (vertices[4*n + column].y + 10f), 0f);
+            }
+            ridge.GetComponent<MeshFilter>().sharedMesh.uv = heights;
+            EditorUtility.SetDirty(ridge.GetComponent<MeshFilter>().sharedMesh);
         }
+        Debug.Log("[SCENE] mountains=3 closed solid meshes normal-lit snowline white no vertex colours");
     }
 
     static Transform SaveMountainMesh(Transform parent, string name, Vector3[] vertices,
@@ -562,27 +605,27 @@ public static class SpikeScene
         importer.SaveAndReimport();
         var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
         var root = new GameObject("Mist Bands").transform;
-        float[] centers = { 220f, 390f };
-        float[] offsets = { 25f, 62f };
+        float[] centers = { 85f, 145f };
+        float[] offsets = { 25f, 47f };
         for (int i = 0; i < 2; i++)
         {
             var mat = new Material(Shader.Find("Mistbell/RidgeFog")) { name = "M_Mist_" + i };
             mat.SetTexture("_NoiseTex", texture);
             mat.SetFloat("_CloudBand", 1f);
             mat.SetFloat("_DepthWrite", 0f);
-            mat.SetFloat("_StencilComp", (float)CompareFunction.Equal);
+            mat.SetFloat("_StencilComp", (float)CompareFunction.Always);
             mat.SetFloat("_StencilPass", (float)StencilOp.Keep);
-            var tint = Hex("#A7B7CB");
-            tint.a = i == 0 ? 0.04f : 0.05f;
+            var tint = Hex("#DCE2E6");
+            tint.a = i == 0 ? 0.56f : 0.65f;
             mat.SetColor("_CloudColor", tint);
             mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-            mat.SetFloat("_DstBlend", (float)BlendMode.One);
+            mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
             mat.SetOverrideTag("RenderType", "Transparent");
             mat.renderQueue = (int)RenderQueue.Transparent;
             string name = "Mist_" + (i == 0 ? "Near" : "Far");
             // 正对主视角的水平云带，透明纹理的上下软边避免山天交界硬线。
             var mesh = new Mesh { name = name };
-            float halfHeight = i == 0 ? 8f : 13f;
+            float halfHeight = i == 0 ? 12f : 18f;
             mesh.vertices = new[] { new Vector3(-800f, -halfHeight, 0f), new Vector3(800f, -halfHeight, 0f),
                                     new Vector3(-800f, halfHeight, 0f), new Vector3(800f, halfHeight, 0f) };
             mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
@@ -590,10 +633,11 @@ public static class SpikeScene
             mesh.RecalculateBounds();
             var band = SaveMountainMesh(root, name, mesh.vertices, mesh.triangles, mat);
             band.GetComponent<MeshFilter>().sharedMesh.uv = mesh.uv;
+            EditorUtility.SetDirty(band.GetComponent<MeshFilter>().sharedMesh);
             UnityEngine.Object.DestroyImmediate(mesh);
             band.position = new Vector3(0f, offsets[i], centers[i]);
         }
-        Debug.Log("[SPIKE] mist near z=220 y=25 far z=390 y=62 bands=2 blend=additive");
+        Debug.Log("[SPIKE] mist near z=85 y=25 far z=145 y=47 bands=2 blend=alpha");
     }
 
     static void BuildStonePath(MeshCollider terrainCollider, Material stone)
@@ -626,358 +670,83 @@ public static class SpikeScene
 
     static void BuildProps(MeshCollider terrain, Material stone, Material wood)
     {
-        const string TEX = "Assets/Art/Textures/";
-        // 线性目标约为草地 (0.27,0.35,0.13) 的 37%/40%/46%，保持暗叶色。
-        // TintFor 按 target / meanLin 归一化并应用 p99 守卫；保留 targetLinear=(0.10,0.14,0.06) 起点。
-        // brief B 唯一一次比例校正：art_ground 实测 138.6/77.1=1.80，目标比 0.90，倍率 0.90/1.80=0.5。
-        // 在 TintFor 之后缩放 RGB，保留 alpha；不改贴图、门槛及其他保护范围。
-        var bushTarget = new Color(0.10f, 0.14f, 0.06f, 1f);
-        var bush = SpikeArt.MakeTextured("Assets/Settings/M_Bush.mat", TEX + "bush.png",
-            TEX + "bush_n.png", 1.0f, bushTarget, 0f, 0.5f);
-        bush.SetFloat("_SpecularHighlights", 0f);
-        bush.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
-        const float bushCorrection = 0.90f / 1.80f; // 唯一校正倍率 = 0.5。
-        // round 26：降低法线强度，补偿从 1.39 起按双视角实测校正，最多两次。
-        const float bumpCompensation = 1.00f;
-        var bushTint = bush.GetColor("_BaseColor");
-        bushTint = new Color(bushTint.r * bushCorrection * bumpCompensation, bushTint.g * bushCorrection * bumpCompensation,
-            bushTint.b * bushCorrection * bumpCompensation, bushTint.a);
-        bush.SetColor("_BaseColor", bushTint);
-        var bushLight = new Material(bush) { name = "M_BushLight" };
-        // 仅在最终校正 tint 基础上增加 6%，让交替叶片略亮而不恢复镜面反光。
-        var lightTint = new Color(bushTint.r * 1.06f, bushTint.g * 1.06f, bushTint.b * 1.06f, bushTint.a);
-        bushLight.SetColor("_BaseColor", lightTint);
-        bushLight.SetFloat("_SpecularHighlights", 0f);
-        bushLight.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
-        Debug.Log($"[SPIKE] bushAlbedo targetLinear=(0.100,0.140,0.060) measuredRatio=1.80 targetRatio=0.90 correction={bushCorrection:F1} correctionCount=1 tint=({bushTint.r:F4},{bushTint.g:F4},{bushTint.b:F4}) lightMultiplier=1.06 bushSpecular={bush.GetFloat("_SpecularHighlights")} bushKeywordOff={bush.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} lightSpecular={bushLight.GetFloat("_SpecularHighlights")} lightKeywordOff={bushLight.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} bump=0.5 compensation={bumpCompensation:F3}");
-        const string lightPath = "Assets/Settings/M_BushLight.mat";
-        AssetDatabase.DeleteAsset(lightPath);
-        AssetDatabase.CreateAsset(bushLight, lightPath);
-        bool useCards = ArgFlag("-bushCard");
-        bool useSprites = ArgFlag("-bushSprite");
-        const float spriteColor = 1f;
-        var spriteMaterials = new Material[8];
-        Mesh spriteMesh = null;
-        if (useSprites)
-        {
-            spriteMesh = SpikeArt.Quad("Billboard", 1f, 1f);
-            // Shader 绕脚点旋转且尺寸取材质参数；扩大CPU剔除包围盒，不改顶点/UV。
-            spriteMesh.bounds = new Bounds(new Vector3(0f, .65f, 0f), new Vector3(4f, 3f, 4f));
-            EditorUtility.SetDirty(spriteMesh);
-            for (int i = 0; i < 8; i++)
-            {
-                string path = TEX + "bush_sprite_" + i + ".png";
-                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-                var ti = (TextureImporter)AssetImporter.GetAtPath(path);
-                ti.textureType = TextureImporterType.Default;
-                ti.sRGBTexture = true; ti.alphaIsTransparency = true;
-                ti.filterMode = FilterMode.Point; ti.textureCompression = TextureImporterCompression.Uncompressed;
-                ti.mipmapEnabled = false; ti.wrapMode = TextureWrapMode.Clamp;
-                ti.npotScale = TextureImporterNPOTScale.None;
-                ti.SaveAndReimport();
-                var mat = new Material(Shader.Find("Mistbell/PixelBillboard")) { name = i == 0 ? "M_BushSprite" : "M_BushSprite_" + i };
-                mat.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>(path));
-                mat.SetColor("_Color", new Color(spriteColor, spriteColor, spriteColor, 1f));
-                mat.SetFloat("_Cutoff", .5f); mat.SetFloat("_Cull", 0f); mat.SetFloat("_PivotY", 0f);
-                mat.SetFloat("_BottomOrigin", 1f);
-                mat.SetFloat("_ScaleX", 1.35f); mat.SetFloat("_ScaleY", .96f);
-                string matPath = "Assets/Settings/" + mat.name + ".mat";
-                AssetDatabase.DeleteAsset(matPath); AssetDatabase.CreateAsset(mat, matPath);
-                spriteMaterials[i] = mat;
-            }
-        }
-        Material card = null;
-        Mesh cardMesh = null;
-        if (useCards)
-        {
-            string cardPath = TEX + "bush_card.png";
-            var tex = SpikeArt.ImportTex(cardPath, false);
-            var importer = (TextureImporter)AssetImporter.GetAtPath(cardPath);
-            importer.alphaIsTransparency = true;
-            importer.mipmapEnabled = true;
-            importer.filterMode = FilterMode.Point;
-            importer.textureCompression = TextureImporterCompression.Uncompressed;
-            importer.wrapMode = TextureWrapMode.Clamp;
-            importer.SaveAndReimport();
-            tex = AssetDatabase.LoadAssetAtPath<Texture2D>(cardPath);
-            // 实测 blob 的最终平均线性反照率，排除卡片透明像素后归一到同一目标。
-            var pixels = AssetDatabase.LoadAssetAtPath<Texture2D>(TEX + "bush.png").GetPixels();
-            var mean = Color.black;
-            foreach (var px in pixels) mean += px.linear;
-            mean /= pixels.Length;
-            var target = new Color(mean.r * bushTint.r, mean.g * bushTint.g, mean.b * bushTint.b, 1f);
-            card = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "M_BushCard" };
-            card.SetTexture("_BaseMap", tex);
-            card.SetColor("_BaseColor", SpikeArt.TintFor(tex, target, true));
-            card.SetFloat("_AlphaClip", 1f); card.SetFloat("_AlphaClipThreshold", 0.5f);
-            card.SetFloat("_Cutoff", 0.5f); // URP Lit 实际裁切阈值属性。
-            card.EnableKeyword("_ALPHATEST_ON");
-            card.SetOverrideTag("RenderType", "TransparentCutout"); card.renderQueue = 2450;
-            card.SetFloat("_Cull", 0f); card.doubleSidedGI = true;
-            card.SetFloat("_Smoothness", 0f); card.SetFloat("_Metallic", 0f);
-            card.SetFloat("_SpecularHighlights", 0f); card.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
-            AssetDatabase.DeleteAsset("Assets/Settings/M_BushCard.mat");
-            AssetDatabase.CreateAsset(card, "Assets/Settings/M_BushCard.mat");
-            cardMesh = SpikeArt.Quad("BushCard", 1.25f, 1.05f);
-            Debug.Log($"[SPIKE] bushCardMaterial alphaClip={card.IsKeywordEnabled("_ALPHATEST_ON").ToString().ToLowerInvariant()} cull={card.GetFloat("_Cull")} specularOff={card.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF").ToString().ToLowerInvariant()} normalMap={(card.GetTexture("_BumpMap") != null).ToString().ToLowerInvariant()}");
-        }
-        var bushMeshes = new Mesh[8];
-        var bushSizes = new[] { new Vector3(1.25f, 0.65f, 1.35f), new Vector3(1.5f, 0.75f, 1.2f),
-            new Vector3(0.75f, 0.48f, 0.85f), new Vector3(0.9f, 0.55f, 0.7f) };
-        for (int i = 0; i < bushMeshes.Length; i++)
-            bushMeshes[i] = SpikeArt.Blob(bushSizes[i / 2], 0.34f, 2, false, 6100 + i);
-        var bushLeafMeshes = new Mesh[6];
-        var leafSizes = new[] { new Vector3(0.20f, 0.17f, 0.20f),
-            new Vector3(0.27f, 0.22f, 0.25f), new Vector3(0.34f, 0.27f, 0.31f) };
-        for (int i = 0; i < bushLeafMeshes.Length; i++)
-            bushLeafMeshes[i] = SpikeArt.Blob(leafSizes[i / 2], 0.40f, 1, false, 9100 + i);
-        int leavesTotal = 0, leavesMin = 8, leavesMax = 0;
-        int exposedMin = 8, exposedMax = 0;
-        float exposureSum = 0f, bodyRadiusMin = float.PositiveInfinity, bodyRadiusMax = 0f;
-        float bushHeightMin = float.PositiveInfinity, bushHeightMax = 0f;
-        var rockMeshes = new Mesh[4];
-        for (int i = 0; i < rockMeshes.Length; i++)
-            rockMeshes[i] = SpikeArt.Blob(Vector3.one * 0.5f, 0.32f, 1, true, 7200 + i);
-        int bushIndex = 0, rockIndex = 0;
-        // 栅栏使用独立副本，以免改变教堂里共用的 wood 材质。
-        var fenceWood = new Material(wood) { name = "M_FenceWood" };
-        fenceWood.SetColor("_BaseColor", Hex("#827767"));
-        const string woodPath = "Assets/Settings/M_FenceWood.mat";
-        AssetDatabase.DeleteAsset(woodPath);
-        AssetDatabase.CreateAsset(fenceWood, woodPath);
-        EditorUtility.SetDirty(bush);
-        EditorUtility.SetDirty(fenceWood);
         var root = new GameObject("Props").transform;
-        var near = new GameObject("Foreground Props").transform;
-        near.SetParent(root, false);
         var roadside = new GameObject("Roadside Props").transform;
         roadside.SetParent(root, false);
+        var rockMat = MakeLit("Assets/Settings/M_WinterRock.mat", Hex("#6E6255"), 0f, .05f);
+        var snowMat = MakeLit("Assets/Settings/M_RockSnow.mat", Hex("#DCE6EE"), 0f, .05f);
+        var fenceWood = new Material(wood) { name = "M_FenceWood" };
+        fenceWood.SetColor("_BaseColor", Hex("#827767"));
+        AssetDatabase.DeleteAsset("Assets/Settings/M_FenceWood.mat");
+        AssetDatabase.CreateAsset(fenceWood, "Assets/Settings/M_FenceWood.mat");
         var rnd = new System.Random(20261102);
         float Range(float a, float b) => Mathf.Lerp(a, b, (float)rnd.NextDouble());
         Vector3 Snap(Vector3 p)
         {
-            if (!terrain.Raycast(new Ray(p + Vector3.up * 100f, Vector3.down), out var hit, 300f))
+            if (!terrain.Raycast(new Ray(new Vector3(p.x, 300f, p.z), Vector3.down), out var hit, 700f))
                 throw new System.InvalidOperationException("Prop ray missed terrain: " + p);
             return hit.point;
         }
-        void Bush(Transform parent, string name, Vector3 p, float scale)
-        {
-            p = Snap(p);
-            var clump = new GameObject(name).transform;
-            clump.SetParent(parent, false);
-            clump.position = p;
-            // 保留旧实现的 10 次抽样，后续落点与栅栏不受形状变化影响。
-            for (int j = 0; j < 10; j++) rnd.NextDouble();
-            int index = bushIndex++;
-            var shape = new System.Random(8100 + index);
-            float ShapeRange(float lo, float hi) => Mathf.Lerp(lo, hi, (float)shape.NextDouble());
-            if (useSprites)
-            {
-                var plane = new GameObject("BushSprite_" + index % 8);
-                plane.transform.SetParent(clump, false);
-                plane.AddComponent<MeshFilter>().sharedMesh = spriteMesh;
-                var renderer = plane.AddComponent<MeshRenderer>();
-                renderer.sharedMaterial = spriteMaterials[index % 8];
-                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-                var block = new MaterialPropertyBlock();
-                block.SetFloat("_ScaleX", 1.35f * scale * ShapeRange(.9f, 1.1f));
-                block.SetFloat("_ScaleY", .96f * scale * ShapeRange(.92f, 1.08f));
-                renderer.SetPropertyBlock(block);
-                return;
-            }
-            if (useCards)
-            {
-                float baseYaw = ShapeRange(0f, 360f);
-                for (int j = 0; j < 3; j++)
-                {
-                    var plane = new GameObject("BushCard_" + j);
-                    plane.transform.SetParent(clump, false);
-                    plane.transform.localRotation = Quaternion.Euler(0f, baseYaw + j * 60f + ShapeRange(-12f, 12f), 0f);
-                    plane.transform.localScale = Vector3.one * (scale * (1f - j * 0.06f));
-                    plane.AddComponent<MeshFilter>().sharedMesh = cardMesh;
-                    var renderer = plane.AddComponent<MeshRenderer>();
-                    renderer.sharedMaterial = card;
-                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-                }
-                return;
-            }
-            var lower = bushMeshes[index % 4];
-            var upper = bushMeshes[4 + (index * 3 + 1) % 4];
-            float lowerY = -0.08f - lower.bounds.min.y * scale;
-            float upperY = lowerY + ShapeRange(0.25f, 0.4f);
-            float top = Mathf.Max(lowerY + lower.bounds.max.y * scale,
-                upperY + upper.bounds.max.y * scale);
-            float heightScale = Mathf.Clamp(top, 0.7f, 1.1f) / top;
-            float bodyMin = float.PositiveInfinity, bodyTop = float.NegativeInfinity, bodyRadius = 0f;
-            var bodyVertices = new System.Collections.Generic.List<Vector3>();
-            for (int j = 0; j < 2; j++)
-            {
-                var leaf = new GameObject("Leaves_" + j);
-                leaf.transform.SetParent(clump, false);
-                float y = j == 0 ? lowerY : upperY;
-                leaf.transform.localPosition = new Vector3(j == 0 ? 0f : ShapeRange(-0.25f, 0.25f),
-                    (y + 0.08f) * heightScale - 0.08f,
-                    j == 0 ? 0f : ShapeRange(-0.25f, 0.25f));
-                leaf.transform.localRotation = Quaternion.Euler(0f, ShapeRange(0f, 360f), 0f);
-                leaf.transform.localScale = new Vector3(scale, scale * heightScale, scale);
-                leaf.AddComponent<MeshFilter>().sharedMesh = j == 0 ? lower : upper;
-                leaf.AddComponent<MeshRenderer>().sharedMaterial = j % 2 == 0 ? bush : bushLight;
-                foreach (var v in leaf.GetComponent<MeshFilter>().sharedMesh.vertices)
-                {
-                    // 世界变换后的顶点，以丛中心为水平原点、保留世界米制。
-                    var q = leaf.transform.TransformPoint(v) - p;
-                    bodyVertices.Add(q);
-                    bodyMin = Mathf.Min(bodyMin, q.y); bodyTop = Mathf.Max(bodyTop, q.y);
-                    bodyRadius = Mathf.Max(bodyRadius, new Vector2(q.x, q.z).magnitude);
-                }
-            }
-            var radii = new float[8];
-            var occupied = new bool[8];
-            foreach (var q in bodyVertices)
-            {
-                int bin = Mathf.Clamp(Mathf.FloorToInt((q.y - bodyMin) / (bodyTop - bodyMin) * 8f), 0, 7);
-                radii[bin] = Mathf.Max(radii[bin], new Vector2(q.x, q.z).magnitude);
-                occupied[bin] = true;
-            }
-            for (int bin = 0; bin < 8; bin++)
-            {
-                if (occupied[bin]) continue;
-                int lo = bin - 1, hi = bin + 1;
-                while (lo >= 0 && !occupied[lo]) lo--;
-                while (hi < 8 && !occupied[hi]) hi++;
-                radii[bin] = lo < 0 ? radii[hi] : hi == 8 ? radii[lo] :
-                    Mathf.Lerp(radii[lo], radii[hi], (bin - lo) / (float)(hi - lo));
-            }
-            float BodyRadiusAtY(float y)
-            {
-                float t = Mathf.Clamp((y - bodyMin) / (bodyTop - bodyMin) * 8f - 0.5f, 0f, 7f);
-                int lo = Mathf.FloorToInt(t);
-                return Mathf.Lerp(radii[lo], radii[Mathf.Min(lo + 1, 7)], t - lo);
-            }
-            // 独立序列，不消耗 shape / rnd，保持所有其它道具落点不变。
-            var leaves = new System.Random(9200 + index);
-            float LeafRange(float lo, float hi) => Mathf.Lerp(lo, hi, (float)leaves.NextDouble());
-            int count = leaves.Next(5, 9), exposed = 0;
-            float clumpHeight = bodyTop - bodyMin;
-            float maxTop = Mathf.Min(bodyTop + 0.10f, bodyMin + 1.20f);
-            float allTop = bodyTop, diameterMin = float.PositiveInfinity, diameterMax = 0f;
-            var exposedAngles = new System.Collections.Generic.List<float>();
-            var exposures = new System.Collections.Generic.List<float>();
-            for (int j = 0; j < count; j++)
-            {
-                bool accepted = false;
-                for (int attempt = 0; attempt < 4000 && !accepted; attempt++)
-                {
-                    var mesh = bushLeafMeshes[leaves.Next(bushLeafMeshes.Length)];
-                    float yaw = LeafRange(0f, 360f);
-                    if (j < 3 && exposedAngles.Exists(a => Mathf.Abs(Mathf.DeltaAngle(a, yaw)) < 55f)) continue;
-                    float y = bodyMin + LeafRange(j < 3 ? 0.70f : 0.30f, 0.95f) * clumpHeight;
-                    float radiusAtY = BodyRadiusAtY(y);
-                    float radius = LeafRange(0.62f, 0.92f) * radiusAtY;
-                    var center = new Vector3(Mathf.Sin(yaw * Mathf.Deg2Rad) * radius, y,
-                        Mathf.Cos(yaw * Mathf.Deg2Rad) * radius);
-                    var rotation = Quaternion.Euler(LeafRange(-20f, 20f), yaw, LeafRange(-20f, 20f));
-                    float minY = 0f, maxY = 0f, radialExtent = 0f;
-                    foreach (var v in mesh.vertices)
-                    {
-                        var q = rotation * v;
-                        minY = Mathf.Min(minY, q.y); maxY = Mathf.Max(maxY, q.y);
-                        radialExtent = Mathf.Max(radialExtent, new Vector2(q.x, q.z).magnitude);
-                    }
-                    // 尺寸重抽；包络超限只缩 fit，不移动中心。
-                    float fit = Mathf.Min(LeafRange(1f, 4f), (bodyRadius * 1.35f - radius) / radialExtent);
-                    fit = Mathf.Min(fit, (maxTop - center.y) / maxY, (center.y - bodyMin) / -minY);
-                    float maxRad = 0f, minRad = float.PositiveInfinity, leafTop = bodyTop;
-                    var vertices = mesh.vertices;
-                    float diameter = 0f;
-                    for (int k = 0; k < vertices.Length; k++)
-                    {
-                        var q = center + rotation * (vertices[k] * fit);
-                        float radial = new Vector2(q.x, q.z).magnitude;
-                        minRad = Mathf.Min(minRad, radial); maxRad = Mathf.Max(maxRad, radial);
-                        leafTop = Mathf.Max(leafTop, q.y);
-                        if (q.y < bodyMin - 0.0001f || q.y > maxTop + 0.0001f || radial > bodyRadius * 1.35f + 0.0001f)
-                            throw new System.InvalidOperationException("Bush leaf vertex outside envelope");
-                        for (int k2 = 0; k2 < k; k2++)
-                            diameter = Mathf.Max(diameter, Vector3.Distance(vertices[k], vertices[k2]) * fit);
-                    }
-                    float exposure = (maxRad - radiusAtY) / Mathf.Max(maxRad - minRad, 1e-4f);
-                    if (j < 3 && (exposure < 0.40f || leafTop - bodyMin < 0.70f)) continue;
-                    var leaf = new GameObject("LeafCluster_" + j);
-                    leaf.transform.SetParent(clump, false);
-                    leaf.transform.localPosition = center;
-                    leaf.transform.localRotation = rotation;
-                    leaf.transform.localScale = Vector3.one * fit;
-                    leaf.AddComponent<MeshFilter>().sharedMesh = mesh;
-                    leaf.AddComponent<MeshRenderer>().sharedMaterial = j % 2 == 0 ? bush : bushLight;
-                    allTop = Mathf.Max(allTop, leafTop);
-                    diameterMin = Mathf.Min(diameterMin, diameter); diameterMax = Mathf.Max(diameterMax, diameter);
-                    exposures.Add(exposure); exposureSum += exposure;
-                    if (exposure >= 0.40f) exposed++;
-                    if (j < 3) exposedAngles.Add(yaw);
-                    accepted = true;
-                }
-                if (!accepted) throw new System.InvalidOperationException("Bush exposure retries exhausted: " + index);
-            }
-            exposures.Sort((a, b) => b.CompareTo(a));
-            exposedMin = Mathf.Min(exposedMin, exposed); exposedMax = Mathf.Max(exposedMax, exposed);
-            bodyRadiusMin = Mathf.Min(bodyRadiusMin, bodyRadius); bodyRadiusMax = Mathf.Max(bodyRadiusMax, bodyRadius);
-            Debug.Log($"[SPIKE] bushMeasure index={index} bodyR={bodyRadius:F4} leafDiameter=[{diameterMin:F4},{diameterMax:F4}] top3=[{exposures[0]:F4},{exposures[1]:F4},{exposures[2]:F4}] qualifiedYaw=[{exposedAngles[0]:F2},{exposedAngles[1]:F2},{exposedAngles[2]:F2}]");
-            float actualHeight = allTop - bodyMin;
-            if (actualHeight < 0.6999f || actualHeight > 1.2001f)
-                throw new System.InvalidOperationException("Bush height outside 0.7–1.2m");
-            leavesTotal += count; leavesMin = Mathf.Min(leavesMin, count); leavesMax = Mathf.Max(leavesMax, count);
-            bushHeightMin = Mathf.Min(bushHeightMin, actualHeight); bushHeightMax = Mathf.Max(bushHeightMax, actualHeight);
-            if (bushIndex == 22)
-            {
-                Debug.Log($"[SPIKE] bushExposure clumps=22 exposedMin={exposedMin} exposedMax={exposedMax} meanExposure={exposureSum / leavesTotal:F3} bodyR=[{bodyRadiusMin:F4},{bodyRadiusMax:F4}] byHeight=true");
-                Debug.Log($"[SPIKE] bushLeaves total={leavesTotal} min={leavesMin} max={leavesMax} meshes=6 height=[{bushHeightMin:F3},{bushHeightMax:F3}]");
-            }
-        }
-        void Rock(Transform parent, string name, Vector3 p)
-        {
-            p = Snap(p);
-            var size = new Vector3(Range(0.3f, 0.7f), Range(0.3f, 0.7f), Range(0.3f, 0.7f));
-            var rotation = Quaternion.Euler(Range(-8f, 8f), Range(0f, 360f), Range(-10f, 10f));
-            var mesh = rockMeshes[rockIndex++ % rockMeshes.Length];
-            var rock = new GameObject(name);
-            rock.transform.SetParent(parent, false);
-            rock.transform.localScale = size / 0.5f;
-            rock.transform.rotation = rotation;
-            // 用实际旋转后的顶点包围高度，沿用中心上移 0.2 半径的埋深算法。
-            float minY = float.PositiveInfinity, maxY = float.NegativeInfinity;
-            foreach (var v in mesh.vertices)
-            {
-                float y = (rotation * Vector3.Scale(v, rock.transform.localScale)).y;
-                minY = Mathf.Min(minY, y); maxY = Mathf.Max(maxY, y);
-            }
-            float extent = (maxY - minY) * 0.5f;
-            rock.transform.position = p + Vector3.up * (extent * 0.2f - (minY + maxY) * 0.5f);
-            rock.AddComponent<MeshFilter>().sharedMesh = mesh;
-            rock.AddComponent<MeshRenderer>().sharedMaterial = stone;
-        }
+        var meshes = new Mesh[6];
+        for (int i = 0; i < meshes.Length; i++)
+            meshes[i] = SpikeArt.Blob(Vector3.one, .20f, 1, true, 7200 + i);
+        var centers = new System.Collections.Generic.List<Vector2>();
+        // Two foreground groups, followed by irregularly spaced groups across the slope.
         var eye = EyeAt(28f, -100f);
         var forward = (new Vector3(0f, 13f, 0f) - eye).normalized;
         var right = new Vector3(forward.z, 0f, -forward.x).normalized;
-        Vector3 NearPoint(int i, int count)
+        for (int side = -1; side <= 1; side += 2)
         {
-            float f = Mathf.Lerp(9.2f, 16.5f, (i / 2f) / (count / 2f));
-            float l = Range(3.25f, 5.6f) * (i % 2 == 0 ? -1f : 1f);
-            return eye + forward * f + right * l;
+            var p = eye + forward * 11f + right * (side * 4.8f);
+            centers.Add(new Vector2(p.x, p.z));
         }
-        for (int i = 0; i < 12; i++) Bush(near, "NearBush_" + i, NearPoint(i, 12), 1f);
-        for (int i = 0; i < 16; i++) Rock(near, "NearRock_" + i, NearPoint(i, 16));
-        Vector3 RoadPoint(float t, float offset)
+        for (int attempt = 0; attempt < 3000 && centers.Count < 22; attempt++)
         {
-            return new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI) + offset, 0f,
-                Mathf.Lerp(-70f, -13.25f, t));
+            var candidate = new Vector2(Range(-40f, 48f), Range(-90f, 24f));
+            float nearest = float.PositiveInfinity;
+            foreach (var center in centers) nearest = Mathf.Min(nearest, Vector2.Distance(center, candidate));
+            if (nearest < Range(6f, 20f) || nearest > 20f) continue;
+            if (Mathf.Abs(candidate.x) < 18f && candidate.y > -18f) continue;
+            centers.Add(candidate);
         }
-        for (int i = 0; i < 10; i++)
-            Bush(roadside, "RoadBush_" + i, RoadPoint(i / 9f * 0.85f,
-                Range(2.4f, 4.2f) * (i % 2 == 0 ? -1f : 1f)), Range(0.8f, 1.2f));
-        for (int i = 0; i < 14; i++)
-            Rock(roadside, "RoadRock_" + i, RoadPoint(i / 13f * 0.85f,
-                Range(2.4f, 4.2f) * (i % 2 == 0 ? 1f : -1f)));
+        int rocks = 0;
+        foreach (var center in centers)
+        {
+            float radius = Range(1.5f, 3f);
+            int count = rnd.Next(3, 9);
+            for (int j = 0; j < count && rocks < 150; j++)
+            {
+                float angle = Range(0f, Mathf.PI * 2f), offset = radius * Mathf.Sqrt(Range(0f, 1f));
+                var p = Snap(new Vector3(center.x + Mathf.Cos(angle) * offset, 0f, center.y + Mathf.Sin(angle) * offset));
+                float size = Range(.4f, 1.6f);
+                var rock = new GameObject("ClusterRock_" + rocks++);
+                rock.transform.SetParent(root, false);
+                rock.transform.position = p + Vector3.up * size * .18f;
+                rock.transform.rotation = Quaternion.Euler(0f, Range(0f, 360f), 0f);
+                rock.transform.localScale = new Vector3(size, size * Range(.55f, .85f), size * Range(.7f, 1f));
+                var mesh = UnityEngine.Object.Instantiate(meshes[rnd.Next(meshes.Length)]);
+                // Split the top faces into a snow submesh; no floating duplicate shell.
+                var stoneTris = new System.Collections.Generic.List<int>();
+                var snowTris = new System.Collections.Generic.List<int>();
+                var vertices = mesh.vertices;
+                var triangles = mesh.triangles;
+                for (int t = 0; t < triangles.Length; t += 3)
+                {
+                    var a = vertices[triangles[t]]; var b = vertices[triangles[t+1]]; var c = vertices[triangles[t+2]];
+                    var target = Vector3.Cross(b-a, c-a).normalized.y > .65f && (a.y+b.y+c.y)/3f > .16f ? snowTris : stoneTris;
+                    target.AddRange(new[] {triangles[t], triangles[t+1], triangles[t+2]});
+                }
+                mesh.subMeshCount = 2;
+                mesh.SetTriangles(stoneTris, 0); mesh.SetTriangles(snowTris, 1);
+                string path = "Assets/Settings/ClusterRock_" + rocks + ".asset";
+                AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(mesh, path);
+                rock.AddComponent<MeshFilter>().sharedMesh = mesh;
+                rock.AddComponent<MeshRenderer>().sharedMaterials = new[] {rockMat, snowMat};
+            }
+        }
+        Debug.Log($"[SPIKE] ground clusters={centers.Count} rocks={rocks} members=3..8 radius=1.5..3 spacing=6..20 size=.4..1.6 color=#6E6255 snowCaps=true");
+        Vector3 RoadPoint(float t, float offset) => new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI) + offset, 0f,
+            Mathf.Lerp(-70f, -13.25f, t));
         int posts = 0, rails = 0;
         Vector3 previous = Vector3.zero;
         // 包含两端，32 段的 z 间隔 1.5625m，沿弯路实际柱距约 1.6m。
@@ -998,42 +767,7 @@ public static class SpikeScene
                 }
             previous = p;
         }
-        if (useSprites)
-            Debug.Log($"[SPIKE] bushSprite quads={bushIndex} variants=8 castShadow=true depthOnly=true tex=112x80 pivotY=0 color=({spriteColor:F3},{spriteColor:F3},{spriteColor:F3}) shadowPass={spriteMaterials[0].FindPass("ShadowCaster")} depthPass={spriteMaterials[0].FindPass("DepthOnly")}");
-        Debug.Log(useSprites ? "[SPIKE] bushVariant=sprite quads=22 material=M_BushSprite variants=8" : useCards
-            ? $"[SPIKE] bushVariant=card quads={bushIndex * 3} material=M_BushCard tex=128x128 clip=0.5 cullOff=true doubleSided=true"
-            : "[SPIKE] bushVariant=blob quads=0 material=M_Bush");
-        Debug.Log($"[SPIKE] props bushes=22 rocks=30 fencePosts={posts} fenceRails={rails} seed=20261102");
-        Debug.Log($"[SPIKE] blobs meshes={bushMeshes.Length + rockMeshes.Length} verts={bushMeshes[0].vertexCount} tris={bushMeshes[0].triangles.Length / 3} bushVariants=8");
-        // 用独立投影计算诊断，不创建或改动任何相机。
-        var inverseView = Quaternion.Inverse(Quaternion.LookRotation(forward));
-        float focal = H * 0.5f / Mathf.Tan(Fov * Mathf.Deg2Rad * 0.5f);
-        float x0 = W, y0 = H, x1 = 0f, y1 = 0f;
-        int visible = 0;
-        foreach (Transform prop in near)
-        {
-            float left = float.PositiveInfinity, top = float.PositiveInfinity;
-            float rightPx = float.NegativeInfinity, bottom = float.NegativeInfinity;
-            foreach (var renderer in prop.GetComponentsInChildren<Renderer>())
-            {
-                var bounds = renderer.bounds;
-                for (int i = 0; i < 8; i++)
-                {
-                    var world = bounds.center + Vector3.Scale(bounds.extents,
-                        new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
-                    var v = inverseView * (world - eye);
-                    float x = W * 0.5f + focal * v.x / v.z;
-                    float y = H * 0.5f - focal * v.y / v.z;
-                    left = Mathf.Min(left, x); rightPx = Mathf.Max(rightPx, x);
-                    top = Mathf.Min(top, y); bottom = Mathf.Max(bottom, y);
-                }
-            }
-            if (rightPx < 0 || left > W || bottom < 918 || top > H) continue;
-            visible++;
-            x0 = Mathf.Min(x0, Mathf.Max(0, left)); y0 = Mathf.Min(y0, Mathf.Max(0, top));
-            x1 = Mathf.Max(x1, Mathf.Min(W, rightPx)); y1 = Mathf.Max(y1, Mathf.Min(H, bottom));
-        }
-        Debug.Log($"[SPIKE] propScreen nearMinY={y0:F1} union=({x0:F1},{y0:F1},{x1:F1},{y1:F1}) visible={visible} bandIntersection=({x0:F1},{Mathf.Max(918f,y0):F1},{x1:F1},{y1:F1})");
+        Debug.Log($"[SPIKE] fence posts={posts} rails={rails}");
     }
 
     /// <summary>坡面解析式：6° 上坡，z=0 处地面 y=0。</summary>
@@ -1134,13 +868,13 @@ public static class SpikeScene
         dof.bladeCount.Override(6);
 
         var color = profile.Add<ColorAdjustments>(true);
-        color.postExposure.Override(0.2f);
+        color.postExposure.Override(-0.15f); // previous +0.20 minus 0.35 EV
         color.contrast.Override(14f);
         color.saturation.Override(-6f);
-        color.colorFilter.Override(new Color(1f, 0.97f, 0.92f));
+        color.colorFilter.Override(Color.white);
 
         var vignette = profile.Add<Vignette>(true);
-        vignette.intensity.Override(0.28f);
+        vignette.intensity.Override(0.16f);
         vignette.smoothness.Override(0.45f);
 
         var grain = profile.Add<FilmGrain>(true);
@@ -1153,6 +887,7 @@ public static class SpikeScene
             comp.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
             AssetDatabase.AddObjectToAsset(comp, profile);
         }
+        EditorUtility.SetDirty(profile);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         return profile;

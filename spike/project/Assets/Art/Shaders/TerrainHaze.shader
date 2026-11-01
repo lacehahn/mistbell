@@ -87,7 +87,8 @@ Shader "Mistbell/TerrainHaze"
                 lighting.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
                 lighting.shadowMask = half4(1,1,1,1);
                 SurfaceData surface = (SurfaceData)0;
-                surface.albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).rgb * _BaseColor.rgb;
+                // Snow albedo 0.75 in linear light, tinted #DCE6EE (normalised by blue).
+                surface.albedo = .75 * _BaseColor.rgb / max(_BaseColor.b, .001);
                 surface.metallic = _Metallic;
                 surface.smoothness = _Smoothness;
                 surface.normalTS = half3(0,0,1);
@@ -96,7 +97,12 @@ Shader "Mistbell/TerrainHaze"
                 // URP Lit's Lambert diffuse + dielectric specular, SH and additional fill.
                 // UniversalFragmentPBR calls GetMainLight and MainLightRealtimeShadow.
                 half3 color = UniversalFragmentPBR(lighting, surface).rgb;
-                color = MixFog(color, ComputeFogFactor(TransformWorldToHClip(input.positionWS).z));
+                // Cool skylight remains in the actual cast shadow; never fill it with white albedo.
+                Light sun = GetMainLight(lighting.shadowCoord);
+                half3 shadowTint = half3(.392, .503, .644); // #A8BCD2 linear
+                color *= lerp(shadowTint, half3(1,1,1), sun.shadowAttenuation);
+                half3 heightFog=lerp(half3(.79,.77,.73),half3(.67,.75,.84),saturate((input.positionWS.y+12)/50));
+                color = MixFogColor(color,heightFog,ComputeFogFactor(TransformWorldToHClip(input.positionWS).z));
                 float d = distance(input.positionWS.xz, _WorldSpaceCameraPos.xz);
                 float t = saturate((d - _HazeStart) / max(1e-3, _HazeEnd - _HazeStart));
                 float f = pow(t, _HazePower) * _HazeStrength;
