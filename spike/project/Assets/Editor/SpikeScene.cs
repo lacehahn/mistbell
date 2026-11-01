@@ -604,6 +604,20 @@ public static class SpikeScene
         var bush = SpikeArt.MakeTextured("Assets/Settings/M_Bush.mat", TEX + "bush.png",
             TEX + "bush_n.png", 1.0f, Hex("#3A4A24"), 0f, 0.7f);
         bush.SetColor("_BaseColor", new Color(0.9f, 0.95f, 0.82f, 1f));
+        var bushLight = new Material(bush) { name = "M_BushLight" };
+        bushLight.SetColor("_BaseColor", new Color(1.15f, 1.20f, 0.98f, 1f));
+        const string lightPath = "Assets/Settings/M_BushLight.mat";
+        AssetDatabase.DeleteAsset(lightPath);
+        AssetDatabase.CreateAsset(bushLight, lightPath);
+        var bushMeshes = new Mesh[8];
+        var bushSizes = new[] { new Vector3(1.25f, 0.65f, 1.35f), new Vector3(1.5f, 0.75f, 1.2f),
+            new Vector3(0.75f, 0.48f, 0.85f), new Vector3(0.9f, 0.55f, 0.7f) };
+        for (int i = 0; i < bushMeshes.Length; i++)
+            bushMeshes[i] = SpikeArt.Blob(bushSizes[i / 2], 0.22f, 1, false, 6100 + i);
+        var rockMeshes = new Mesh[4];
+        for (int i = 0; i < rockMeshes.Length; i++)
+            rockMeshes[i] = SpikeArt.Blob(Vector3.one * 0.5f, 0.32f, 1, true, 7200 + i);
+        int bushIndex = 0, rockIndex = 0;
         // 栅栏使用独立副本，以免改变教堂里共用的 wood 材质。
         var fenceWood = new Material(wood) { name = "M_FenceWood" };
         fenceWood.SetColor("_BaseColor", Hex("#827767"));
@@ -631,17 +645,30 @@ public static class SpikeScene
             var clump = new GameObject(name).transform;
             clump.SetParent(parent, false);
             clump.position = p;
-            float width = Range(0.9f, 1.4f);
-            float[] widths = { width, 0.7f, 0.45f };
-            float[] heights = { 0.35f, 0.32f, 0.28f };
-            float bottom = -0.08f;
-            for (int j = 0; j < 3; j++)
+            // 保留旧实现的 10 次抽样，后续落点与栅栏不受形状变化影响。
+            for (int j = 0; j < 10; j++) rnd.NextDouble();
+            int index = bushIndex++;
+            var shape = new System.Random(8100 + index);
+            float ShapeRange(float lo, float hi) => Mathf.Lerp(lo, hi, (float)shape.NextDouble());
+            var lower = bushMeshes[index % 4];
+            var upper = bushMeshes[4 + (index * 3 + 1) % 4];
+            float lowerY = -0.08f - lower.bounds.min.y * scale;
+            float upperY = lowerY + ShapeRange(0.25f, 0.4f);
+            float top = Mathf.Max(lowerY + lower.bounds.max.y * scale,
+                upperY + upper.bounds.max.y * scale);
+            float heightScale = Mathf.Clamp(top, 0.7f, 1.1f) / top;
+            for (int j = 0; j < 2; j++)
             {
-                SpikeArt.Box(clump, "Leaves_" + j,
-                    new Vector3(widths[j], heights[j], widths[j]) * scale,
-                    new Vector3(Range(-0.09f, 0.09f), bottom + heights[j] * scale * 0.5f,
-                        Range(-0.09f, 0.09f)), bush, false, Range(0f, 360f));
-                bottom += heights[j] * scale * 0.87f;
+                var leaf = new GameObject("Leaves_" + j);
+                leaf.transform.SetParent(clump, false);
+                float y = j == 0 ? lowerY : upperY;
+                leaf.transform.localPosition = new Vector3(j == 0 ? 0f : ShapeRange(-0.25f, 0.25f),
+                    (y + 0.08f) * heightScale - 0.08f,
+                    j == 0 ? 0f : ShapeRange(-0.25f, 0.25f));
+                leaf.transform.localRotation = Quaternion.Euler(0f, ShapeRange(0f, 360f), 0f);
+                leaf.transform.localScale = new Vector3(scale, scale * heightScale, scale);
+                leaf.AddComponent<MeshFilter>().sharedMesh = j == 0 ? lower : upper;
+                leaf.AddComponent<MeshRenderer>().sharedMaterial = index % 2 == 0 ? bush : bushLight;
             }
         }
         void Rock(Transform parent, string name, Vector3 p)
@@ -649,12 +676,22 @@ public static class SpikeScene
             p = Snap(p);
             var size = new Vector3(Range(0.3f, 0.7f), Range(0.3f, 0.7f), Range(0.3f, 0.7f));
             var rotation = Quaternion.Euler(Range(-8f, 8f), Range(0f, 360f), Range(-10f, 10f));
-            // 旋转后以实际垂直半径决定埋深，仍有约 60% 露在地面上。
-            float extent = (Mathf.Abs((rotation * Vector3.right).y) * size.x
-                + Mathf.Abs((rotation * Vector3.up).y) * size.y
-                + Mathf.Abs((rotation * Vector3.forward).y) * size.z) * 0.5f;
-            var rock = SpikeArt.Box(parent, name, size, p + Vector3.up * extent * 0.2f, stone, false);
+            var mesh = rockMeshes[rockIndex++ % rockMeshes.Length];
+            var rock = new GameObject(name);
+            rock.transform.SetParent(parent, false);
+            rock.transform.localScale = size / 0.5f;
             rock.transform.rotation = rotation;
+            // 用实际旋转后的顶点包围高度，沿用中心上移 0.2 半径的埋深算法。
+            float minY = float.PositiveInfinity, maxY = float.NegativeInfinity;
+            foreach (var v in mesh.vertices)
+            {
+                float y = (rotation * Vector3.Scale(v, rock.transform.localScale)).y;
+                minY = Mathf.Min(minY, y); maxY = Mathf.Max(maxY, y);
+            }
+            float extent = (maxY - minY) * 0.5f;
+            rock.transform.position = p + Vector3.up * (extent * 0.2f - (minY + maxY) * 0.5f);
+            rock.AddComponent<MeshFilter>().sharedMesh = mesh;
+            rock.AddComponent<MeshRenderer>().sharedMaterial = stone;
         }
         var eye = EyeAt(28f, -100f);
         var forward = (new Vector3(0f, 13f, 0f) - eye).normalized;
@@ -699,6 +736,7 @@ public static class SpikeScene
             previous = p;
         }
         Debug.Log($"[SPIKE] props bushes=22 rocks=30 fencePosts={posts} fenceRails={rails} seed=20261102");
+        Debug.Log($"[SPIKE] blobs meshes={bushMeshes.Length + rockMeshes.Length} verts={bushMeshes[0].vertexCount} tris={bushMeshes[0].triangles.Length / 3} bushVariants=8");
         // 用独立投影计算诊断，不创建或改动任何相机。
         var inverseView = Quaternion.Inverse(Quaternion.LookRotation(forward));
         float focal = H * 0.5f / Mathf.Tan(Fov * Mathf.Deg2Rad * 0.5f);

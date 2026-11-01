@@ -1,4 +1,5 @@
 using System.IO;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -49,6 +50,97 @@ public static class SpikeArt
         m.RecalculateTangents();
         m.RecalculateBounds();
         return m;
+    }
+
+    /// <summary>焊接二十面球、确定性双频位移；几何与 UV 均以米计，缓存为真实资产。</summary>
+    public static Mesh Blob(Vector3 size, float displace, int subdiv, bool flat, int seed)
+    {
+        string key = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "Blob_{0:R}_{1:R}_{2:R}_{3:R}_{4}_{5}_{6}",
+            size.x, size.y, size.z, displace, subdiv, flat, seed);
+        string path = "Assets/Settings/" + key + ".asset";
+        var cached = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (cached != null) return cached;
+        var points = new List<Vector3>();
+        var welded = new Dictionary<Vector3Int, int>();
+        int Vertex(Vector3 p)
+        {
+            p.Normalize();
+            var k = new Vector3Int(Mathf.RoundToInt(p.x * 1000000f),
+                Mathf.RoundToInt(p.y * 1000000f), Mathf.RoundToInt(p.z * 1000000f));
+            if (welded.TryGetValue(k, out int index)) return index;
+            index = points.Count;
+            welded.Add(k, index);
+            points.Add(p);
+            return index;
+        }
+        float t = (1f + Mathf.Sqrt(5f)) * 0.5f;
+        foreach (var p in new[] {
+            new Vector3(-1,t,0), new Vector3(1,t,0), new Vector3(-1,-t,0), new Vector3(1,-t,0),
+            new Vector3(0,-1,t), new Vector3(0,1,t), new Vector3(0,-1,-t), new Vector3(0,1,-t),
+            new Vector3(t,0,-1), new Vector3(t,0,1), new Vector3(-t,0,-1), new Vector3(-t,0,1) }) Vertex(p);
+        var faces = new List<int> {
+            0,11,5, 0,5,1, 0,1,7, 0,7,10, 0,10,11,
+            1,5,9, 5,11,4, 11,10,2, 10,7,6, 7,1,8,
+            3,9,4, 3,4,2, 3,2,6, 3,6,8, 3,8,9,
+            4,9,5, 2,4,11, 6,2,10, 8,6,7, 9,8,1 };
+        for (int level = 0; level < subdiv; level++)
+        {
+            var next = new List<int>(faces.Count * 4);
+            for (int i = 0; i < faces.Count; i += 3)
+            {
+                int a = faces[i], b = faces[i + 1], c = faces[i + 2];
+                int ab = Vertex(points[a] + points[b]), bc = Vertex(points[b] + points[c]),
+                    ca = Vertex(points[c] + points[a]);
+                next.AddRange(new[] { a,ab,ca, b,bc,ab, c,ca,bc, ab,bc,ca });
+            }
+            faces = next;
+        }
+        float Hash(Vector3 d, int salt)
+        {
+            unchecked
+            {
+                uint h = (uint)(seed + salt);
+                h = (h ^ (uint)Mathf.RoundToInt(d.x * 10000f)) * 16777619u;
+                h = (h ^ (uint)Mathf.RoundToInt(d.y * 10000f)) * 16777619u;
+                h = (h ^ (uint)Mathf.RoundToInt(d.z * 10000f)) * 16777619u;
+                h ^= h >> 16; h *= 2246822519u; h ^= h >> 13;
+                return (h & 0x00ffffffu) / 16777215f;
+            }
+        }
+        for (int i = 0; i < points.Count; i++)
+        {
+            var d = points[i];
+            float r = 1f + displace * (Hash(d, 0) * 2f - 1f)
+                + displace * 0.4f * (Hash(d * 3f, 7919) * 2f - 1f);
+            points[i] = Vector3.Scale(d * r, size * 0.5f);
+        }
+        if (flat)
+        {
+            var split = new List<Vector3>(faces.Count);
+            for (int i = 0; i < faces.Count; i++) split.Add(points[faces[i]]);
+            points = split;
+            for (int i = 0; i < faces.Count; i++) faces[i] = i;
+        }
+        var mesh = new Mesh { name = key };
+        mesh.SetVertices(points);
+        mesh.SetTriangles(faces, 0);
+        mesh.RecalculateNormals();
+        var normals = mesh.normals;
+        var uv = new Vector2[points.Count];
+        for (int i = 0; i < points.Count; i++)
+        {
+            var n = normals[i];
+            var p = points[i]; // 已乘 size * 0.5；不能再乘一次边长。
+            float ax = Mathf.Abs(n.x), ay = Mathf.Abs(n.y), az = Mathf.Abs(n.z);
+            uv[i] = ax >= ay && ax >= az ? new Vector2(p.z, p.y)
+                : ay >= ax && ay >= az ? new Vector2(p.x, p.z) : new Vector2(p.x, p.y);
+        }
+        mesh.uv = uv;
+        mesh.RecalculateTangents();
+        mesh.RecalculateBounds();
+        AssetDatabase.CreateAsset(mesh, path);
+        return mesh;
     }
 
     /// <summary>建一个盒体（网格 UV 以米计），可选碰撞体。</summary>

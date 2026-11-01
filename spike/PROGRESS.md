@@ -3,7 +3,7 @@
 > 规则：每完成一步就在「日志」里追加一行（时间 | 步骤 | 命令/产物 | 结果）。任何新会话先读本文件末尾 3 条 + `git log --oneline -5` 再动手。
 > Codex 限流时：在日志记「Codex 限额耗尽，等待重置」，本步跳过，下一次调度再试；**不要**因此中断其它不依赖 Codex 的工作。
 
-## 当前状态（最后更新：2026-11-02 05:30）
+## 当前状态（最后更新：2026-11-02 05:24）
 
 - 环境：Unity Hub 3.22.5 / Unity 6000.3.27f2 / Windows Mono 模块 / macOS 目标内置 / Blender 5.2.3 LTS / Unity Personal 已激活
 - 闭环已验证：
@@ -59,7 +59,7 @@
    - v3：**块尺度才是病根** —— `patchwork.py` 证明颜色方差与参考持平（邻块明度差 5.4% vs 参考 10.8–14.2%），真因是块太小（0.53×0.6 m → 主视角 12 px）；`m_Scale` 1/2.4→1/4.8
    - v4：贴图块间明度抖动 ±0.09→±0.03、色相 ±6→±2.5°、sat→0.12 → 贴图 `blockSpread 74.3%→29.2%`；tiling 从 `.mat`（**被 gitignore 忽略、不可复现**）挪进 `SpikeScene.cs`；移轴 `_MaxRadius 10→12`
    - ⚠️ 遗留（近读仍像「现代砌块」）：① 块面太平滑、无接触阴影 → **SSAO（队列 11）**；② 灰缝部分偏绿、亮度不均；③ `Lstd 44.5→28.1` 与 `coarseStd 27→9.6` 偏低，需要块内起伏/凹陷把细节补回来
-15. ⚠️ **前景细节物件** 主体到位（2026-11-02 05:30）——见队列 20 的遗留：
+15. ⚠️ **前景细节物件** 主体到位（2026-11-02 05:19）——见队列 20 的遗留：
    - Codex 第 21 轮按 `spike/brief-props.md` 加 `make_bush()`（`bush.png` 128²，`seam 0.79/0.84`、`meanRGB(42,58,32)`、`edge% 9.4`）+ `SpikeScene.BuildProps()`：前景带 12 灌木 / 16 石块（相对揭示机位 `fwd 9.2–16.5 m`、`|lat| 3.25–5.6 m`）+ 路侧 10 灌木 / 14 石块 + 沿路 33 立柱 / 64 横杆，固定种子 `20261102`，全部射线吸附地形
    - 我独立复跑：`[SPIKE] props bushes=22 rocks=30 fencePosts=33 fenceRails=64`；`sharp art_runtime bottom 1.95→3.43`（门槛 2.6）；前景两矩形 `Lstd 3.6/4.4 → 23.6/17.5`（门槛 8.0）；`frame sky (167,183,203)`、`clipped 0.00%`、`heightPct 49.8 / pitch 11.8 / pilgrim y=terrain y` 未动；`art_close` 三带数字**一位未变**（近景机位里根本没有物件，属正常）；双平台 Succeeded / error CS 0；贴图 md5 前后一致（草/石/瓦字节未变）
    - **目视判定**：栅栏是这一轮最大的收获——左侧沿路一排立柱+双横杆，把路从画面边缘引到台地，HD-2D 的「路引」终于成立；但**灌木是三层轴对齐方盒堆成的「纸箱塔」**（`art_ground` 里一眼看穿），石块也偏方 → 队列 20
@@ -72,7 +72,16 @@
    - **B 砂粒**：`make_stone` 在块面（`edge≥2` 且 `height>0.1`）叠 `±7` 中性偏移（**三通道共用**，不再引入彩线）+ 高度 `±0.04`。`texstat edge% 9.1→13.6`、法线图 84 KB→365 KB；`sharp art_close middle 11.73→12.85`（差门槛 13.0 只有 0.15，**如实记未达标**）。
    - 守卫未破：`frame` 三张 `sky(167,183,203)/ground_near(67,90,28)/clipped 0.00%` 一字未动、`edge.py mean jump 4.1`、`patchwork neighborDiff 5.2%`、`region wall sat 0.289 clipped 0.06%`、双平台 `Succeeded errors=0`；`make_textures.py` md5 前后一致（确定性）。
 19. **檐口/穹顶底环的白描边 + 屋顶瓦缝偏软**（2026-11-02 05:10 目视新增，次优先）：主视角里穹顶底部一圈与山墙檐口是石材的高亮带，在暗屋顶上形成「白描边」；`roof_slate` 的 `coarseStd 4.22 / edge% 1.5` 偏低（瓦缝压影 `×0.80` 收到 `×0.70`、贴图 128→256 可改善）。
-20. **灌木/石块去掉「纸箱塔」造型**（2026-11-02 05:30 目视新增，优先）：现在灌木是 3 个轴对齐方盒叠放（`art_ground` 一眼看穿像货架纸箱），石块也是方盒随机转。改用**位移后的低多边形 blob 网格**（icosphere subdiv 2 = 42 顶点，按种子噪声沿法线位移 ±18%，非均匀缩放、保持平直法线；UV 按主法线轴投影、以米计），石块用同一生成器 + 更强位移 + 石材贴图。验收：`[SPIKE] props` 新增 `blobTris` 与 `bushVerts` 日志；`sharp art_runtime bottom ≥ 3.4`（不许倒退）、前景两矩形 `Lstd ≥ 15`、`frame sky/clipped`、`heightPct 49.8`、双平台 Succeeded 全部守住；**目视为准**：`art_ground` 里灌木轮廓不再有长直边、能读成「一丛叶子」。
+20. ✅ **灌木/石块去掉「纸箱塔」造型**（2026-11-02 05:24 完成）：`SpikeArt.Blob()` —— 二十面体 subdiv1（42 顶点 / 80 面）、确定性哈希沿法线位移 ±22%（石块 ±32% + 硬棱）、UV 按主法线轴以米计、12 个网格分档复用；灌木改为两团错位叠合 + `M_Bush`/`M_BushLight` 两档配色。
+   - 实测：`blobs meshes=12 verts=42 tris=80 bushVariants=8`、`sharp runtime bottom 3.43→3.84`、前景两矩形 `Lstd 23.6/17.5→24.3/25.9`、`sky/clipped/heightPct/pitch` 未动、双平台 Succeeded、`props`/`blobs` 两行确定性一致
+   - 目视：方盒感消失，接地有软阴影；**但灌木读成「绿色石头」**（表面光滑有光泽、饱和度高于草地、轮廓无叶簇破口）→ 队列 21
+21. **灌木的叶簇破轮廓 + 去塑感**（2026-11-02 05:24 目视新增，优先）：现在 blob 表面是光滑的绿色塑料块。三件事一起做：
+   (a) 主体 blob 周围加 5–8 片小 blob（0.18–0.35 m，位移 ±40%，随机 yaw）做出「叶团」断口与外轮廓毛边；
+   (b) `bush.png` 的叶簇对比加强（亮部/暗部差 ≥ 2 倍、加 1 px 枝条与透光缝隙），并让 `_BaseColor` 往草地色板靠（现在比草地更饱和更亮，显得浮）；
+   (c) 材质 smoothness 0.7→0.35（现在有高光，像塑料）。
+   验收：`sharp art_runtime bottom ≥ 3.8`、前景 `Lstd ≥ 25`、`region` 前景矩形 `sat ≤ 0.60`（现在 0.580/0.621，要往 0.55 落）、其余守卫全守住；目视为准——`art_ground` 里灌木轮廓有毛边、不再是光泽绿石。
+22. **远山体积**（2026-11-02 05:24 目视新增，次优先）：三层山现在是**纯雾色剪影**，没有明暗面、没有雪、层间距靠颜色硬凑。要做：山体正面叠一层方向光渐变（迎光面比背光面亮 15–25%）、雪线只在最高层出现且带破碎边缘、层与层之间用轻微色温差（近层偏冷青、远层偏紫灰）。验收用新尺子判「山体内部有没有明暗」：山体矩形内 `Lstd` 从当前 ~3 提到 ≥ 8，且三层均值差 ≥ 6。
+   - 基线（05:26 量，`region.py art_runtime`）：左山 `40,340,520,700 → mean(160,176,195) sat 0.183 Lstd 10.0`、右山 `1520,340,1900,700 → (151,168,184) Lstd 7.7`——**这两个 Lstd 主要是山脊与天空之间的锯齿边贡献的，山体内部几乎无明暗**；量「内部」时要把矩形往下压到山腰（避免框进天空）。
 
 ## 日志
 
@@ -173,6 +182,9 @@
 | 05:02 | 派发 Codex 第 20 轮（队列 18） | `codex.sh` 读 `spike/brief-stone6.md`（日志 `logs/122_codex_stone6.log`） | A：`SpikeScene.cs` 屋顶材质后加显式 `_BaseColor (0.50,0.47,0.43)`（值由「石材标定 → 渲染放大 R/B 1.07 倍」推导，**不是试出来的**）；B：`make_stone` 块面加单 texel 中性砂粒 `±7` + 高度 `±0.04`（三通道共用偏移、灰缝跳过）。Codex 自跑一轮 `SpikeScene.Run → SpikeBuild.Run → caffeinate capture_runtime.sh` 并自量 |
 | 05:08 | 人工复跑（确定性 + 10 把尺子 + 目视 ×3） | `make_textures.py`（md5 前后比对）/ `texstat` / `seam` / `region` / `sharp` / `frame` / `edge` / `patchwork` / `vision_analyze` | **数字与 Codex 自报逐项一致**。贴图层：stone `sat 0.111 coarseStd 14.46 edge% 13.6`（门槛 12 ✓）、`seam 0.95/1.33`、md5 **确定性一致**；roof/grass 未变。渲染层：**屋顶 `(91,87,82) sat 0.083 R-B +8.6 p50 87.2`——R1 三条门槛全过**；`sharp middle 12.85`（门槛 13.0，**差 0.15 未过**）；`region wall sat 0.289 clipped 0.06%` ✓；`frame` 三张一字未动 ✓；`edge mean jump 4.1` ✓；`patchwork neighborDiff 5.2%` ✓；双平台 Succeeded / error CS 0 ✓。**目视**：屋顶是深石板瓦、瓦排可数、无黑点无番茄红；石墙砖缝是细暗线+单侧倒角，块面出现砂粒（优于上一轮，但仍不到真砂岩）。**判断：主视角第一次「像一座真实的山地石教堂」而不是玩具模型**；下一个最致命的仍是队列 15 前景空无一物 |
 | 05:14 | 量前景基线（队列 15 派发前） | `sharp` / `region` / `frame`，存 `spike/scratch/baseline-props.md` | 主视角前景两矩形 `Lstd 3.6 / 4.4`（整片平涂）、`sharp bottom 1.95`；几何换算：画面最下 15% 行 = 相机前方 9.2–16.3 m，`px_per_m(d)=1712.6/d` |
-| 05:16 | 派发 Codex 第 21 轮（队列 15） | `spike/brief-props.md` → `codex.sh`（日志 `logs/124_codex_props.log`，46.2k tokens） | 任务：`make_bush()` 新贴图 + `SpikeScene.BuildProps()`（前景带/路侧/木栅栏，固定种子、射线吸附地形）。Codex 自跑全链、自报 10 条门槛全过 |
-| 05:28 | 人工复跑（9 把尺子 + md5 + 构建日志） | `texstat` / `seam` / `sharp` / `region` / `frame` / `make_textures.py` 二次 md5 / `162_build.log` | **数字与自报逐项一致**：`bush 128² meanRGB(42,58,32) sat 0.445 edge% 9.4 seam 0.79/0.84`；`[SPIKE] props bushes=22 rocks=30 fencePosts=33 fenceRails=64`；`sharp art_runtime bottom 1.95→3.43`、`art_close middle 12.85 未动`、`art_ground middle 11.89→11.02`；前景两矩形 `Lstd 23.6/17.5`、`p50 74.4/72.0`；`frame sky(167,183,203)`、`clipped 0.00%`、`heightPct 49.8 / pitch 11.8 / pilgrim y=terrain y` 未动；贴图 md5 前后一致；macOS 123.2 MB / Windows 105.3 MB、`error CS` 0 |
-| 05:30 | 目视判定（队列 15 部分通过） | `vision_analyze` ×3（runtime / close / ground） | **栅栏是本轮最大收益**：路左侧 33 柱 + 双横杆把路从画面边缘引到台地，HD-2D 的「路引」成立，主视角前景不再是空草地。**但灌木是 3 个轴对齐方盒叠成的「纸箱塔」**——`art_ground` 里一眼看穿（层叠方盒 + 硬直边），石块同样偏方 → 队列 20。另记：`art_close` 机位离墙太近，画面读成一堵大石板墙，门洞内仍是平涂棕（队列 10 未做） |
+| 05:15 | 派发 Codex 第 21 轮（队列 15） | `spike/brief-props.md` → `codex.sh`（日志 `logs/124_codex_props.log`，46.2k tokens） | 任务：`make_bush()` 新贴图 + `SpikeScene.BuildProps()`（前景带/路侧/木栅栏，固定种子、射线吸附地形）。Codex 自跑全链、自报 10 条门槛全过 |
+| 05:18 | 人工复跑（9 把尺子 + md5 + 构建日志） | `texstat` / `seam` / `sharp` / `region` / `frame` / `make_textures.py` 二次 md5 / `162_build.log` | **数字与自报逐项一致**：`bush 128² meanRGB(42,58,32) sat 0.445 edge% 9.4 seam 0.79/0.84`；`[SPIKE] props bushes=22 rocks=30 fencePosts=33 fenceRails=64`；`sharp art_runtime bottom 1.95→3.43`、`art_close middle 12.85 未动`、`art_ground middle 11.89→11.02`；前景两矩形 `Lstd 23.6/17.5`、`p50 74.4/72.0`；`frame sky(167,183,203)`、`clipped 0.00%`、`heightPct 49.8 / pitch 11.8 / pilgrim y=terrain y` 未动；贴图 md5 前后一致；macOS 123.2 MB / Windows 105.3 MB、`error CS` 0 |
+| 05:19 | 目视判定（队列 15 部分通过） | `vision_analyze` ×3（runtime / close / ground） | **栅栏是本轮最大收益**：路左侧 33 柱 + 双横杆把路从画面边缘引到台地，HD-2D 的「路引」成立，主视角前景不再是空草地。**但灌木是 3 个轴对齐方盒叠成的「纸箱塔」**——`art_ground` 里一眼看穿（层叠方盒 + 硬直边），石块同样偏方 → 队列 20。另记：`art_close` 机位离墙太近，画面读成一堵大石板墙，门洞内仍是平涂棕（队列 10 未做） |
+| 05:20 | 派发 Codex 第 22 轮（队列 20） | `spike/brief-props2.md` → `codex.sh`（日志 `logs/126_codex_blob.log`，42.0k tokens） | 任务：`SpikeArt.Blob()`（二十面体 subdiv1 = 42 顶点/80 面、确定性哈希沿法线位移、UV 以米计）替换灌木与石块的方盒堆；栅栏与落点不动；灌木配色分两档 `M_Bush`/`M_BushLight` |
+| 05:22 | 人工复跑（8 条门槛） | `sharp` / `region` / `frame` / `164_scene.log` / `166_build.log` | **与自报逐项一致**：`blobs meshes=12 verts=42 tris=80 bushVariants=8`；`sharp runtime bottom 3.43→3.84`、`ground middle 11.02→12.21`；前景两矩形 `Lstd 23.6/17.5→24.3/25.9`；`sky(167,183,203)`、`clipped 0.01%`、`heightPct 49.8 / pitch 11.8 / pilgrim y=terrain y` 未动；macOS 123.1 MB / Windows 105.1 MB、`error CS` 0 |
+| 05:24 | 目视判定（队列 20 部分通过） | `vision_analyze` on `art_ground` / `art_runtime` | **「纸箱塔」消失**：灌木成了两团错位叠合的凹凸体块，接地有软阴影，主视角左右两组前景 + 左侧栅栏 + 石板路形成完整前后景层次；`art_close` 三带数字仍未变（机位里没有物件）。**但灌木读成「绿色石头」**：表面光滑有光泽、饱和度高于草地、轮廓无叶簇破口 → 队列 21 |
