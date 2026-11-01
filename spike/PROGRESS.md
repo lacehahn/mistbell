@@ -84,3 +84,5 @@
 | 00:21 | 关键发现 | 设定画标注尺寸 | **教堂真实尺寸 34 m 宽 × 27 m 高 × 24 m 深**（此前按 14 m 建，是构图反复切顶的根因）；穹顶 12 边形、钟楼 8 边形开敞且独立 |
 | 00:28 | 验收 Codex Blender v1 | 独立跑 `check_church.py`（blender -b） | **不合格**：bbox 40.0×34.5×25.4 超限、tris=1560、拱门未开洞（前墙仅 88 tris）；根因含我的 spec 自相矛盾（台地40×32+侧屋30m+钟楼外偏塞不进 34×24） |
 | 00:30 | 重发 Blender v2 | `codex.sh`（自洽尺寸 + 三视图渲染 + 硬门槛） | 门槛：bbox_in_range=True、tris≥3000、nave_front_tris≥120、产出 views/{front,side,top,iso}.png；进行中 |
+| 00:38 | 验收 Codex Blender v2 | 独立 `check_church.py` + 看三视图 | **通过**：bbox 34.00×24.00×26.60（in_range=True）、tris 14864、前墙 944 tris（拱洞真切）；三视图 front/side/top/iso 已出；评：正立面缺拱窗、穹顶偏矮胖、檐口太厚 |
+| 00:40 | 派发 Unity 导入+相机重算 | `codex.sh`（第 5 轮） | 关键计算：相机距角色 20 m（≈150 px）、教堂推至 110 m（约 39% 画面高），解决"真实尺度下角色与教堂比例不可兼得"；硬门槛 35–45% / 120–170 px / tris>5000；进行中 |
