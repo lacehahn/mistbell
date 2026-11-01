@@ -10,6 +10,69 @@ using UnityEngine.Rendering.Universal;
 /// </summary>
 public static class SpikeURP
 {
+    public static void TiltShift()
+    {
+        const string materialPath = "Assets/Settings/M_TiltShift.mat";
+        const string featurePath = "Assets/Settings/TiltShiftFeature.asset";
+        const string rendererPath = "Assets/Settings/MistbellRenderer.asset";
+        Directory.CreateDirectory("Assets/Settings");
+        var shader = Shader.Find("Mistbell/TiltShift");
+        if (shader == null || !shader.isSupported)
+            throw new System.InvalidOperationException("Mistbell/TiltShift shader missing or unsupported");
+        var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+        if (material == null)
+        {
+            material = new Material(shader) { name = "M_TiltShift" };
+            AssetDatabase.CreateAsset(material, materialPath);
+        }
+        material.shader = shader;
+        material.SetFloat("_FocusCenter", 0.5f);
+        material.SetFloat("_FocusBand", 0.26f);
+        material.SetFloat("_Falloff", 0.24f);
+        material.SetFloat("_MaskPower", 1.2f);
+        material.SetFloat("_MaxRadius", 10f);
+        EditorUtility.SetDirty(material);
+
+        var feature = AssetDatabase.LoadAssetAtPath<FullScreenPassRendererFeature>(featurePath);
+        if (feature == null)
+        {
+            feature = ScriptableObject.CreateInstance<FullScreenPassRendererFeature>();
+            feature.name = "TiltShiftFeature";
+            AssetDatabase.CreateAsset(feature, featurePath);
+        }
+        feature.injectionPoint = FullScreenPassRendererFeature.InjectionPoint.AfterRenderingPostProcessing;
+        feature.requirements = ScriptableRenderPassInput.None;
+        feature.fetchColorBuffer = true;
+        feature.bindDepthStencilAttachment = false;
+        feature.passMaterial = material;
+        feature.passIndex = 0;
+        feature.SetActive(true);
+        EditorUtility.SetDirty(feature);
+
+        var renderer = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(rendererPath);
+        if (renderer == null)
+            throw new System.InvalidOperationException("Missing renderer: " + rendererPath);
+        if (!renderer.rendererFeatures.Contains(feature))
+            renderer.rendererFeatures.Add(feature);
+        renderer.SetDirty();
+        EditorUtility.SetDirty(renderer);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.ImportAsset(materialPath, ImportAssetOptions.ForceUpdate);
+        AssetDatabase.ImportAsset(featurePath, ImportAssetOptions.ForceUpdate);
+        AssetDatabase.ImportAsset(rendererPath, ImportAssetOptions.ForceUpdate);
+
+        renderer = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(rendererPath);
+        var loadedFeature = renderer.rendererFeatures.Count == 1
+            ? renderer.rendererFeatures[0] as FullScreenPassRendererFeature : null;
+        if (loadedFeature == null || loadedFeature.passMaterial == null
+            || AssetDatabase.GetAssetPath(loadedFeature) != featurePath)
+            throw new System.InvalidOperationException("Tilt-shift renderer serialization assertion failed");
+        Debug.Log("[POST] tiltshift feature=" + AssetDatabase.GetAssetPath(loadedFeature)
+            + " material=" + loadedFeature.passMaterial.name + " injection=" + loadedFeature.injectionPoint);
+        Debug.Log("[POST] renderer features=" + renderer.rendererFeatures.Count
+            + " entry0=" + loadedFeature.GetType().Name + " materialSet=" + (loadedFeature.passMaterial != null));
+    }
+
     public static void Run()
     {
         const string dir = "Assets/Settings";
