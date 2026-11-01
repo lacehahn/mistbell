@@ -63,10 +63,12 @@
 16. ~~**石缝锐度 + 砂岩颗粒**~~ ⚠️ 主体完成（2026-11-02 04:52）：512×512、倒角 2 texel（0.20→0.80）、灰缝 1–3 px、`blotch` 88→50、`fine_grain` 20→40、加亮砂粒。
    - ✅ **8 px 灰带 → 清晰凹槽**（`art_close` 目视确认：砖缝是一条细暗线 + 一侧受光倒角，块可数、不再糊成软灰带）；贴图 `edge% 4.9→9.1`、`coarseStd 9.60→14.46`、`art_close` 文件 1.89 MB→2.48 MB（高频回来了）
    - ❌ **残留「块面像石膏」**：现有噪声最小 cell 是 `size//32` = 16 texel（≈15 cm），**没有单 texel 砂粒**。→ 队列 18
-18. **屋顶 tint + 石材单 texel 砂粒**（2026-11-02 04:52 新增）：
-   - **屋顶仍是暖棕不是青灰**，但**真因不在贴图**：贴图已改成 `meanRGB(75,81,89)`（冷），渲染出来却是 `(108,80,63) R-B +45`。因为 `SpikeScene.cs` L41 `ChurchMaterial("roof", "#A06B4A")` 只在 `.mat` 不存在时生效，而 `Assets/Settings/M_Roof.mat`（**被 gitignore、不可见**）里存着一个很暖的 `_BaseColor`，把贴图的冷色乘掉了。→ 照 stone 的写法在代码里显式 `roofMat.SetColor("_BaseColor", …)`。**教训：贴图层面的改色会被材质 `_BaseColor` 乘性抵消；改色必须连同 tint 一起改，否则你量到的是 tint 不是贴图。**
-   - 石材要在块面上加**真·单 texel 随机砂粒**（±6~8，三通道共用偏移保持中性 + 高度场同频微扰），目标 `texstat edge% ≥ 12`、`sharp art_close middle ≥ 13`
-   - ⚠️ 另记：本轮 `art_close` 墙面 `p50 140.3→123.9（-12%）`、`Lstd 33.5→35.0`，而贴图 `meanRGB` 只从 `(125,121,112)` 变到 `(123,118,109)`（-1.6%）——**墙面变暗不是贴图均值造成的**，最可能是 `_BumpScale=1.8` 遇到更陡的 2 texel 倒角后法线更偏。暂不追，`art_runtime` 的 sky/ground_near/clipped 三张一字未动，说明曝光与光照没被带偏。
+18. ~~**屋顶 tint + 石材单 texel 砂粒**~~ ✅ 完成（2026-11-02 05:10）：
+   - **A 屋顶色（队列 17 收官）**：`SpikeScene.cs` 在屋顶材质后加显式 `roofMat.SetColor("_BaseColor", new Color(0.50f, 0.47f, 0.43f, 1f))`（照 stone 的「写进代码才可复现」写法）。渲染 **`(156,84,55) sat 0.638 R-B +101` → `(91,87,82) sat 0.083 R-B +8.6`**，目视已读成「深石板瓦屋顶」，瓦排搭接在 19 px/m 下仍可数、番茄红与黑噪点一并消失。
+     - **可复用的推导法**：拿石材当标定（贴图 `R-B +14` → 渲染 `+40.6`），反推「太阳+tonemap」把 R/B 比值放大 **1.07 倍**；要使渲染中性（`R-B ≈ +5`），`tint R/B = 1.05 / (0.843 × 1.07) ≈ 1.16`。以后改任何材质色都先算这一步，否则会在贴图上反复空转。
+   - **B 砂粒**：`make_stone` 在块面（`edge≥2` 且 `height>0.1`）叠 `±7` 中性偏移（**三通道共用**，不再引入彩线）+ 高度 `±0.04`。`texstat edge% 9.1→13.6`、法线图 84 KB→365 KB；`sharp art_close middle 11.73→12.85`（差门槛 13.0 只有 0.15，**如实记未达标**）。
+   - 守卫未破：`frame` 三张 `sky(167,183,203)/ground_near(67,90,28)/clipped 0.00%` 一字未动、`edge.py mean jump 4.1`、`patchwork neighborDiff 5.2%`、`region wall sat 0.289 clipped 0.06%`、双平台 `Succeeded errors=0`；`make_textures.py` md5 前后一致（确定性）。
+19. **檐口/穹顶底环的白描边 + 屋顶瓦缝偏软**（2026-11-02 05:10 目视新增，次优先）：主视角里穹顶底部一圈与山墙檐口是石材的高亮带，在暗屋顶上形成「白描边」；`roof_slate` 的 `coarseStd 4.22 / edge% 1.5` 偏低（瓦缝压影 `×0.80` 收到 `×0.70`、贴图 128→256 可改善）。
 
 ## 日志
 
@@ -164,3 +166,5 @@
 | 04:45 | 出双平台包 | `SpikeBuild.Run`（`logs/142_build.log`） | macOS **122.6 MB** / Windows **104.6 MB**、`Succeeded errors=0`、`error CS` 0（贴图 512 让包体 +2 MB） |
 | 04:47 | 运行时截图 | `caffeinate -dimu -t 200 bash tools/capture_runtime.sh`（`logs/20_runtime_043733.log`） | 三机位全出；`art_close` **1.89 MB→2.48 MB**（高频细节回来了）；`fov=35`、`pose[0..2]` 正常 |
 | 04:52 | 人工验收（8 把尺子 + 目视） | `region` / `patchwork` / `texstat` / `seam` / `sharp` / `frame` / `vision_analyze` ×2 | **贴图 6 条全过；渲染 3 条不过**。✅ 灰带→清晰凹槽（`art_close` 目视：细暗线+单侧倒角，块可数）；✅ 屋顶黑噪点消失、番茄红→暗棕；✅ `sharp art_close middle 10.85→11.73`、`clipped 0.02%`、`art_runtime` 的 `sky(167,183,203)/ground_near(67,90,28)/clipped 0.00%` **一字未动**；✅ `patchwork neighborDiff 5.3%`（拼布没回来，Codex 把块间抖动从 ±0.03 提到 ±0.075~0.095 换 coarseStd，实测邻块差反而降到 5.3%）。❌ **屋顶渲染 `(108,80,63) sat 0.422 R-B +45`**——贴图已是冷的，真因是 `M_Roof.mat` 里不可见的暖 `_BaseColor`；❌ 墙面 `p50 123.9`（门槛 130–150）、`tail 0.501`；❌ 块面仍像石膏（无单 texel 砂粒）→ 队列 18 |
+| 05:02 | 派发 Codex 第 20 轮（队列 18） | `codex.sh` 读 `spike/brief-stone6.md`（日志 `logs/122_codex_stone6.log`） | A：`SpikeScene.cs` 屋顶材质后加显式 `_BaseColor (0.50,0.47,0.43)`（值由「石材标定 → 渲染放大 R/B 1.07 倍」推导，**不是试出来的**）；B：`make_stone` 块面加单 texel 中性砂粒 `±7` + 高度 `±0.04`（三通道共用偏移、灰缝跳过）。Codex 自跑一轮 `SpikeScene.Run → SpikeBuild.Run → caffeinate capture_runtime.sh` 并自量 |
+| 05:08 | 人工复跑（确定性 + 10 把尺子 + 目视 ×3） | `make_textures.py`（md5 前后比对）/ `texstat` / `seam` / `region` / `sharp` / `frame` / `edge` / `patchwork` / `vision_analyze` | **数字与 Codex 自报逐项一致**。贴图层：stone `sat 0.111 coarseStd 14.46 edge% 13.6`（门槛 12 ✓）、`seam 0.95/1.33`、md5 **确定性一致**；roof/grass 未变。渲染层：**屋顶 `(91,87,82) sat 0.083 R-B +8.6 p50 87.2`——R1 三条门槛全过**；`sharp middle 12.85`（门槛 13.0，**差 0.15 未过**）；`region wall sat 0.289 clipped 0.06%` ✓；`frame` 三张一字未动 ✓；`edge mean jump 4.1` ✓；`patchwork neighborDiff 5.2%` ✓；双平台 Succeeded / error CS 0 ✓。**目视**：屋顶是深石板瓦、瓦排可数、无黑点无番茄红；石墙砖缝是细暗线+单侧倒角，块面出现砂粒（优于上一轮，但仍不到真砂岩）。**判断：主视角第一次「像一座真实的山地石教堂」而不是玩具模型**；下一个最致命的仍是队列 15 前景空无一物 |

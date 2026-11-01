@@ -197,6 +197,7 @@ def make_stone(rnd, size=512):
     mortar = (0x46, 0x46, 0x46)
     img = [[mortar for _ in range(size)] for _ in range(size)]
     height = [[0.05] * size for _ in range(size)]
+    block_face = [[False] * size for _ in range(size)]
     grain = stone_noise(size // 16)
     fine_grain = stone_noise(size // 32)
     blotch = stone_noise(size // 2)
@@ -247,6 +248,7 @@ def make_stone(rnd, size=512):
                     joints = (left_joint, right_joint, top_joint, bottom_joint)
                     side = min(range(4), key=lambda i: distances[i] - joints[i])
                     edge = distances[side] - joints[side]
+                    block_face[y][x] = edge >= 2
                     if edge < 0:
                         img[y][x] = joint_colors[side]
                         continue
@@ -292,6 +294,13 @@ def make_stone(rnd, size=512):
                 fine += rnd.uniform(10, 18)
                 height[y][x] += 0.06
             img[y][x] = tuple(clamp8(c * (1 - dust) + fine) for c in img[y][x])
+    # 在原有随机流程之后叠加单 texel 中性砂粒，保留块形、倒角和灰缝。
+    for y in range(size):
+        for x in range(size):
+            if block_face[y][x] and height[y][x] > 0.1:
+                grit = rnd.uniform(-7, 7)
+                img[y][x] = tuple(clamp8(c + grit) for c in img[y][x])
+                height[y][x] += rnd.uniform(-0.04, 0.04)
     mean = sum(all_widths) / len(all_widths)
     std = (sum((w - mean) ** 2 for w in all_widths) / len(all_widths)) ** 0.5
     scale = 2.4 / size

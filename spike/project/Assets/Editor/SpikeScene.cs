@@ -39,6 +39,9 @@ public static class SpikeScene
         // 固定曝光补偿：原石材 tint × (目标反照率 0.30 / 原目标 0.36)，重复生成不累乘。
         stone.SetColor("_BaseColor", new Color(0.675f, 0.63f, 0.575f, 1f));
         var roofMat = ChurchMaterial("roof", "#A06B4A");
+        // 屋顶：贴图本身已是深石板冷灰（meanRGB 75,81,89）；_BaseColor 是乘性归一系数，
+        // 必须写死在代码里——Assets/Settings/M_Roof.mat 被 .gitignore 忽略，写进 .mat 等于不可复现。
+        roofMat.SetColor("_BaseColor", new Color(0.50f, 0.47f, 0.43f, 1f));
         var wood = ChurchMaterial("wood", "#6B4A32");
         var ground = SpikeArt.MakeTextured("Assets/Settings/M_Ground.mat", TEX + "grass.png", TEX + "grass_n.png",
                                            3.2f, Hex("#5E7A2E"), 0.08f, 0.8f);
