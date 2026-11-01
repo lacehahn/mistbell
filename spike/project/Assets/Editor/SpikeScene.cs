@@ -49,6 +49,7 @@ public static class SpikeScene
 
         Physics.SyncTransforms();
         BuildMountains();
+        BuildMist();
         BuildStonePath(slope.GetComponent<Collider>(), stone);
 
         // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
@@ -114,9 +115,10 @@ public static class SpikeScene
         RenderSettings.ambientLight = new Color(0.45f, 0.45f, 0.49f);
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Linear;
-        RenderSettings.fogColor = new Color(0.62f, 0.68f, 0.74f);
-        RenderSettings.fogStartDistance = 80f;
-        RenderSettings.fogEndDistance = 1800f; // 远景薄雾保留 250–700 m 山脊的色阶。
+        RenderSettings.fogColor = Hex("#A7B7CB");
+        RenderSettings.fogStartDistance = 90f;
+        RenderSettings.fogEndDistance = 1500f;
+        Debug.Log($"[SPIKE] fog start=90 end=1500 color=#{ColorUtility.ToHtmlStringRGB(RenderSettings.fogColor)}");
 
         // ---------- 后期 Volume ----------
         var profile = BuildProfile("Assets/Settings/MistbellPost.asset");
@@ -313,7 +315,16 @@ public static class SpikeScene
         var forward = Quaternion.Euler(0f, -2.632f, 0f) * Vector3.forward;
         var right = Quaternion.Euler(0f, -2.632f, 0f) * Vector3.right;
         float[] distances = { 250f, 450f, 700f };
-        string[] colors = { "#4E6478", "#6E8399", "#93A6B8" };
+        string[] bottoms = { "#44546A", "#5A6D80", "#74879A" };
+        string[] tops = { "#7A8C9E", "#93A5B6", "#A9B8C6" };
+        // 雪线按简报设置，仅最远两层启用。
+        float[] snowHeights = { 10000f, 330f, 300f };
+        // 渐变覆盖仰视画面里实际可见的山腰，而不是沉入谷底的网格基底。
+        float[] gradLows = { 35f, 65f, 105f };
+        float[] gradHighs = { 110f, 180f, 310f };
+        var shader = Shader.Find("Mistbell/RidgeFog");
+        if (shader == null) throw new System.InvalidOperationException("Missing Mistbell/RidgeFog");
+        var noise = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/mist.png");
         var root = new GameObject("Mountain Ridges").transform;
         for (int layer = 0; layer < 3; layer++)
         {
@@ -335,28 +346,28 @@ public static class SpikeScene
                 triangles[t] = v; triangles[t + 1] = v + 1; triangles[t + 2] = v + 2;
                 triangles[t + 3] = v + 2; triangles[t + 4] = v + 1; triangles[t + 5] = v + 3;
             }
-            var ridge = SaveMountainMesh(root, "Mountain_" + (layer + 1), vertices, triangles,
-                                         Hex(colors[layer]));
+            var mat = new Material(shader) { name = "M_Mountain_" + (layer + 1) };
+            mat.SetColor("_ColorBottom", Hex(bottoms[layer]));
+            mat.SetColor("_ColorTop", Hex(tops[layer]));
+            mat.SetColor("_SnowColor", Hex("#D5E1E9"));
+            mat.SetFloat("_SnowHeight", snowHeights[layer]);
+            mat.SetFloat("_SnowSoftness", layer == 1 ? 45f : 60f);
+            mat.SetFloat("_GradPow", 1.65f);
+            mat.SetFloat("_FogFloor", 0.58f);
+            mat.SetTexture("_NoiseTex", noise);
+            var ridge = SaveMountainMesh(root, "Mountain_" + (layer + 1), vertices, triangles, mat);
             // 贴地仰视约 13°；山体基底沉入谷底，使三层山脊进入上半幅。
             float[] valleyDepths = { 275f, 215f, 90f };
             ridge.position = forward * distances[layer] + Vector3.down * valleyDepths[layer];
-            Debug.Log($"[SPIKE] ridge {layer + 1} vertices={vertices.Length} distance={distances[layer]:F0}");
-            if (layer == 2)
-            {
-                var snowVertices = (Vector3[])vertices.Clone();
-                for (int i = 0; i < samples; i++)
-                {
-                    snowVertices[i * 2] = vertices[i * 2 + 1] - Vector3.up * 9f;
-                    snowVertices[i * 2 + 1] = vertices[i * 2 + 1];
-                }
-                var snow = SaveMountainMesh(ridge, "Mountain_Snow", snowVertices, triangles, Hex("#EAF1F6"));
-                snow.localPosition = -forward * 0.1f;
-            }
+            mat.SetFloat("_GradLow", gradLows[layer]);
+            mat.SetFloat("_GradHigh", gradHighs[layer]);
+            EditorUtility.SetDirty(mat);
+            Debug.Log($"[SPIKE] ridge {layer + 1} shader=RidgeFog snowHeight={snowHeights[layer]:F0} vertices={vertices.Length} distance={distances[layer]:F0}");
         }
     }
 
     static Transform SaveMountainMesh(Transform parent, string name, Vector3[] vertices,
-                                      int[] triangles, Color color)
+                                      int[] triangles, Material mat)
     {
         var mesh = new Mesh { name = name, vertices = vertices, triangles = triangles };
         mesh.RecalculateNormals();
@@ -364,9 +375,6 @@ public static class SpikeScene
         string meshPath = "Assets/Settings/" + name + ".asset";
         AssetDatabase.DeleteAsset(meshPath);
         AssetDatabase.CreateAsset(mesh, meshPath);
-        var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "M_" + name };
-        mat.SetColor("_BaseColor", color);
-        mat.SetFloat("_Cull", 0f);
         string matPath = "Assets/Settings/M_" + name + ".mat";
         AssetDatabase.DeleteAsset(matPath);
         AssetDatabase.CreateAsset(mat, matPath);
@@ -378,6 +386,56 @@ public static class SpikeScene
         renderer.shadowCastingMode = ShadowCastingMode.Off;
         renderer.receiveShadows = false;
         return go.transform;
+    }
+
+    static void BuildMist()
+    {
+        const string texturePath = "Assets/Art/Textures/mist.png";
+        var importer = AssetImporter.GetAtPath(texturePath) as TextureImporter;
+        if (importer == null) throw new System.InvalidOperationException("Generate mist.png first");
+        importer.wrapMode = TextureWrapMode.Repeat;
+        importer.filterMode = FilterMode.Bilinear;
+        importer.alphaSource = TextureImporterAlphaSource.FromInput;
+        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.mipmapEnabled = true;
+        importer.SaveAndReimport();
+        var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
+        var root = new GameObject("Mist Bands").transform;
+        float[] centers = { 170f, 330f };
+        float[] offsets = { 6f, 14f };
+        for (int i = 0; i < 2; i++)
+        {
+            var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "M_Mist_" + i };
+            mat.SetTexture("_BaseMap", texture);
+            var tint = Hex("#A7B7CB");
+            tint.a = i == 0 ? 0.22f : 0.30f;
+            mat.SetColor("_BaseColor", tint);
+            mat.SetTextureScale("_BaseMap", new Vector2(i == 0 ? 3f : 5f, 1f));
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", 0f);
+            mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            mat.SetFloat("_ZWrite", 0f);
+            mat.SetFloat("_Cull", 0f);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.renderQueue = (int)RenderQueue.Transparent;
+            string name = "Mist_" + (i == 0 ? "Near" : "Far");
+            // 900×380，从正 z 锚点向远处铺开，全部位于教堂与角色后方。
+            float back = 0f;
+            float front = 380f;
+            var mesh = new Mesh { name = name };
+            mesh.vertices = new[] { new Vector3(-450f, 0f, back), new Vector3(450f, 0f, back),
+                                    new Vector3(-450f, 0f, front), new Vector3(450f, 0f, front) };
+            mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
+            mesh.triangles = new[] { 0, 2, 1, 1, 2, 3 };
+            mesh.RecalculateBounds();
+            var band = SaveMountainMesh(root, name, mesh.vertices, mesh.triangles, mat);
+            band.GetComponent<MeshFilter>().sharedMesh.uv = mesh.uv;
+            UnityEngine.Object.DestroyImmediate(mesh);
+            band.position = new Vector3(0f, GroundY(centers[i]) + offsets[i], centers[i]);
+        }
+        Debug.Log($"[SPIKE] mist near z=170 y={GroundY(170f) + 6f:F2} far z=330 y={GroundY(330f) + 14f:F2}");
     }
 
     static void BuildStonePath(Collider terrain, Material stone)

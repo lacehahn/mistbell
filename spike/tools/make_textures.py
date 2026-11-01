@@ -338,6 +338,42 @@ def seam_score(img):
     return diff_col(SZ - 1, 0) / max(inner_c, 0.01), diff_row(SZ - 1, 0) / max(inner_r, 0.01)
 
 
+def make_mist():
+    """1024×256 周期软噪声；两端零斜率渐隐，RGBA alpha 供雾带及雪线复用。"""
+    import math
+    width, height = 1024, 256
+    rnd = random.Random(59)
+    octaves = []
+    for nx, ny, weight in ((16, 4, 1.0), (32, 8, 0.35), (64, 16, 0.12)):
+        lattice = [[rnd.random() for _ in range(nx)] for _ in range(ny)]
+        octaves.append((nx, ny, weight, lattice))
+    img = []
+    for y in range(height):
+        row = []
+        envelope = math.sin(math.pi * y / (height - 1)) ** 2
+        for x in range(width):
+            value = 0.0
+            for nx, ny, weight, lattice in octaves:
+                fx, fy = x * nx / width, y * ny / height
+                ix, iy = int(fx), int(fy)
+                tx, ty = smooth(fx - ix), smooth(fy - iy)
+                top = lerp(lattice[iy % ny][ix % nx], lattice[iy % ny][(ix + 1) % nx], tx)
+                bot = lerp(lattice[(iy + 1) % ny][ix % nx], lattice[(iy + 1) % ny][(ix + 1) % nx], tx)
+                value += lerp(top, bot, ty) * weight
+            alpha = clamp8(255 * envelope * smooth(min(1.0, value / 1.47)))
+            row.append((255, 255, 255, alpha))
+        img.append(row)
+    # 独立 RGBA 写出，不改变已有三类贴图或其 PNG 写出逻辑。
+    raw = b"".join(b"\x00" + bytes(c for pixel in row for c in pixel) for row in img)
+    def chunk(tag, data):
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff)
+    blob = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+    with open(os.path.join(OUT, "mist.png"), "wb") as fh:
+        fh.write(blob)
+    print("mist           RGBA=1024x256 bytes=%d alpha=soft periodic noise" % len(blob))
+
+
 def main():
     jobs = [
         ("grass", make_grass, 11),
@@ -356,6 +392,8 @@ def main():
         preview(img, os.path.join(PREVIEW, name + "_tiled.png"))
         sc = seam_score(img)
         print("%-14s color=%5d B normal=%5d B seam(col,row)=%.2f,%.2f" % (name, col_bytes, n_bytes, sc[0], sc[1]))
+
+    make_mist()
 
 
 if __name__ == "__main__":
