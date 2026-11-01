@@ -76,3 +76,5 @@
 | 23:43 | 量化工具 | `tools/frame.py`（纯标准库 PNG 解码，求区域均值/最大值/削顶率） | 曝光与材质改动一律用它验，不再只靠肉眼 |
 | 23:44 | 加贴地近景机位 | `ShotRig` 增 `art_ground`（pitch 26 / d 7 / yaw 15） | 用于量「草地像素密度」：草叶约 4~6 px/颗、无可见平铺网格 |
 | 23:46 | 材质定稿 + 目视（队列 3 ✅） | `make_textures.py`→`SpikeScene.Run`→`SpikeBuild.Run`→`capture_runtime.sh` | 石块块间色调差 ±0.15（±0.24 时像拼花被面，回调）；macOS 114.2 MB / Windows 96.2 MB、0 errors。产物 `Shots/art_runtime.png`(2.2 MB)、`art_close.png`、`art_ground.png`；阈值：削顶 0%、天空 166、地面近 (136,156,112)。**判断**：已脱离纯色块，草/石/瓦都能读出材质，但仍缺「带状移轴 + 雾层纵深 + 可辨认的角色」三件 → 队列 4/5/6 |
+| 23:58 | Codex 修构图与曝光（人工派发） | `spike/tools/codex.sh`（gpt-6.1-sol/medium） | exit 0；只改 SpikeScene.cs/Screenshotter.cs；3 条验收命令全 0；`components=7`；Codex 自报"角色高于坡面" |
+| 00:00 | 人工验收（读图） | `Shots/art_runtime.png` | 教堂全高入画 ✓、曝光提亮 ✓、像素材质已上（草/砖/瓦）✓；**角色悬空** ✗、无雾无纵深 ✗、调色偏灰 ✗ |

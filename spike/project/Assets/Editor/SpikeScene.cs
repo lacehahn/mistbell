@@ -65,8 +65,10 @@ public static class SpikeScene
             return;
         }
 
-        // 门前平台上的朝圣者：必须站在相机这一侧的教堂脚下，否则会被教堂体块挡住（上一版就不可见）
-        var pilgrimPos = new Vector3(-1.6f, GroundY(-6.6f) + 0.02f, -6.6f);
+        // 揭示机位前方约 10 m、视轴下方 1.5 m：角色落在画面中下部，避免教堂遮挡。
+        var revealRotation = Quaternion.Euler(20f, 22f, 0f);
+        var pilgrimPos = new Vector3(0f, 6f, 0f) - revealRotation * Vector3.forward * 35f
+                         - revealRotation * Vector3.up * 1.5f;
 
         var bbMat = new Material(bbShader) { name = "M_Pilgrim" };
         bbMat.SetTexture("_MainTex", sprite != null ? sprite.texture : null);
@@ -89,14 +91,14 @@ public static class SpikeScene
         // ---------- 光与雾（曝光整体提亮：HD-2D 要能看清像素细节）----------
         var sun = new GameObject("Sun").AddComponent<Light>();
         sun.type = LightType.Directional;
-        sun.intensity = 1.2f;   // 贴图化后反照率降到 0.42 左右，1.2 让石墙落在中间调（1.5 时近景正面削顶）
+        sun.intensity = 2.2f;   // 提亮教堂立面与像素细节。
         sun.color = new Color(1f, 0.94f, 0.85f);
         sun.transform.rotation = Quaternion.Euler(38f, 25f, 0f);   // 光从相机侧约 45° 打过来：相机可见的两个立面一亮一中，保留体积感
         sun.shadows = LightShadows.Soft;
         sun.shadowStrength = 0.75f;
 
         RenderSettings.ambientMode = AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.40f, 0.43f, 0.49f);
+        RenderSettings.ambientLight = new Color(0.45f, 0.45f, 0.49f);
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Linear;
         RenderSettings.fogColor = new Color(0.62f, 0.68f, 0.74f);
@@ -126,8 +128,8 @@ public static class SpikeScene
         var rigGo = new GameObject("ShotRig");
         var rig = rigGo.AddComponent<ShotRig>();
 
-        // reveal：教堂全高入画（塔顶 y≈95px、基座 y≈859px），前景留 ~1/4 地面；朝圣者站在门前 y≈922px
-        rig.poses.Add(ShotRig.Make("art_runtime", new Vector3(0f, 4.0f, 6f), 16f, 50f, 40f, Fov));
+        // reveal：目标高 6 m，距离 45 m、俯仰 20°、偏航 22°，容纳教堂全高及前景角色。
+        rig.poses.Add(ShotRig.Make("art_runtime", new Vector3(0f, 6f, 0f), 20f, 45f, 22f, Fov));
         // close：角色约 250px 屏高，门廊与教堂体量压在背后（塔顶出画属预期，近距离仰视必然切顶）
         rig.poses.Add(ShotRig.Make("art_close", new Vector3(-1.6f, GroundY(-6.6f) + 1.4f, -6.6f), 14f, 14f, 12f, Fov));
         // ground：贴地近景，用来量「草地的像素密度」是否真的看得出（PPU 与 tiling 是否匹配）

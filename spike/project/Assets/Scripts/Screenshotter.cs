@@ -133,7 +133,7 @@ public class Screenshotter : MonoBehaviour
 
         var bloom = p.Add<Bloom>(true);
         bloom.threshold.Override(0.9f);
-        bloom.intensity.Override(0.75f);
+        bloom.intensity.Override(1.3f);
         bloom.scatter.Override(0.72f);
         bloom.tint.Override(new Color(1f, 0.95f, 0.87f));
 
@@ -145,7 +145,7 @@ public class Screenshotter : MonoBehaviour
         dof.bladeCount.Override(6);
 
         var color = p.Add<ColorAdjustments>(true);
-        color.postExposure.Override(0.2f);
+        color.postExposure.Override(0.4f);
         color.contrast.Override(14f);
         color.saturation.Override(-6f);
         color.colorFilter.Override(new Color(1f, 0.96f, 0.90f));
