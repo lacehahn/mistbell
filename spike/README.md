@@ -9,7 +9,7 @@
 - [x] Unity Hub 3.22.5 已装（`/Applications/Unity Hub.app`）
 - [x] Unity 编辑器 6000.3.27f2 已装（`/Applications/Unity/Hub/Editor/6000.3.27f2`，10 GB）
 - [x] Windows Mono 构建模块已装（`PlaybackEngines/WindowsStandaloneSupport`）
-- [ ] macOS 构建模块待确认（Hub CLI 拒绝 `mac-macos-arm64` 这个 id；需在 Hub GUI → Installs → Add modules 里核对是否已内置或需补装）
+- [x] macOS 构建模块**已内置**：`Unity.app/Contents/PlaybackEngines/MacStandaloneSupport`（含 `UnityEditor.OSXStandalone.Extensions.dll` 与 `MacStandalonePlayerBuildProgram`）——macOS 宿主上无需单独装模块；Windows 模块在编辑器目录外，977 MB。
 - [x] Blender 5.2.3 LTS 已装（`/Applications/Blender.app`，CLI `/opt/homebrew/bin/blender`）
 - [ ] Unity 授权未激活（`~/Library/Application Support/Unity/licenses` 为空）→ 需人工用 Unity ID 登录，确认 Personal 资格
 - [ ] `Unity -batchmode` 能在空工程上完成一次编译并落日志
