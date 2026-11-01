@@ -29,6 +29,9 @@ public static class SpikeScene
         // ---------- 材质（程序化像素贴图 + 法线图；UV 以米计，tiling 按每张贴图覆盖的米数反推）----------
         const string TEX = "Assets/Art/Textures/";
         var stone = ChurchMaterial("stone", "#C9A87C");
+        stone.SetTextureScale("_BaseMap", new Vector2(1f / 4.8f, 1f / 4.8f));
+        stone.SetTextureScale("_BumpMap", new Vector2(1f / 4.8f, 1f / 4.8f));
+        Debug.Log("[SPIKE] stone tiling=" + stone.GetTextureScale("_BaseMap").ToString("F8"));
         // 固定曝光补偿：原石材 tint × (目标反照率 0.30 / 原目标 0.36)，重复生成不累乘。
         stone.SetColor("_BaseColor", new Color(0.675f, 0.63f, 0.575f, 1f));
         var roofMat = ChurchMaterial("roof", "#A06B4A");

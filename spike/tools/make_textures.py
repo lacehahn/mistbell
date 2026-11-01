@@ -224,12 +224,11 @@ def make_stone(rnd, size=256):
             joint_colors = [(0x6E, 0x66, 0x5C) if rnd.random() < 0.15 else
                             tuple(c - rnd.randint(25, 45) for c in (110, 106, 100))
                             for _ in range(4)]
-            hue = base_h + rnd.uniform(-6, 6) / 360
+            hue = base_h + rnd.uniform(-2.5, 2.5) / 360
             direction = rnd.choice((-1, 1))
             # 低频斑驳缩小后由块间明度承担层次，亮块收窄以避免运行时过曝。
-            light = base_l + direction * rnd.uniform(0.15 if direction < 0 else 0.12,
-                                                     0.19 if direction < 0 else 0.16)
-            color = tuple(v * 255 for v in colorsys.hls_to_rgb(hue % 1, light, min(0.18, base_s)))
+            light = base_l + direction * rnd.uniform(0.025, 0.035)
+            color = tuple(v * 255 for v in colorsys.hls_to_rgb(hue % 1, light, min(0.12, base_s)))
             gradient = rnd.uniform(0.03, 0.06)
             for y in range(y0, y1):
                 t = (y - y0) / (y1 - y0)
