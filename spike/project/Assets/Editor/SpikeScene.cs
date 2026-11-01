@@ -598,6 +598,9 @@ public static class SpikeScene
         Debug.Log($"[SPIKE] stone path segments={points.Length - 1} material=existing M_Stone (stone_ashlar; no Substance material available)");
     }
 
+    static bool ArgFlag(string name) =>
+        System.Array.IndexOf(System.Environment.GetCommandLineArgs(), name) >= 0;
+
     static void BuildProps(MeshCollider terrain, Material stone, Material wood)
     {
         const string TEX = "Assets/Art/Textures/";
@@ -607,13 +610,15 @@ public static class SpikeScene
         // 在 TintFor 之后缩放 RGB，保留 alpha；不改贴图、门槛及其他保护范围。
         var bushTarget = new Color(0.10f, 0.14f, 0.06f, 1f);
         var bush = SpikeArt.MakeTextured("Assets/Settings/M_Bush.mat", TEX + "bush.png",
-            TEX + "bush_n.png", 1.0f, bushTarget, 0f, 0.9f);
+            TEX + "bush_n.png", 1.0f, bushTarget, 0f, 0.5f);
         bush.SetFloat("_SpecularHighlights", 0f);
         bush.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
         const float bushCorrection = 0.90f / 1.80f; // 唯一校正倍率 = 0.5。
+        // round 26：降低法线强度，补偿从 1.39 起按双视角实测校正，最多两次。
+        const float bumpCompensation = 1.00f;
         var bushTint = bush.GetColor("_BaseColor");
-        bushTint = new Color(bushTint.r * bushCorrection, bushTint.g * bushCorrection,
-            bushTint.b * bushCorrection, bushTint.a);
+        bushTint = new Color(bushTint.r * bushCorrection * bumpCompensation, bushTint.g * bushCorrection * bumpCompensation,
+            bushTint.b * bushCorrection * bumpCompensation, bushTint.a);
         bush.SetColor("_BaseColor", bushTint);
         var bushLight = new Material(bush) { name = "M_BushLight" };
         // 仅在最终校正 tint 基础上增加 6%，让交替叶片略亮而不恢复镜面反光。
@@ -621,10 +626,78 @@ public static class SpikeScene
         bushLight.SetColor("_BaseColor", lightTint);
         bushLight.SetFloat("_SpecularHighlights", 0f);
         bushLight.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
-        Debug.Log($"[SPIKE] bushAlbedo targetLinear=(0.100,0.140,0.060) measuredRatio=1.80 targetRatio=0.90 correction={bushCorrection:F1} correctionCount=1 tint=({bushTint.r:F4},{bushTint.g:F4},{bushTint.b:F4}) lightMultiplier=1.06 bushSpecular={bush.GetFloat("_SpecularHighlights")} bushKeywordOff={bush.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} lightSpecular={bushLight.GetFloat("_SpecularHighlights")} lightKeywordOff={bushLight.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} bump=0.9");
+        Debug.Log($"[SPIKE] bushAlbedo targetLinear=(0.100,0.140,0.060) measuredRatio=1.80 targetRatio=0.90 correction={bushCorrection:F1} correctionCount=1 tint=({bushTint.r:F4},{bushTint.g:F4},{bushTint.b:F4}) lightMultiplier=1.06 bushSpecular={bush.GetFloat("_SpecularHighlights")} bushKeywordOff={bush.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} lightSpecular={bushLight.GetFloat("_SpecularHighlights")} lightKeywordOff={bushLight.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} bump=0.5 compensation={bumpCompensation:F3}");
         const string lightPath = "Assets/Settings/M_BushLight.mat";
         AssetDatabase.DeleteAsset(lightPath);
         AssetDatabase.CreateAsset(bushLight, lightPath);
+        bool useCards = ArgFlag("-bushCard");
+        bool useSprites = ArgFlag("-bushSprite");
+        const float spriteColor = 1f;
+        var spriteMaterials = new Material[8];
+        Mesh spriteMesh = null;
+        if (useSprites)
+        {
+            spriteMesh = SpikeArt.Quad("Billboard", 1f, 1f);
+            // Shader 绕脚点旋转且尺寸取材质参数；扩大CPU剔除包围盒，不改顶点/UV。
+            spriteMesh.bounds = new Bounds(new Vector3(0f, .65f, 0f), new Vector3(4f, 3f, 4f));
+            EditorUtility.SetDirty(spriteMesh);
+            for (int i = 0; i < 8; i++)
+            {
+                string path = TEX + "bush_sprite_" + i + ".png";
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                var ti = (TextureImporter)AssetImporter.GetAtPath(path);
+                ti.textureType = TextureImporterType.Default;
+                ti.sRGBTexture = true; ti.alphaIsTransparency = true;
+                ti.filterMode = FilterMode.Point; ti.textureCompression = TextureImporterCompression.Uncompressed;
+                ti.mipmapEnabled = false; ti.wrapMode = TextureWrapMode.Clamp;
+                ti.npotScale = TextureImporterNPOTScale.None;
+                ti.SaveAndReimport();
+                var mat = new Material(Shader.Find("Mistbell/PixelBillboard")) { name = i == 0 ? "M_BushSprite" : "M_BushSprite_" + i };
+                mat.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>(path));
+                mat.SetColor("_Color", new Color(spriteColor, spriteColor, spriteColor, 1f));
+                mat.SetFloat("_Cutoff", .5f); mat.SetFloat("_Cull", 0f); mat.SetFloat("_PivotY", 0f);
+                mat.SetFloat("_BottomOrigin", 1f);
+                mat.SetFloat("_ScaleX", 1.35f); mat.SetFloat("_ScaleY", .96f);
+                string matPath = "Assets/Settings/" + mat.name + ".mat";
+                AssetDatabase.DeleteAsset(matPath); AssetDatabase.CreateAsset(mat, matPath);
+                spriteMaterials[i] = mat;
+            }
+        }
+        Material card = null;
+        Mesh cardMesh = null;
+        if (useCards)
+        {
+            string cardPath = TEX + "bush_card.png";
+            var tex = SpikeArt.ImportTex(cardPath, false);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(cardPath);
+            importer.alphaIsTransparency = true;
+            importer.mipmapEnabled = true;
+            importer.filterMode = FilterMode.Point;
+            importer.textureCompression = TextureImporterCompression.Uncompressed;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.SaveAndReimport();
+            tex = AssetDatabase.LoadAssetAtPath<Texture2D>(cardPath);
+            // 实测 blob 的最终平均线性反照率，排除卡片透明像素后归一到同一目标。
+            var pixels = AssetDatabase.LoadAssetAtPath<Texture2D>(TEX + "bush.png").GetPixels();
+            var mean = Color.black;
+            foreach (var px in pixels) mean += px.linear;
+            mean /= pixels.Length;
+            var target = new Color(mean.r * bushTint.r, mean.g * bushTint.g, mean.b * bushTint.b, 1f);
+            card = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "M_BushCard" };
+            card.SetTexture("_BaseMap", tex);
+            card.SetColor("_BaseColor", SpikeArt.TintFor(tex, target, true));
+            card.SetFloat("_AlphaClip", 1f); card.SetFloat("_AlphaClipThreshold", 0.5f);
+            card.SetFloat("_Cutoff", 0.5f); // URP Lit 实际裁切阈值属性。
+            card.EnableKeyword("_ALPHATEST_ON");
+            card.SetOverrideTag("RenderType", "TransparentCutout"); card.renderQueue = 2450;
+            card.SetFloat("_Cull", 0f); card.doubleSidedGI = true;
+            card.SetFloat("_Smoothness", 0f); card.SetFloat("_Metallic", 0f);
+            card.SetFloat("_SpecularHighlights", 0f); card.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            AssetDatabase.DeleteAsset("Assets/Settings/M_BushCard.mat");
+            AssetDatabase.CreateAsset(card, "Assets/Settings/M_BushCard.mat");
+            cardMesh = SpikeArt.Quad("BushCard", 1.25f, 1.05f);
+            Debug.Log($"[SPIKE] bushCardMaterial alphaClip={card.IsKeywordEnabled("_ALPHATEST_ON").ToString().ToLowerInvariant()} cull={card.GetFloat("_Cull")} specularOff={card.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF").ToString().ToLowerInvariant()} normalMap={(card.GetTexture("_BumpMap") != null).ToString().ToLowerInvariant()}");
+        }
         var bushMeshes = new Mesh[8];
         var bushSizes = new[] { new Vector3(1.25f, 0.65f, 1.35f), new Vector3(1.5f, 0.75f, 1.2f),
             new Vector3(0.75f, 0.48f, 0.85f), new Vector3(0.9f, 0.55f, 0.7f) };
@@ -675,6 +748,36 @@ public static class SpikeScene
             int index = bushIndex++;
             var shape = new System.Random(8100 + index);
             float ShapeRange(float lo, float hi) => Mathf.Lerp(lo, hi, (float)shape.NextDouble());
+            if (useSprites)
+            {
+                var plane = new GameObject("BushSprite_" + index % 8);
+                plane.transform.SetParent(clump, false);
+                plane.AddComponent<MeshFilter>().sharedMesh = spriteMesh;
+                var renderer = plane.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = spriteMaterials[index % 8];
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                var block = new MaterialPropertyBlock();
+                block.SetFloat("_ScaleX", 1.35f * scale * ShapeRange(.9f, 1.1f));
+                block.SetFloat("_ScaleY", .96f * scale * ShapeRange(.92f, 1.08f));
+                renderer.SetPropertyBlock(block);
+                return;
+            }
+            if (useCards)
+            {
+                float baseYaw = ShapeRange(0f, 360f);
+                for (int j = 0; j < 3; j++)
+                {
+                    var plane = new GameObject("BushCard_" + j);
+                    plane.transform.SetParent(clump, false);
+                    plane.transform.localRotation = Quaternion.Euler(0f, baseYaw + j * 60f + ShapeRange(-12f, 12f), 0f);
+                    plane.transform.localScale = Vector3.one * (scale * (1f - j * 0.06f));
+                    plane.AddComponent<MeshFilter>().sharedMesh = cardMesh;
+                    var renderer = plane.AddComponent<MeshRenderer>();
+                    renderer.sharedMaterial = card;
+                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                }
+                return;
+            }
             var lower = bushMeshes[index % 4];
             var upper = bushMeshes[4 + (index * 3 + 1) % 4];
             float lowerY = -0.08f - lower.bounds.min.y * scale;
@@ -872,6 +975,11 @@ public static class SpikeScene
                 }
             previous = p;
         }
+        if (useSprites)
+            Debug.Log($"[SPIKE] bushSprite quads={bushIndex} variants=8 castShadow=true depthOnly=true tex=112x80 pivotY=0 color=({spriteColor:F3},{spriteColor:F3},{spriteColor:F3}) shadowPass={spriteMaterials[0].FindPass("ShadowCaster")} depthPass={spriteMaterials[0].FindPass("DepthOnly")}");
+        Debug.Log(useSprites ? "[SPIKE] bushVariant=sprite quads=22 material=M_BushSprite variants=8" : useCards
+            ? $"[SPIKE] bushVariant=card quads={bushIndex * 3} material=M_BushCard tex=128x128 clip=0.5 cullOff=true doubleSided=true"
+            : "[SPIKE] bushVariant=blob quads=0 material=M_Bush");
         Debug.Log($"[SPIKE] props bushes=22 rocks=30 fencePosts={posts} fenceRails={rails} seed=20261102");
         Debug.Log($"[SPIKE] blobs meshes={bushMeshes.Length + rockMeshes.Length} verts={bushMeshes[0].vertexCount} tris={bushMeshes[0].triangles.Length / 3} bushVariants=8");
         // 用独立投影计算诊断，不创建或改动任何相机。

@@ -231,6 +231,148 @@ def make_bush(rnd):
     return img, 1.0, height
 
 
+def make_bushcard():
+    """128² 二值 alpha；34 个圆弧轮廓、三块硬明暗、50 片无描边叶形。"""
+    import math
+    rnd = random.Random(2501)
+    palette = ((18,28,17), (30,42,24), (44,58,34), (60,76,44), (84,100,62))
+    # 宽底圆顶：上半椭圆 + 垂直下裙；34 个圆弧凸起覆盖上缘、两侧与底边。
+    centers = []
+    for i in range(19):
+        a = math.pi + math.pi * i / 18
+        centers.append((64 + 51 * math.cos(a), 62 + 50 * math.sin(a), rnd.randint(3,6)))
+    for y in (75,88,101,114):
+        for x in (13,115): centers.append((x,y,rnd.randint(3,6)))
+    for x in (22,36,50,64,78,92,106): centers.append((x,115,rnd.randint(3,6)))
+    mask = [[(y <= 62 and ((x-64)/51)**2 + ((y-62)/50)**2 <= 1) or
+             (62 <= y <= 115 and abs(x-64) <= 51) or
+             any((x-cx)**2 + (y-cy)**2 <= r*r for cx,cy,r in centers)
+             for x in range(128)] for y in range(128)]
+    tiers = [[3 if x + y * .45 + (2 if y % 13 < 3 else 0) < 117 else 2
+              for x in range(128)] for y in range(128)]
+    for y in range(128):
+        for x in range(128):
+            if x + y * .45 < 48: tiers[y][x] = 4
+    def inside(x, y, poly):
+        hit = False
+        for i, (ax,ay) in enumerate(poly):
+            bx,by = poly[i-1]
+            if (ay > y) != (by > y) and x < (bx-ax)*(y-ay)/(by-ay)+ax: hit = not hit
+        return hit
+    for _ in range(50):
+        while True:
+            cx,cy = rnd.randint(13,96),rnd.randint(15,96)
+            if mask[cy][cx] and cx+cy*.45 < 117: break
+        w,h = rnd.randint(4,7),rnd.randint(4,7)
+        poly = [(cx-w//2,cy), (cx-1,cy-h//2), (cx+w//2,cy-1), (cx+w//2-1,cy+h//2),(cx-1,cy+h//2)]
+        for y in range(max(0,cy-h),min(128,cy+h)):
+            for x in range(max(0,cx-w),min(128,cx+w)):
+                if inside(x,y,poly): tiers[y][x] = 4
+    for y in range(105,128):
+        for x in range(128): tiers[y][x] = max(0,tiers[y][x]-1)
+    # 12 个最外层天光钩边，每块 1–2 px。
+    for x in range(20,109,8):
+        y = next(y for y in range(128) if mask[y][x])
+        tiers[y][x] = 4
+        if mask[y][x+1] and (y == 0 or not mask[y-1][x+1]): tiers[y][x+1] = 4
+    img = [[palette[tiers[y][x]] + (255,) if mask[y][x] else (0,0,0,0)
+            for x in range(128)] for y in range(128)]
+    opaque = [p for row in img for p in row if p[3] > 128]
+    print("bush_card RGBA=128x128 opaque=%.3f%% meanRGB=%s alpha={0,255}" %
+          (len(opaque)/16384*100, tuple(round(sum(p[c] for p in opaque)/len(opaque),3) for c in range(3))))
+    return img
+
+
+def make_bushsprite(seed=2600):
+    """八叶团；二值轮廓、随机方向小叶形、左上硬分区明暗。独立种子不影响旧贴图。"""
+    import math
+    rnd = random.Random(seed)
+    w, h = 112, 80
+    palette = ((18,28,17), (30,42,24), (44,58,34), (60,76,44),
+               (84,100,62), (104,120,74))
+    tiers = [[-1] * w for _ in range(h)]
+    def inside(x, y, poly):
+        hit = False
+        for i, (ax, ay) in enumerate(poly):
+            bx, by = poly[i-1]
+            if (ay > y) != (by > y) and x < (bx-ax)*(y-ay)/(by-ay)+ax:
+                hit = not hit
+        return hit
+    centers = [(17,58),(43,59),(69,58),(95,59),
+               (21,34),(46,24),(73,28),(95,39)]
+    for ci, (cx, cy) in enumerate(centers):
+        cx += rnd.randint(-2,2); cy += rnd.randint(-2,2)
+        rx, ry = rnd.uniform(14,15), rnd.uniform(14,15)
+        poly = []
+        for k in range(12):
+            a = k*math.tau/12
+            r = rnd.uniform(.89,1.05)
+            poly.append((round(cx+rx*math.cos(a)*r),round(cy+ry*math.sin(a)*r)))
+        leaves = []
+        for k in range(rnd.randint(6,10)):
+            a = rnd.random()*math.tau
+            lx = cx+math.cos(a)*rx*rnd.uniform(.45,.9)
+            ly = cy+math.sin(a)*ry*rnd.uniform(.45,.9)
+            angle = rnd.random()*math.tau
+            # 3–5 px 叶形小块，长轴在整个圆周随机取向，无描边。
+            length, width = rnd.randint(3,5), rnd.randint(3,4)
+            leaf = []
+            for u,v in ((-length/2,0),(0,-width/2),(length/2,0),(length/4,width/2)):
+                leaf.append((round(lx+u*math.cos(angle)-v*math.sin(angle)),
+                             round(ly+u*math.sin(angle)+v*math.cos(angle))))
+            leaves.append(leaf)
+        for y in range(max(4,cy-18),min(76,cy+18)):
+            for x in range(max(1,cx-18),min(111,cx+18)):
+                leaf_hit = any(inside(x,y,leaf) for leaf in leaves)
+                if not inside(x,y,poly) and not leaf_hit: continue
+                # 硬斜线和 2–3px 阶梯；每团独立，避免贯穿整丛的竖棱。
+                t = (x-cx)*.55+(y-cy)+((x//3+ci)%3-1)*2
+                tier = 4 if t < -5 else 3 if t < 6 else 1 if t > 13 else 2
+                if leaf_hit: tier = min(4,tier+1)
+                tiers[y][x] = tier
+    # 叶团重叠处只保留向外开放的V形缺口，填掉封闭孔洞，避免读成花环。
+    outside = set()
+    stack = [(x, y) for y in range(h) for x in range(w)
+             if x in (0,w-1) or y in (0,h-1)]
+    while stack:
+        x,y = stack.pop()
+        if (x,y) in outside or tiers[y][x] >= 0: continue
+        outside.add((x,y))
+        for nx,ny in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
+            if 0 <= nx < w and 0 <= ny < h and (nx,ny) not in outside:
+                stack.append((nx,ny))
+    for y in range(h):
+        for x in range(w):
+            if tiers[y][x] < 0 and ((x,y) not in outside or (18 <= x <= 94 and 42 <= y <= 58)):
+                cx,cy = min(centers, key=lambda c: (x-c[0])**2+(y-c[1])**2)
+                t = (x-cx)*.55+(y-cy)+((x//3)%3-1)*2
+                tiers[y][x] = 4 if t < -5 else 3 if t < 6 else 1 if t > 13 else 2
+    # 整丛底部14px接地暗部，不填补透明缺口。
+    for y in range(62,76):
+        for x in range(w):
+            if tiers[y][x] >= 0: tiers[y][x] = 0
+    # 顶缘1px天光，只钩向上的局部边缘，保持亮色面积受控。
+    mask = [[v >= 0 for v in row] for row in tiers]
+    for x in range(w):
+        for y in range(4,60):
+            if mask[y][x] and not mask[y-1][x] and (x//3)%3 != 2:
+                tiers[y][x] = 5
+                break
+    img = [[palette[v]+(255,) if v >= 0 else (0,0,0,0) for v in row] for row in tiers]
+    opaque = [p for row in img for p in row if p[3]]
+    print("bush_sprite seed=%d RGBA=112x80 alpha={0,255} opaque=%.3f%% meanRGB=%s rim=%.3f%%" %
+          (seed,100*len(opaque)/(w*h),tuple(round(sum(p[c] for p in opaque)/len(opaque),3) for c in range(3)),
+           100*sum(p[:3] == palette[5] for p in opaque)/len(opaque)))
+    return img
+
+
+def write_bushsprites():
+    for i in range(8):
+        img = make_bushsprite(2600+i)
+        write_png(os.path.join(OUT, "bush_sprite_%d.png" % i), img, alpha=True)
+        if i == 0: write_png(os.path.join(OUT, "bush_sprite.png"), img, alpha=True)
+
+
 # ---------------------------------------------------------------- 石砌墙面
 def block_widths(rnd, total):
     """随机块宽（4 的倍数）拼满一圈，避免等宽网格那种「瓷砖」观感。"""
@@ -461,7 +603,7 @@ def write_png(path, img, alpha=False):
     h = len(img)
     w = len(img[0])
     if alpha:
-        raw = b"".join(b"\x00" + bytes(c for p in row for c in (p[0], p[1], p[2], 255)) for row in img)
+        raw = b"".join(b"\x00" + bytes(c for p in row for c in (p[0], p[1], p[2], p[3] if len(p) > 3 else 255)) for row in img)
         ihdr = struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)
     else:
         raw = b"".join(b"\x00" + bytes(c for p in row for c in p[:3]) for row in img)
@@ -558,8 +700,14 @@ def main():
         print("%-14s color=%5d B normal=%5d B seam(col,row)@%dx%d=%.2f,%.2f" %
               (name, col_bytes, n_bytes, len(img[0]), len(img), sc[0], sc[1]))
 
+    write_png(os.path.join(OUT, "bush_card.png"), make_bushcard(), alpha=True)
     make_mist()
+    write_bushsprites()
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--bush-sprite-only" in sys.argv:
+        write_bushsprites()
+    else:
+        main()

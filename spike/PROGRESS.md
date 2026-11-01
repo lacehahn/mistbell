@@ -3,7 +3,7 @@
 > 规则：每完成一步就在「日志」里追加一行（时间 | 步骤 | 命令/产物 | 结果）。任何新会话先读本文件末尾 3 条 + `git log --oneline -5` 再动手。
 > Codex 限流时：在日志记「Codex 限额耗尽，等待重置」，本步跳过，下一次调度再试；**不要**因此中断其它不依赖 Codex 的工作。
 
-## 当前状态（最后更新：2026-11-02 06:25）
+## 当前状态（最后更新：2026-11-02 07:15）
 
 - 环境：Unity Hub 3.22.5 / Unity 6000.3.27f2 / Windows Mono 模块 / macOS 目标内置 / Blender 5.2.3 LTS / Unity Personal 已激活
 - 闭环已验证：
@@ -15,6 +15,7 @@
 - 场景几何约定（后续沿用）：坡地 4°、`GroundY(z)=tan4°·z`（z=0 处 y=0）；教堂整体抬高 `ChurchBaseY=0.6`；**门廊朝 -z（来路侧）**，玩家自下坡上来看到的是正立面。
 - **✅ 截图现在是可复现的测量工具**：`tools/frame.py`（原 pngstat.py）可直接对 PNG 求区域均值/削顶率，曝光改动用它验，不要只靠肉眼。
 - **尺子清单**（都不许为了过门槛而改）：`frame.py` 曝光/过曝 · `edge.py` 地平线硬边（单行跳变 + 距离提亮）· `horizon.py` 地平线跨度 · `sharp.py` 三带高频（移轴）· `texstat.py` 贴图统计 · `region.py` 画面矩形均值（含 `p5/p50/tail`：判凹陷压暗而非整体变暗）· `probe_col.py` 逐列 RGB · `seam.py` 贴图**真实尺寸**环绕接缝 · `patchwork.py` 块级明度/色度离散（判「迷彩拼布」；**开了 SSAO 后 `blockSpread` 会被 AO 梯度污染，必须与 `neighborDiff` 一起读**）· `foliage.py` 灌木/草地亮度比（**矩形必须落在灌木本体内部，先用掩码验一遍**）· `bushmask.py` 反照率归零差分 → 灌木掩码 → 量「本体」而不是矩形（诊断协议，见队列 23）
+- **尺子的采样有效性（2026-11-02 06:52 起）**：前景灌木长到 1 m 以上后会插进 `edge.py` 的采样列，`green_row` 会抓到**灌木顶边**（不是天地交界），这时量出的是假数。`edge.py` 现在要求该列同时满足：地平线样本偏蓝（b−r≥10）、地平线下 3 px 是草地（luma≥90、g−r≥15、g−b≥20）、地平线上 40 px 平滑（无单行 >25 跌落），否则跳过该列。**加新物件后凡是「矩形/列采样」的尺子都要先问一句「它采到的是不是它想量的东西」**。
 - **SSAO 约定（2026-11-02 04:26 起）**：参数只写在 `SpikeURP.SSAO()`（`Intensity 2.2 / DirectLightingStrength 0.85 / Radius 0.5 m / Source=Depth`），资产 `Assets/Settings/SSAOFeature.asset` 是独立 `.asset`、被 `.gitignore` 忽略，**改参数必须改代码再跑一次 `SSAO`**。它只能压暗几何凹角（台阶/门廊/拱洞/墙-台地交界），**压不动贴图砖缝**。差分验证：`.asset` 里 `m_Active: 0` → 出包 → 截图 → 对比，是判断「AO 到底有没有生效」的唯一可靠办法。
 - 材质约定（后续沿用）：
   - 所有网格 UV 以**米**为单位，材质 `_BaseMap` tiling = `1/每张贴图覆盖的米数`（草 3.2 m、**石 4.8 m**、瓦 2.4 m）；**不要**用 `PrimitiveType.Cube`（每面 0..1 UV，不同立面的纹理密度会差 1.4 倍）。石材 tiling 必须写在 `SpikeScene.cs` 里（`.mat` 被 `.gitignore` 忽略，写进 `.mat` 等于不可复现）。
@@ -25,6 +26,13 @@
 - 美术目标（用户 2026-11-02 指示）：**尽可能实现类似《歧路旅人》的 HD-2D 风格**
 
 ## 待办队列（按顺序，未完成的在前）
+
+25. **⚠️ 植被改用 Y 轴像素 Billboard（2026-11-02 07:13 决策）** —— 本项取代队列 21/23/24 的 blob 路线
+   - ✅ 第 26 轮已实现：`PixelBillboard.shader` 补 `ShadowCaster` + `DepthOnly`/`DepthNormalsOnly` pass（三个 pass 共用 Y 轴朝向与 `_Cutoff`）、`make_bushsprite(seed)` 出 8 个变体 `bush_sprite_0..7.png`（112×80 RGBA、alpha 只有 {0,255}、不透明 52.4–55.9%）、8 个 `M_BushSprite*.mat`、每丛 1 张 `SpikeArt.Quad("Billboard",1,1)`、落点/计数/`bushIndex` 抽样序列全沿用
+   - 实测：`foliage` ground **1.03** / runtime **0.94**（两机位一致，这是 blob 从来没有过的）、`clipped` 0.03% / 0.00%、`sharp ground middle 11.10`、`frame clipped 0.00%`、双平台 Succeeded / 0 error、确定性 OK
+   - 下一轮（美术迭代，未做）：① 叶团**更小更多**（8 个 28–30 px → 12–16 个 14–20 px），大小方差加大；② 轮廓加**深 V 形缺口**（现在是没有缺口的圆叶团，读成「一排多肉」）；③ 叶斑不要围着团心均匀分布，改成一侧偏重；④ 默认路线切成 sprite（`-bushBlob` 反向开关），让 `art_*.png` 成为 sprite 版
+   - 之后同法处理**石块**（现在仍是 3D blob，`art_ground` 里仍是「灰石头」形状对了但材质是实时光照）
+26. **植被调色一致性**（2026-11-02 07:13 记）：sprite 是 unlit，主视角里比受光草地略暗（0.94）不刺眼，但**清晨/逆光时会把灌木和光照脱钩**。要做：`_Color` 按一天中的光照（太阳强度/色温）做一次乘法，或给 `PixelBillboard` 加一个「按主光 NdotL 取 3 档」的廉价模式。⚠️ 待决策，MVP 之前可以先不做（当前只有一种光照状态）
 
 1. ~~**构图修正**~~ ✅ 已完成（2026-11-01 23:20）：塔顶 y=95px 余量、基座 y=859px、朝圣者 y=921px 入画
 2. ~~**曝光与光照**~~ ✅ 已完成（2026-11-01 23:21）：sun 1.5 / ambient 0.45 / postExposure 0.4 / bloom 0.9 / sun yaw +25（先试 2.2 过曝，回调）
@@ -88,7 +96,7 @@
    - 下一轮（都要做）：(a) 叶簇外推 `0.62–0.92 × 半径`、尺寸 0.25–0.42 m，每丛至少 3 片露出 ≥40% 体积；(b) 主体 `subdiv 1→2`（162 顶点/320 面）+ `displace 0.22→0.34`；(c) 法线图改 256² 叶簇高度场 + `bumpScale 0.35→0.9`；
      验收用掩码协议（`bushmask.py` 的 `bush-only` 行）：`clipped ≤0.05%`、`p95/p50 ≥ 2.4`、`sharp art_ground middle ≥ 13.5`，目视轮廓断口 ≥4 处。
 24. ⚠️ **待决策：植被是否改「像素叶片卡片」**（2026-11-02 06:22）：HD-2D 的植被在原作里是 alpha-clip 的像素卡片，不是 3D blob。卡片路线：每丛 2–3 张交叉 quad + `bush.png` 的叶簇 alpha、`PixelBillboard.shader` 已有 alpha clip 可改 → 轮廓天然是像素毛边，与角色像素密度一致。代价：要处理卡片阴影（`alpha clips shadow`）与相机朝向偏转时卡片穿插；blob 路线则永远在近景读成石头。→ 队列 23 做完再做 A/B 对比再定。
-   - **A/B 已派发（2026-11-02 07:16）**：简报 `spike/brief-bushcard.md`（Codex 第 25 轮）。队列 23 的三件事数字全过（`verts=162`、`exposedMin=3`、`256² edge% 18.8`、凹口 7 处），但目视反而更差：**暗一倍半（0.90→0.46，bump 0.9 掀法线 + 高光已关）**、表面读成**龟甲/贝壳鳞片**。A/B 的口径：blob 先按实测 ×1.85 提亮（只比形状与轮廓），卡片路线用 `-bushCard` 开关并存，两套截图同名加 `card_` 前缀，用同一批尺子（`foliage` 的 `card_art_*` 矩形已加、`sharp`、`region`、`frame`）+ 目视定罪。
+   - **A/B 已派发（2026-11-02 06:54）**：简报 `spike/brief-bushcard.md`（Codex 第 25 轮）。队列 23 的三件事数字全过（`verts=162`、`exposedMin=3`、`256² edge% 18.8`、凹口 7 处），但目视反而更差：**暗一倍半（0.90→0.46，bump 0.9 掀法线 + 高光已关）**、表面读成**龟甲/贝壳鳞片**。A/B 的口径：blob 先按实测 ×1.85 提亮（只比形状与轮廓），卡片路线用 `-bushCard` 开关并存，两套截图同名加 `card_` 前缀，用同一批尺子（`foliage` 的 `card_art_*` 矩形已加、`sharp`、`region`、`frame`）+ 目视定罪。
 
 22. **远山体积**（2026-11-02 05:24 目视新增，次优先）：三层山现在是**纯雾色剪影**，没有明暗面、没有雪、层间距靠颜色硬凑。要做：山体正面叠一层方向光渐变（迎光面比背光面亮 15–25%）、雪线只在最高层出现且带破碎边缘、层与层之间用轻微色温差（近层偏冷青、远层偏紫灰）。验收用新尺子判「山体内部有没有明暗」：山体矩形内 `Lstd` 从当前 ~3 提到 ≥ 8，且三层均值差 ≥ 6。
    - 基线（05:26 量，`region.py art_runtime`）：左山 `40,340,520,700 → mean(160,176,195) sat 0.183 Lstd 10.0`、右山 `1520,340,1900,700 → (151,168,184) Lstd 7.7`——**这两个 Lstd 主要是山脊与天空之间的锯齿边贡献的，山体内部几乎无明暗**；量「内部」时要把矩形往下压到山腰（避免框进天空）。
@@ -205,6 +213,13 @@
 | 06:20 | 新尺子 `tools/bushmask.py`（掩码协议） | 黑白差分取灌木掩码 + 积分图找干净矩形 | 掩码 93815 px（4.52%）：**灌木本体 `mean(59,64,42) luma 61.1 sat 0.337 p5 21.8 p50 51.1 p95 132.7 clipped 0.00%`** → **灌木比草地暗（0.79）**、**本体零削顶**；此前报的「亮 57% / clipped 0.99%」是**矩形污染的假数**（旧矩形约八成是背景草与石板路）。`foliage.py` 的 `art_ground` 矩形改为掩码验证过的 `(360,540,780,620)`（比值 **0.84**） |
 | 06:24 | 目视判定（队列 21 部分通过） | `vision_analyze` on `art_ground` / `art_runtime` | 主视角灌木从「单个油亮绿石」变成「几团凹凸的橄榄绿体块」，轮廓有**约 2 处**凹口（要求 ≥4），表面仍有 30–40 px 宽的光滑明暗波；**判定：仍是「长苔的绿石头」，没到「灌木丛」** → 队列 23（叶簇全埋在轮廓内 + 42 顶点平滑法线 + 低频法线图） |
 | 06:46 | Codex 第 24 轮（队列 23 三件事） | `spike/brief-props4.md` → `codex.sh`（`logs/184_codex_bush2.log`）→ `logs/180_scene.log` / `182_build.log` → `caffeinate capture_runtime.sh` | 三件事全部落地且数字与自报逐项一致：主体 `blobs verts=162 tris=320`、`bushExposure clumps=22 exposedMin=3 exposedMax=5 meanExposure=0.306 bodyR=[0.7806,1.0814] byHeight=true`、`bush.png 256² meanRGB(52,65,39) sat 0.405 edge% 18.8 coarseStd 3.65`、`seam 0.95/1.04`、`region 前景 sat 0.522/0.516 Lstd 26.7/32.9`、`frame sky(167,183,203)/clipped 0.00%/heightPct 49.8/pitch 11.8/porch 924.6` 未动、双平台 Succeeded / error CS 0、两次场景日志 DETERMINISM_OK。**但引入两个新问题** |
-| 07:02 | 目视判定（队列 23 不过关） | `vision_analyze` on `art_ground` / `art_runtime` | ① `foliage art_ground` 亮度比 **0.90→0.46**（bush luma 34.6 / grass 75.4）：`bumpScale 0.9` 把法线大面积掀向背光侧，而直射高光已关 → 漫反射掉一半，**不是配色问题**；② 表面读成「**龟甲/贝壳鳞片**」：256² 上叶簇每簇 10–18 px = 屏幕约 10 px 一片，每片一圈硬暗边 + 法线顶起。轮廓凹口目视确实到了 7 处（要求 ≥4），但整丛像一堆贝壳/绿珊瑚，与像素角色语汇不配。`sharp art_ground middle 11.27`（门槛 13.5 未过） |
-| 07:14 | 修 `tools/edge.py` 采样有效性 | 前景灌木长到 1.2 m 后插进采样列（x=320 `Lsky=29.2`、x=480 `jump=154.2` 都是灌木顶边，不是天地交界） | 加三项有效性检查：地平线样本偏蓝（b−r≥10）、地平线下 3 px 是草地（luma≥90 且 g−r≥15、g−b≥20）、地平线上 40 px **平滑**（无单行 >25 跌落）。有效列 mean jump **4.0**，与改前基线 4.1 一致；`art_ground` 也 4.0。**教训：尺子的采样列必须能自证「采到的确实是它想量的东西」** |
-| 07:16 | 定性：blob 路线到顶 → 转 A/B | 记入队列 24 | 三轮（22/23/24）每次都是「换一个 artifact」：方盒塔→绿石→油亮绿石→贝壳堆。HD-2D 原作的植被是 alpha-clip 像素卡片，与像素角色同一套语汇 → 派发 A/B（`spike/brief-bushcard.md`），blob 先按实测 ×1.85 提亮，让比较只落在形状与轮廓上 |
+| 06:50 | 目视判定（队列 23 不过关） | `vision_analyze` on `art_ground` / `art_runtime` | ① `foliage art_ground` 亮度比 **0.90→0.46**（bush luma 34.6 / grass 75.4）：`bumpScale 0.9` 把法线大面积掀向背光侧，而直射高光已关 → 漫反射掉一半，**不是配色问题**；② 表面读成「**龟甲/贝壳鳞片**」：256² 上叶簇每簇 10–18 px = 屏幕约 10 px 一片，每片一圈硬暗边 + 法线顶起。轮廓凹口目视确实到了 7 处（要求 ≥4），但整丛像一堆贝壳/绿珊瑚，与像素角色语汇不配。`sharp art_ground middle 11.27`（门槛 13.5 未过） |
+| 06:52 | 修 `tools/edge.py` 采样有效性 | 前景灌木长到 1.2 m 后插进采样列（x=320 `Lsky=29.2`、x=480 `jump=154.2` 都是灌木顶边，不是天地交界） | 加三项有效性检查：地平线样本偏蓝（b−r≥10）、地平线下 3 px 是草地（luma≥90 且 g−r≥15、g−b≥20）、地平线上 40 px **平滑**（无单行 >25 跌落）。有效列 mean jump **4.0**，与改前基线 4.1 一致；`art_ground` 也 4.0。**教训：尺子的采样列必须能自证「采到的确实是它想量的东西」** |
+| 06:54 | 定性：blob 路线到顶 → 转 A/B | 记入队列 24 | 三轮（22/23/24）每次都是「换一个 artifact」：方盒塔→绿石→油亮绿石→贝壳堆。HD-2D 原作的植被是 alpha-clip 像素卡片，与像素角色同一套语汇 → 派发 A/B（`spike/brief-bushcard.md`），blob 先按实测 ×1.85 提亮，让比较只落在形状与轮廓上 |
+| 06:56 | Codex 第 25 轮（队列 24 A/B：blob vs 像素卡片） | `spike/brief-bushcard.md` → `codex.sh`（`logs/186_codex_bushcard.log`）/ 报告 `spike/report-bushcard.md`；产物 `Shots/card_art_*.png` 与重出的 `Shots/art_*.png` | 两套都跑通（card 关：`quads=66 clip=0.5 cullOff=true tex=128x128`、双平台 Succeeded ×2、确定性 ×2、6 张保护贴图 MD5_OK）。数字：blob 提亮后 `art_ground` 比 **0.46→0.83**、`sharp middle 11.27→13.81`；card `0.71`、`sharp middle 10.71`。**但 blob 主视角炸了**：`foliage art_runtime` luma **74.1→123.7**、`clipped 11.54%`，`frame` 全帧 clipped **0.00%→1.10%** |
+| 07:02 | 目视判定（A/B 双败） | `vision_analyze` on `art_runtime` / `card_art_runtime` / `art_ground` / `card_art_ground` | blob：前景灌木变成**发白的斑点绿石**（提亮过头 + 削顶），比上一轮更糟；card：读成**三片相交的绿蘑菇/扇贝**，轮廓有像素毛边（这点对了），但每片自带一条连续明暗渐变、贴图叶形被拉成竖条，破面感压过叶团感。**共同根因**：两者都是**实时受光的连续明暗**；HD-2D 的植被是靠「明暗画进像素里 + alpha clip 毛边 + 1 texel≈1–2 屏幕像素」成立的 → 转 Billboard 精灵路线（队列 25） |
+| 07:03 | 定性：blob 暗的真因是 bump，不是反照率 | 复盘 | 上一轮把 `bumpScale 0.35→0.9` 顶上去后，法线大面积掀离光源 → 漫反射掉一半；我让 Codex 用反照率 ×1.85 去补，等于在**近景把小面片 NdotL≈1 的像素直接打穿**（clipped 11.5%）。**教训：几何/法线导致的整体变暗不能用反照率补——那会同时把受光面推到削顶；先回退造成变暗的那个参数** |
+| 07:05 | Codex 第 26 轮（blob 回修 + Y 轴像素 Billboard 灌木） | `spike/brief-bushsprite.md` → `codex.sh`（`logs/196_codex_sprite.log`）/ 报告 `spike/report-bushsprite.md` | 12 项过 / 3 项不过（F3 blob ground 亮度、F9 blob 锐度、F15 sprite 目视）。blob：`bump 0.9→0.5`、补偿 `1.85→1.0`，削顶从 1.10% 压到 **0.00%**，但 ground 亮度比掉到 **0.46**、`sharp middle 11.16`；sprite：`bushSprite quads=22 variants=8 castShadow=true depthOnly=true tex=112x80 pivotY=0`、8 个变体 alpha 全为 {0,255}、不透明 52.4–55.9%、`_Color` 未调（比 1.03 / 0.94） |
+| 07:10 | 人工复跑（8 把尺子 + 构建 + 确定性 + md5） | `foliage` 四张 / `sharp` 四张 / `frame` 两张 / `edge` / `197,199_build` / 场景日志 diff | **与自报逐项一致**。blob：ground 比 **0.46** clipped 0.00%、runtime 比 0.92 clipped 0.047%、`sharp ground middle 11.16`；sprite：ground 比 **1.03** clipped 0.03%、runtime 比 **0.94** clipped 0.00%、`sharp ground middle 11.10`、runtime `Lstd 17.5`（blob 是 46.9 —— 那 46.9 正是「光滑石头明暗」的量化形态）；`frame` 两套 sky(167,183,203)、全帧 clipped 0.00%；双平台 Succeeded ×2、error CS 0；两套场景日志 diff 均 0（确定性）；六张保护贴图 + `bush`/`bush_card` md5 未变 |
+| 07:12 | 目视判定（A/B 定胜负） | `vision_analyze` on `sprite_art_runtime` / `sprite_art_ground` / `art_runtime` / `art_ground` | **sprite 明显更像 HD-2D**：主视角里灌木成了深绿小丛，与像素草、教堂同一套语汇，不再是「发白斑点绿石」；`ground_near std` 从 34.25 降到 11.95（不再有光滑大块明暗）。近景仍不合格：叶团太圆太均匀，读成「一排圆叶团绿篱 / 多肉」，缺 V 形缺口，看得出是一张平面 |
+| 07:13 | **决策：植被改用 Y 轴像素 Billboard** | 记入队列 25 | 理由不只目视：blob 的 ground / runtime 两个机位给出 **0.46 vs 0.92** 的亮度比（差 2 倍），单一反照率不可能同时满足 —— 说明外观被几何法线支配；sprite 是 unlit、明暗画进像素，两个机位自然一致（1.03 / 0.94）。下一轮把默认切成 sprite（开关改 `-bushBlob`），并对精灵美术做第二轮迭代 |

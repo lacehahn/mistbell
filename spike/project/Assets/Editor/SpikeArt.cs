@@ -52,6 +52,21 @@ public static class SpikeArt
         return m;
     }
 
+    // 底边中点原点，正面朝 -Z；尺寸进入缓存键，避免不同尺寸串用。
+    public static Mesh Quad(string key, float w, float h)
+    {
+        string path = "Assets/Settings/Quad_" + key + "_" + w.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "_" + h.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + ".asset";
+        var cached = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (cached != null) return cached;
+        var mesh = new Mesh { name = "Quad_" + key };
+        mesh.vertices = new[] { new Vector3(-w/2,0,0), new Vector3(w/2,0,0), new Vector3(-w/2,h,0), new Vector3(w/2,h,0) };
+        mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
+        mesh.triangles = new[] { 0,2,1, 1,2,3 };
+        mesh.RecalculateNormals(); mesh.RecalculateTangents(); mesh.RecalculateBounds();
+        AssetDatabase.CreateAsset(mesh, path);
+        return mesh;
+    }
+
     /// <summary>焊接二十面球、确定性双频位移；几何与 UV 均以米计，缓存为真实资产。</summary>
     public static Mesh Blob(Vector3 size, float displace, int subdiv, bool flat, int seed)
     {
@@ -202,10 +217,11 @@ public static class SpikeArt
     /// ② 补偿过量时最亮 texel × tint 会 &gt; 1，反照率被削顶，画面发白一片。
     /// 所以：按「平均亮度」统一缩放（保留贴图本来色相），再按峰值压一次，保证 max ≤ 0.95。
     /// </summary>
-    public static Color TintFor(Texture2D tex, Color targetAlbedo)
+    public static Color TintFor(Texture2D tex, Color targetAlbedo, bool opaqueOnly = false)
     {
         if (tex == null) return targetAlbedo;
         var px = tex.GetPixels();
+        if (opaqueOnly) px = System.Array.FindAll(px, p => p.a > 128f / 255f);
         double r = 0, g = 0, b = 0;
         for (int i = 0; i < px.Length; i++)
         {
