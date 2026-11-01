@@ -60,8 +60,13 @@
    - v4：贴图块间明度抖动 ±0.09→±0.03、色相 ±6→±2.5°、sat→0.12 → 贴图 `blockSpread 74.3%→29.2%`；tiling 从 `.mat`（**被 gitignore 忽略、不可复现**）挪进 `SpikeScene.cs`；移轴 `_MaxRadius 10→12`
    - ⚠️ 遗留（近读仍像「现代砌块」）：① 块面太平滑、无接触阴影 → **SSAO（队列 11）**；② 灰缝部分偏绿、亮度不均；③ `Lstd 44.5→28.1` 与 `coarseStd 27→9.6` 偏低，需要块内起伏/凹陷把细节补回来
 15. **前景细节物件**：草地是一整片平涂绿色，缺《歧路旅人》那种「近景点缀」——需要灌木丛/碎石/路边栅栏/路缘石各若干（可用体块 + 像素材质快速做），既补画面层次，也让移轴的虚化有东西可虚。**主视角最致命的一项**（HD-2D 观感一半来自近景细节 + 移轴虚化）
-16. **石缝锐度 + 砂岩颗粒**（2026-11-02 04:30 新增，次优先）：倒角现在是 3 texel 阶梯，在 art_close 尺度（约 143 px/m）摊成 8 px 宽灰晕 → 砖缝读成「软灰带」而不是「清晰凹槽 + 接触阴影」；块面像石膏/泡沫，砂岩粒感弱。修法：`make_stone` 倒角收到 1–2 texel（高度 0.35→0.6）、缝宽 1–3 px、`blotch` 振幅 88→50（低频斑驳现在把颗粒盖住了），并考虑 256→512（106 texel/m；4 皮 × 512 要整除，`seam.py` 必须复测）
-17. **屋顶色病态**（2026-11-02 04:30 新增）：主视角屋顶是番茄红 + 黑噪点，要压到「深石板青灰」并去掉黑点；与 16 同批（都是 `make_textures.py`）
+16. ~~**石缝锐度 + 砂岩颗粒**~~ ⚠️ 主体完成（2026-11-02 04:52）：512×512、倒角 2 texel（0.20→0.80）、灰缝 1–3 px、`blotch` 88→50、`fine_grain` 20→40、加亮砂粒。
+   - ✅ **8 px 灰带 → 清晰凹槽**（`art_close` 目视确认：砖缝是一条细暗线 + 一侧受光倒角，块可数、不再糊成软灰带）；贴图 `edge% 4.9→9.1`、`coarseStd 9.60→14.46`、`art_close` 文件 1.89 MB→2.48 MB（高频回来了）
+   - ❌ **残留「块面像石膏」**：现有噪声最小 cell 是 `size//32` = 16 texel（≈15 cm），**没有单 texel 砂粒**。→ 队列 18
+18. **屋顶 tint + 石材单 texel 砂粒**（2026-11-02 04:52 新增）：
+   - **屋顶仍是暖棕不是青灰**，但**真因不在贴图**：贴图已改成 `meanRGB(75,81,89)`（冷），渲染出来却是 `(108,80,63) R-B +45`。因为 `SpikeScene.cs` L41 `ChurchMaterial("roof", "#A06B4A")` 只在 `.mat` 不存在时生效，而 `Assets/Settings/M_Roof.mat`（**被 gitignore、不可见**）里存着一个很暖的 `_BaseColor`，把贴图的冷色乘掉了。→ 照 stone 的写法在代码里显式 `roofMat.SetColor("_BaseColor", …)`。**教训：贴图层面的改色会被材质 `_BaseColor` 乘性抵消；改色必须连同 tint 一起改，否则你量到的是 tint 不是贴图。**
+   - 石材要在块面上加**真·单 texel 随机砂粒**（±6~8，三通道共用偏移保持中性 + 高度场同频微扰），目标 `texstat edge% ≥ 12`、`sharp art_close middle ≥ 13`
+   - ⚠️ 另记：本轮 `art_close` 墙面 `p50 140.3→123.9（-12%）`、`Lstd 33.5→35.0`，而贴图 `meanRGB` 只从 `(125,121,112)` 变到 `(123,118,109)`（-1.6%）——**墙面变暗不是贴图均值造成的**，最可能是 `_BumpScale=1.8` 遇到更陡的 2 texel 倒角后法线更偏。暂不追，`art_runtime` 的 sky/ground_near/clipped 三张一字未动，说明曝光与光照没被带偏。
 
 ## 日志
 
@@ -153,3 +158,9 @@
 | 04:12 | **差分验证**：SSAO 到底贡献了多少 | `m_Active:0` → `SpikeBuild.Run` → `capture_runtime.sh` → `region.py`；证据 `Shots/ssao_off_close.png` | 同一份贴图下 SSAO(0.75/0.15/0.6) 只让墙面 tail **0.496→0.489（-1.4%）**、台阶 0.462→0.459、**平墙 0.583 一动不动**。结论：**SSAO 只能压暗几何凹角，压不动贴图砖缝**；且 URP 默认 `AfterOpaque=false` 时 AO 主要作用在间接光上，正立面被太阳直打 → 强度太低等于没开 |
 | 04:26 | SSAO 调参（写进代码，可复现） | `SpikeURP.cs`：`Intensity 0.75→2.2`、`DirectLightingStrength 0.15→0.85`、`Radius 0.6→0.5`；重跑 `SSAO`→`Build`→`capture` | 墙面 p50 **147.7→140.3（-5.0%）**、Lstd 31.8→33.5、tail 0.496→0.477；台阶/门廊 p50 **151.9→100.8（-34%）**（门廊凹角重，台阶级差终于读出来）；平墙 0.583 仍不动。`frame`：sky (167,183,203)、ground_near (67,90,28)、clipped 0.00% **一字未动**；双平台 Succeeded / error CS 0 |
 | 04:30 | 目视判定（SSAO + 块面起伏） | `vision_analyze` on `art_close` / `art_ground` / `art_runtime` | **通过**：灰缝粉/绿彩线消失（改中性后肉眼确认）；块面有倒角与微凹、拱洞与门廊有接触阴影、台阶读得出 5 级、石板路与草地交界有接地感；`art_ground` 无 AO 脏斑。**新问题**：① 倒角 3 texel 在 art_close 摊成 8 px 灰晕，砖缝变成「软灰带」而非「清晰凹槽」；② 块面像石膏/泡沫，砂岩粒感弱；③ 主视角屋顶番茄红+黑噪点、前景仍空 → 队列 16 / 17 / 15 |
+| 04:34 | 派发 Codex 第 19 轮（队列 16+17 同批） | `codex.sh` 读 `spike/brief-stone5.md`（日志 `logs/120_codex_stone5.log`；tokens 25.7k） | 只改 `make_textures.py`：石材 **512×512**、倒角 2 texel（0.20→0.80）、灰缝 1–3 px、`blotch` 88→50 / `fine_grain` 20→40、加亮砂粒；屋顶改 HLS **215°/0.33/0.10** 深石板青灰、明暗全部改**乘法**（消黑噪点）、tone 收窄到 ±0.08、保底 0.55；顺手修 `seam_score`/`preview` 的 `SZ=128` 索引 bug（对 256 已失效，打印的是假数） |
+| 04:38 | 人工复跑 6 条贴图门槛 | `make_textures.py` / `texstat.py` / `seam.py` ×3 | **全过**：stone `512x512 sat 0.111 coarseStd 14.46 edge% 9.1`、`seam 0.93/1.48`；generator 自打印的 seam 与 `seam.py` **差 0.00**（bug 真修了）；roof `sat 0.157 meanRGB(75,81,89)`（B>R，冷）、`seam 0.88/0.62`、亮度均值 80.8；`grass` 字节未变 `(79,90,58) 0.349`。生成器 4.15 s（256 时 1.3 s） |
+| 04:41 | 重建场景 | `SpikeScene.Run`（`logs/140_scene.log`） | `stone tiling=(0.2083,0.2083)` 未动、`church heightPct=49.8 porch centerX=924.6` 未动（几何没被带偏）、`terrain verts=23103`、`ssao/bump` 未动 |
+| 04:45 | 出双平台包 | `SpikeBuild.Run`（`logs/142_build.log`） | macOS **122.6 MB** / Windows **104.6 MB**、`Succeeded errors=0`、`error CS` 0（贴图 512 让包体 +2 MB） |
+| 04:47 | 运行时截图 | `caffeinate -dimu -t 200 bash tools/capture_runtime.sh`（`logs/20_runtime_043733.log`） | 三机位全出；`art_close` **1.89 MB→2.48 MB**（高频细节回来了）；`fov=35`、`pose[0..2]` 正常 |
+| 04:52 | 人工验收（8 把尺子 + 目视） | `region` / `patchwork` / `texstat` / `seam` / `sharp` / `frame` / `vision_analyze` ×2 | **贴图 6 条全过；渲染 3 条不过**。✅ 灰带→清晰凹槽（`art_close` 目视：细暗线+单侧倒角，块可数）；✅ 屋顶黑噪点消失、番茄红→暗棕；✅ `sharp art_close middle 10.85→11.73`、`clipped 0.02%`、`art_runtime` 的 `sky(167,183,203)/ground_near(67,90,28)/clipped 0.00%` **一字未动**；✅ `patchwork neighborDiff 5.3%`（拼布没回来，Codex 把块间抖动从 ±0.03 提到 ±0.075~0.095 换 coarseStd，实测邻块差反而降到 5.3%）。❌ **屋顶渲染 `(108,80,63) sat 0.422 R-B +45`**——贴图已是冷的，真因是 `M_Roof.mat` 里不可见的暖 `_BaseColor`；❌ 墙面 `p50 123.9`（门槛 130–150）、`tail 0.501`；❌ 块面仍像石膏（无单 texel 砂粒）→ 队列 18 |

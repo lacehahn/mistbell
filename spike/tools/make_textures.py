@@ -169,7 +169,7 @@ def block_widths(rnd, total):
     return widths
 
 
-def make_stone(rnd, size=256):
+def make_stone(rnd, size=512):
     import colorsys
     import math
 
@@ -220,7 +220,7 @@ def make_stone(rnd, size=256):
         y0, y1 = round(course * size / courses), round((course + 1) * size / courses)
 
         for width in widths:
-            left_joint, right_joint, top_joint, bottom_joint = [rnd.randint(1, 5) for _ in range(4)]
+            left_joint, right_joint, top_joint, bottom_joint = [rnd.randint(1, 3) for _ in range(4)]
             joint_colors = []
             for _ in range(4):
                 # 灰缝三通道共用偏移和抖动，饱和度为零；保留 15% 浅缝。
@@ -235,8 +235,8 @@ def make_stone(rnd, size=256):
                 joint_colors.append((value, value, value))
             hue = base_h + rnd.uniform(-2.5, 2.5) / 360
             direction = rnd.choice((-1, 1))
-            # 块间明度抖动保持原值；块内起伏另由连续高度场承担。
-            light = base_l + direction * rnd.uniform(0.025, 0.035)
+            # 减弱低频斑驳后，以块间明度差保留老石砌的粗尺度层次。
+            light = base_l + direction * rnd.uniform(0.075, 0.095)
             color = tuple(v * 255 for v in colorsys.hls_to_rgb(hue % 1, light, min(0.12, base_s)))
             gradient = rnd.uniform(0.03, 0.06)
             for y in range(y0, y1):
@@ -250,17 +250,17 @@ def make_stone(rnd, size=256):
                     if edge < 0:
                         img[y][x] = joint_colors[side]
                         continue
-                    variation = ((grain[y][x] - 0.5) * 44 +
-                                 (fine_grain[y][x] - 0.5) * 20 +
-                                 (blotch[y][x] - 0.5) * 88 - 7)
-                    # 三像素倒角：0.30 → 0.50 → 0.70；块心浅凹，幅度不超过 0.05。
+                    variation = ((grain[y][x] - 0.5) * 34 +
+                                 (fine_grain[y][x] - 0.5) * 40 +
+                                 (blotch[y][x] - 0.5) * 50 - 7)
+                    # 两像素倒角：0.20 → 0.80 → 满高；块心保留浅凹。
                     u = (xx - x0 - left_joint) / max(1, width - left_joint - right_joint - 1)
                     v = (y - y0 - top_joint) / max(1, y1 - y0 - top_joint - bottom_joint - 1)
                     bowl = max(0.0, 1 - (2 * u - 1) ** 2) * max(0.0, 1 - (2 * v - 1) ** 2)
-                    bevel = (0.30, 0.50, 0.70)[min(edge, 2)]
+                    bevel = (0.20, 0.80)[edge] if edge < 2 else 1.0
                     relief = -0.04 * bowl + (blotch[y][x] - 0.5) * 0.02
                     height[y][x] = bevel + relief + (grain[y][x] - 0.5) * 0.30
-                    edge_dark = rnd.uniform(-12, -8) if edge == 0 else (-8 if edge == 1 else 0)
+                    edge_dark = rnd.uniform(-14, -10) if edge == 0 else 0
                     relief_color = edge_dark + 4 * bowl
                     img[y][x] = tuple(clamp8(c * (1 - gradient * t) + variation + relief_color)
                                       for c in color)
@@ -280,13 +280,17 @@ def make_stone(rnd, size=256):
         # 底部积尘；在皮间灰缝中回到起点，平铺时明暗跳变落在灰缝内。
         dust = 0.08 * smooth(max(0.0, (y / (size - 1) - 0.8) / 0.2))
         for x in range(size):
-            fine = rnd.uniform(-9, 9)
+            fine = rnd.uniform(-12, 12)
             if height[y][x] <= 0.1:
-                fine *= 2 / 9  # 灰缝只用三通道共用的 ±2 抖动。
+                fine *= 2 / 12  # 灰缝只用三通道共用的 ±2 抖动。
             # 少量砂眼打断平滑石面；不沿边界描出闭合轮廓。
             if height[y][x] > 0.1 and rnd.random() < 0.008:
                 fine -= rnd.uniform(22, 38)
                 height[y][x] -= 0.12
+            # 亮砂粒只落在块面内部，避免沿倒角描边。
+            if height[y][x] > 0.8 and rnd.random() < 0.012:
+                fine += rnd.uniform(10, 18)
+                height[y][x] += 0.06
             img[y][x] = tuple(clamp8(c * (1 - dust) + fine) for c in img[y][x])
     mean = sum(all_widths) / len(all_widths)
     std = (sum((w - mean) ** 2 for w in all_widths) / len(all_widths)) ** 0.5
@@ -298,36 +302,46 @@ def make_stone(rnd, size=256):
 
 # ---------------------------------------------------------------- 石板瓦屋面
 def make_roof(rnd):
+    import colorsys
+
     rows, row_h = 4, SZ // 4
     tw = SZ // 4
-    img = new_img((0x40, 0x2C, 0x26))
+    img = new_img()
     height = [[0.5] * SZ for _ in range(SZ)]
     grain = fbm([16, 8, 2], rnd, 0.55)
+    base = colorsys.hls_to_rgb(215 / 360, 0.33, 0.10)
+    # HLS S=0.10 对应 HSV S≈0.182；中性石粉降低色度以满足 HSV S≤0.16。
+    neutral = sum(base) / 3
+    base = tuple((c * 0.85 + neutral * 0.15) * 255 for c in base)
 
     for r in range(rows):
         y0 = r * row_h + row_h // 2
         offset = tw // 4 + ((tw // 2) if r % 2 else 0)
         for col in range(4):
             x0 = col * tw + offset
-            tone = 0.58 + rnd.uniform(-0.18, 0.18)
-            for y in range(y0, y0 + row_h):
-                for x in range(x0, x0 + tw):
-                    g = grain[y % SZ][x % SZ]
-                    v = tone + (g - 0.5) * 0.26
-                    img[y % SZ][x % SZ] = (clamp8(v * 210), clamp8(v * 152), clamp8(v * 130))
-                    height[y % SZ][x % SZ] = 0.45 + (g - 0.5) * 0.4
-            # 瓦片上缘受光唇、下缘被上一排压住的 3 px 深影 —— 搭接感全靠这两条
-            for x in range(x0, x0 + tw):
-                add(img, x, y0, 18)
-                add(img, x, y0 + row_h - 1, -46)
-                add(img, x, y0 + row_h - 2, -30)
-                add(img, x, y0 + row_h - 3, -14)
-                height[y0 % SZ][x % SZ] = 1.0
-                height[(y0 + row_h - 1) % SZ][x % SZ] = 0.0
-            # 竖向瓦缝
-            for y in range(y0, y0 + row_h):
-                add(img, x0, y, -20)
-                height[y % SZ][x0 % SZ] = 0.1
+            tone = 0.62 + rnd.uniform(-0.08, 0.08)
+            tile_base = tuple(c * tone / 0.62 for c in base)
+            for dy in range(row_h):
+                y = (y0 + dy) % SZ
+                for dx in range(tw):
+                    x = (x0 + dx) % SZ
+                    g = grain[y][x]
+                    factor = 1 + (g - 0.5) * 0.26 + rnd.uniform(-0.045, 0.045)
+                    if dy == 0:
+                        factor *= 1.12
+                    elif dy >= row_h - 3:
+                        factor *= (0.94, 0.88, 0.80)[dy - (row_h - 3)]
+                    if dx == 0:
+                        factor *= 0.86
+                    factor = max(0.55, factor)
+                    img[y][x] = tuple(clamp8(c * factor) for c in tile_base)
+                    height[y][x] = 0.45 + (g - 0.5) * 0.4
+                    if dy == 0:
+                        height[y][x] = 1.0
+                    elif dy == row_h - 1:
+                        height[y][x] = 0.0
+                    if dx == 0:
+                        height[y][x] = 0.1
 
     return img, 2.4, height
 
@@ -382,22 +396,24 @@ def write_png(path, img, alpha=False):
 
 def preview(img, path, times=4, zoom=2):
     """4× 平铺 + 2× 最近邻放大：人眼检查接缝。"""
-    n = SZ * times
-    big = new_img((0, 0, 0))
-    big = [[img[y % SZ][x % SZ] for x in range(n)] for y in range(n)]
-    out = [[big[y // zoom][x // zoom] for x in range(n * zoom)] for y in range(n * zoom)]
+    h, w = len(img), len(img[0])
+    out = [[img[(y // zoom) % h][(x // zoom) % w]
+            for x in range(w * times * zoom)] for y in range(h * times * zoom)]
     return write_png(path, out)
 
 
 def seam_score(img):
-    """接缝自检：首尾列/行差 vs 内部相邻列/行平均差，比值应接近 1。"""
+    """按真实尺寸、RGB 三通道计算，与 tools/seam.py 使用同一把尺子。"""
+    h, w = len(img), len(img[0])
     def diff_col(a, b):
-        return sum(abs(img[y][a][0] - img[y][b][0]) for y in range(SZ)) / SZ
+        return sum(abs(img[y][a][c] - img[y][b][c])
+                   for y in range(h) for c in range(3)) / (h * 3)
     def diff_row(a, b):
-        return sum(abs(img[a][x][0] - img[b][x][0]) for x in range(SZ)) / SZ
-    inner_c = sum(diff_col(x, x + 1) for x in range(SZ - 1)) / (SZ - 1)
-    inner_r = sum(diff_row(y, y + 1) for y in range(SZ - 1)) / (SZ - 1)
-    return diff_col(SZ - 1, 0) / max(inner_c, 0.01), diff_row(SZ - 1, 0) / max(inner_r, 0.01)
+        return sum(abs(img[a][x][c] - img[b][x][c])
+                   for x in range(w) for c in range(3)) / (w * 3)
+    inner_c = sum(diff_col(x, x + 1) for x in range(w - 1)) / (w - 1)
+    inner_r = sum(diff_row(y, y + 1) for y in range(h - 1)) / (h - 1)
+    return diff_col(w - 1, 0) / max(inner_c, 0.01), diff_row(h - 1, 0) / max(inner_r, 0.01)
 
 
 def make_mist():
@@ -453,7 +469,8 @@ def main():
         n_bytes = write_png(os.path.join(OUT, name + "_n.png"), n_img)
         preview(img, os.path.join(PREVIEW, name + "_tiled.png"))
         sc = seam_score(img)
-        print("%-14s color=%5d B normal=%5d B seam(col,row)=%.2f,%.2f" % (name, col_bytes, n_bytes, sc[0], sc[1]))
+        print("%-14s color=%5d B normal=%5d B seam(col,row)@%dx%d=%.2f,%.2f" %
+              (name, col_bytes, n_bytes, len(img[0]), len(img), sc[0], sc[1]))
 
     make_mist()
 
