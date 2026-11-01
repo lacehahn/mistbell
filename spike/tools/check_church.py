@@ -27,8 +27,8 @@ for ob in bpy.data.objects:
 size = [round(hi[i] - lo[i], 2) for i in range(3)]
 print("[CHECK] objects=", len(rows))
 print("[CHECK] triangles=", tri)
-print("[CHECK] bbox X=%.2f Y=%.2f Z=%.2f (目标 34 x 24 x 27)" % (size[0], size[1], size[2]))
-print("[CHECK] bbox_in_range=", abs(size[0] - 34) <= 3 and abs(size[1] - 24) <= 3 and abs(size[2] - 27) <= 3)
+print("[CHECK] bbox X=%.2f Y=%.2f Z=%.2f (目标 28 x 22 x 24.5)" % (size[0], size[1], size[2]))
+print("[CHECK] bbox_in_range=", abs(size[0] - 28) <= 2 and abs(size[1] - 22) <= 2 and abs(size[2] - 24.5) <= 2)
 print("[CHECK] --- 逐物体 ---")
 for name, t, dim in sorted(rows, key=lambda r: -r[1])[:20]:
     print("[CHECK]   %-28s tris=%-5d dim=%s" % (name, t, dim))

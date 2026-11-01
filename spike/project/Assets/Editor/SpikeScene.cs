@@ -308,7 +308,9 @@ public static class SpikeScene
         bool hasPorch = false;
         foreach (var r in renderers)
         {
-            if (!r.name.ToLowerInvariant().Contains("porch")) continue;
+            // v2 结构的 FBX 里门廊叫 Portal_Layer_0..2（旧件叫 Porch）；两者都算门廊。
+            var rendererName = r.name.ToLowerInvariant();
+            if (!rendererName.Contains("porch") && !rendererName.Contains("portal")) continue;
             if (!hasPorch) { porchBounds = r.bounds; hasPorch = true; }
             else porchBounds.Encapsulate(r.bounds);
         }

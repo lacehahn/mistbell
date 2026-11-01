@@ -33,6 +33,12 @@
    - 下一轮（美术迭代，未做）：① 叶团**更小更多**（8 个 28–30 px → 12–16 个 14–20 px），大小方差加大；② 轮廓加**深 V 形缺口**（现在是没有缺口的圆叶团，读成「一排多肉」）；③ 叶斑不要围着团心均匀分布，改成一侧偏重；④ 默认路线切成 sprite（`-bushBlob` 反向开关），让 `art_*.png` 成为 sprite 版
    - 之后同法处理**石块**（现在仍是 3D blob，`art_ground` 里仍是「灰石头」形状对了但材质是实时光照）
 26. **植被调色一致性**（2026-11-02 07:13 记）：sprite 是 unlit，主视角里比受光草地略暗（0.94）不刺眼，但**清晨/逆光时会把灌木和光照脱钩**。要做：`_Color` 按一天中的光照（太阳强度/色温）做一次乘法，或给 `PixelBillboard` 加一个「按主光 NdotL 取 3 档」的廉价模式。⚠️ 待决策，MVP 之前可以先不做（当前只有一种光照状态）
+27. **⚠️ 结构重建之后的新队列（2026-11-02 08:05，按对「揭示镜头」影响排序）**
+   - 27a **雪山氛围（P0，用户六条里的 P0）**：现在三层山是**纯雾色剪影**（`sharp art_runtime top 0.00`），无迎光/背光面、无雪线、无云雾带。目标：迎光面比背光面亮 15–25%、最远层雪线带破碎边、山脚 2 层横向云带。尺子：山腰矩形（避开天空与山脊锯齿）`Lstd ≥ 8`、三层均值差 ≥ 6（队列 22 已定义）
+   - 27b **台地与场景引导（P1，整条缺失）**：教堂现在直接坐在草地上。要做台地 + 挡土墙（含压顶石）+ 正面石阶 + 沿路矮墙/旗帜，形成指向正门的连续动线；验收 `edge`/`horizon` 不被破坏 + 主视角目视「有没有一条引到门口的线」
+   - 27c **拱圈与台阶的几何修整**：拱石段拼装读成齿轮（段间暗缝、每段外凸），台阶是悬空薄板。改法：拱圈做成**单条连续曲面 + 由贴图/法线表达砌块**（不靠几何分段），台阶做成整体盒阶梯（每级与下一级咬合，取消板间缝）；验收 `art_close` 门洞 2 倍放大目视无缝、5 级且无暗缝穿透
+   - 27d **机位按新体量重定**：`heightPct 44.7`（目标 48–55）、`centerX 917.9`（应 950–970）。只动机位参数，不动几何；改完与 27a/27c 的尺子基线一起重记
+   - 27e 队列 25 未清部分照旧：sprite 默认化（`-bushBlob` 反向开关）+ 精灵美术第二轮（叶团更小更多、V 缺口、叶斑偏心）
 
 1. ~~**构图修正**~~ ✅ 已完成（2026-11-01 23:20）：塔顶 y=95px 余量、基座 y=859px、朝圣者 y=921px 入画
 2. ~~**曝光与光照**~~ ✅ 已完成（2026-11-01 23:21）：sun 1.5 / ambient 0.45 / postExposure 0.4 / bloom 0.9 / sun yaw +25（先试 2.2 过曝，回调）
@@ -224,4 +230,11 @@
 | 07:12 | 目视判定（A/B 定胜负） | `vision_analyze` on `sprite_art_runtime` / `sprite_art_ground` / `art_runtime` / `art_ground` | **sprite 明显更像 HD-2D**：主视角里灌木成了深绿小丛，与像素草、教堂同一套语汇，不再是「发白斑点绿石」；`ground_near std` 从 34.25 降到 11.95（不再有光滑大块明暗）。近景仍不合格：叶团太圆太均匀，读成「一排圆叶团绿篱 / 多肉」，缺 V 形缺口，看得出是一张平面 |
 | 07:13 | **决策：植被改用 Y 轴像素 Billboard** | 记入队列 25 | 理由不只目视：blob 的 ground / runtime 两个机位给出 **0.46 vs 0.92** 的亮度比（差 2 倍），单一反照率不可能同时满足 —— 说明外观被几何法线支配；sprite 是 unlit、明暗画进像素，两个机位自然一致（1.03 / 0.94）。下一轮把默认切成 sprite（开关改 `-bushBlob`），并对精灵美术做第二轮迭代 |
 | 07:35 | 收入设定画 v2 + 六条批评 | 用户提供设定画与 P0/P1 清单 | 存 `art-ref/sheet-v2-church-hd2d.jpg`；规格 `art-ref/notes-sheet-v2.md`：**尺寸改 28×22×24.5 m**、主堂十字布局、钟楼净距 ≥3 m、门洞进深 ≥1.2 m + 3 层递进拱、视觉语言统一判据（降到 480×270 看颗粒一致性） |
-| 07:36 | 派发结构重建（Codex） | `codex.sh --image=sheet-v2` | 四条 P0 全部量化：bbox 28±2/22±2/24.5±2、tris≥25000、tower_gap≥3.0、portal_depth≥1.2；产出三视图；进行中 |
+| 07:46 | Codex 第 27 轮（按设定画 v2 重建教堂结构） | `spike/tools/codex.sh --image=art-ref/sheet-v2-church-hd2d.jpg`（日志 `~/.hermes/cache/scratch/codex_church_v3.log`，31k tokens）→ 产物 `spike/blend/gergeti_church.blend` / `spike/export/gergeti_church.fbx`(7.0 MB) / `spike/blend/views/{front,side,top,iso}.png` | Codex 自报 `[CHURCH2] bbox=27.755x22.177x24.500 bbox_ok=True tris=181990 tower_gap=3.435 portal_depth=2.100`；四条硬门槛全过；自行报告「横厅与 +10.5 的钟楼无法留 3 m 净距，故把主堂左移 2 m」 |
+| 07:52 | 人工复跑 Blender（确定性 + 独立拍照） | `blender -b --python spike/tools/build_church.py -- --verify` ×2、`check_church.py`、FBX md5 前后比对 | **与自报逐字一致**：同一行 `[CHURCH2] bbox=27.755x22.177x24.500 tris=181990 tower_gap=3.435 portal_depth=2.100`；`[VERIFY] recessed portal + four through belfry arches ray tests PASS` ×2、`metre/triangle/UV round-trip + four PNG sizes PASS`；FBX md5 `eefb6e48…` 复跑前后不变（确定性）；`check_church` objects=453 tris=181990 bbox 27.76×22.18×24.50 在范围内 |
+| 07:55 | 导入 Unity（撞一处旧假设） | `cp` FBX → `Assets/Art/Church/` → `SpikeScene.Run` | 首次 `InvalidOperationException: Church has no porch renderers`：`LogFrame` 只认名字含 `porch` 的渲染器，而 v2 的 FBX 叫 `Portal_Layer_0..2`。patch 成 `porch|portal` 都算门廊（同一行日志标签不动，历史 grep 继续有效）→ `EXIT=0` |
+| 07:57 | 构图与几何复测 | `logs/212_scene_v2.log` | `church imported tris=181782 bounds=27.76x24.50`、`materials stone=448 roof=5 wood=0`；`frame church top=286.7 bottom=769.0 heightPct=44.7 widthPct=28.3 centerX=917.9`、`porch heightPct=8.3 centerX=883.9`、`pilgrim 14.5`、`pitch 11.8`、`ridge 30.7/32.9/25.0`。**教堂比旧版小 5.1 个百分点**（真高 24.5 vs 26.6），且 `centerX 917.9` 偏左 42 px（annex 把包围盒拉到 −15.5，中轴不在 x=0） |
+| 08:00 | 双平台出包 + 运行时截图 | `SpikeBuild.Run`（`logs/214_build_v2.log`）→ `caffeinate -dimu -t 260 bash spike/tools/capture_runtime.sh` | macOS **133.7 MB** / Windows **115.7 MB**、均 `Succeeded errors=0`、`error CS` 0（+10 MB 来自 7 MB FBX / 182k 面）；三机位全部出图 |
+| 08:02 | 尺子复测 | `frame` / `edge` / `sharp` / `region` | `frame`：sky (167,183,203)、ground_near (56,67,32) **std=34.25**、clipped 0.00% → **默认灌木仍是 blob**（std 与 blob 基线逐位相同，队列 25 的 sprite 默认切换未做）；`edge` mean jump **4.0**、distance-lift +32.8；`sharp`：runtime top 0.00 / middle 3.08 / bottom 4.34，close top 4.20 / middle 8.71 / bottom 4.03，**tilt-shift 比值 0.48/0.46 首次不过门槛 0.45**（近景机位是为旧体量定的，墙填满焦带 → 该比值当前无判读意义，记未过）；`region` close：右墙 (62,55,47) sat .235（背光面）、左立面 (145,142,139)、台阶 (113,99,81) tail .407 |
+| 08:05 | 目视判定（结构重建） | `vision_analyze` on `blend/views/front`、`iso`、`Shots/art_runtime`、`art_close`（含门洞 2 倍放大） | **P0 结构全过**：正视图/等轴图里十字主堂 + 12 边鼓座锥顶 + **右侧独立钟楼**（明显分离、带穿透拱洞）+ 三层递进拱 + 5 级台阶 + 双侧灯座，轮廓终于像高加索山地教堂；主视角从「带烟囱的小房子」变成「穹顶教堂 + 独立钟楼」。**但四个新问题**：① 拱圈由独立拱石段拼成，每段外凸 + 段间暗缝 → 读成**齿轮/锯齿**（阶梯状 jamb 也是）；② 台阶每级是薄板、板间有暗缝，顶层踩面像悬空；③ **完全没有台地/挡土墙/围墙/石阶引导**（`SpikeScene.cs` 里已无 Terrace/RetainingWall，教堂直接坐在草地上）——notes-sheet-v2 的 P1「场景引导」整条缺失；④ 主视角教堂偏小（44.7%）且中轴偏左 42 px |
+
