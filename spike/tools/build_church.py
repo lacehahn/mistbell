@@ -3,7 +3,7 @@
 Run: blender -b --python spike/tools/build_church.py
 Verify saved files: blender -b --python spike/tools/build_church.py -- --verify
 The explicit placement datum takes precedence over the incompatible entrance-origin
-request: nave centre (0,-1), front -Y, entrance floor (0,-6.5,0).
+request: nave centre (0,-1), front -Y, terrace datum (0,-6.5,0); raised entrance floor z=1.4.
 Terrace occupies z=-1.2..0, so the complete height is exactly 26.6m.
 """
 import math
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import bpy
 import bmesh
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
 BLEND = ROOT / 'spike/blend/gergeti_church.blend'
@@ -121,7 +121,7 @@ def bevel(obj, amount=.035):
     activate(obj)
     mod = obj.modifiers.new('Stone_edge_highlights','BEVEL')
     mod.width = amount
-    mod.segments = 2
+    mod.segments = 4
     mod.limit_method = 'ANGLE'
     mod.angle_limit = math.radians(25)
     bpy.ops.object.modifier_apply(modifier=mod.name)
@@ -170,15 +170,46 @@ def openings_check():
         # Outside the circular head must remain solid: catches rectangular cuts.
         start = centre+tangent*(.9*r)+Vector((0,0,height-.05))-normal*(depth/2+.1)
         assert hit(start), (name,'missing shoulder')
-    probe('Nave_Front',(0,-6.2,0),2.6,3.6,(0,1,0),.6)
+    probe('Nave_Front',(0,-6.2,1.4),3,4.2,(0,1,0),.6)
+    probe('Porch_Arch',(0,-8.15,1.4),3.2,4.6,(0,1,0),.3)
+    for x in (-4.8,4.8):
+        probe('Nave_Front',(x,-6.2,5.3),1,2.4,(0,1,0),.6)
+    probe('Gable_Stone',(0,-6.2,13.1),.9,1.6,(0,1,0),.6)
     for name,x in [('Nave_West',-8.7),('Nave_East',8.7)]:
-        for y in (-3.8,-1,1.8):
-            probe(name,(x,y,5),1.2,2.4,(1,0,0),.6)
+        for y in (-3.4,1.4):
+            probe(name,(x,y,5.4),.9,2.2,(1,0,0),.6)
     probe('Nave_Back',(0,4.2,5),1.2,2.4,(0,1,0),.6)
-    for nx,ny in ((0,1),(1,0),(0,-1),(-1,0)):
-        probe('BellTower_8',(10+nx*1.65,-6+ny*1.65,9.4),
-              1.6,3,(nx,ny,0),1.0)
-    print('[VERIFY] 12 real arched openings: 60 clear rays + 12 solid shoulders PASS')
+    for i in range(8):
+        angle=i*math.pi/4
+        nx,ny=math.sin(angle),math.cos(angle)
+        probe('BellTower_8',(10+nx*2.9,-6+ny*2.9,9.4),
+              2.2,3.2,(nx,ny,0),1.6)
+    print('[VERIFY] 8 belfry arches + porch/door/8 windows: clear rays and solid shoulders PASS')
+
+
+def facade_check():
+    objects=[o for o in bpy.context.scene.objects if o.type=='MESH']
+    steps=sorted((o for o in objects if o.name.startswith('Steps_')),key=lambda o:o.name)
+    assert len(steps)==5
+    for i,o in enumerate(steps):
+        lo,hi=bounds([o])
+        assert abs((hi-lo).x-8)<.001
+        assert abs((hi-lo).y-.45)<.001
+        assert abs(hi.z-(i+1)*.28)<.001 and abs(lo.z)<.001
+    lo,hi=bounds([bpy.data.objects['Gable_Stone']])
+    assert abs(hi.z-16)<.12 and abs(lo.z-12.5)<.001
+    porch=[o for o in objects if 'porch' in o.name.lower()]
+    lo,hi=bounds(porch)
+    assert all(abs(a-b)<.001 for a,b in zip(hi-lo,(6,1.8,5.7)))
+    assert abs(hi.z-(1.4+5.5))<.001  # slab extends 0.2m below the entrance floor
+    assert len([o for o in objects if o.name.startswith('Porch_Column')])==2
+    assert len([o for o in objects if 'Window_Wood' in o.name])==7
+    assert bpy.data.objects['BellTower_8'].get('applied_boolean_count')==9
+    for o in objects:
+        uv=o.data.uv_layers.active
+        assert uv and len(uv.data)==len(o.data.loops), o.name
+        assert all(math.isfinite(c) for t in uv.data for c in t.uv), o.name
+    print('[VERIFY] gable + porch 6x1.8x5.5m / two columns + five 0.28x0.45m steps + seven recessed windows + full finite UVs PASS')
 
 
 def prepare():
@@ -258,7 +289,7 @@ def report(objects):
     print('[CHURCH] triangles=%d bbox=%.3fx%.3fx%.3f objects=%d bbox_in_range=%s'
           %(total,*size,len(objects),valid))
     print('[CHURCH] nave_front_tris=%d bell_tower_tris=%d'%(front,bell))
-    assert valid and total>=3000 and front>=120
+    assert valid and 50000 < total < 60000 and front>=120
     assert all(abs(a-b)<.001 for a,b in zip(size,(34,24,26.6))), tuple(size)
     assert set(bpy.data.materials)=={bpy.data.materials[n] for n in ('Stone','Roof','Wood')}
     return total,list(size)
@@ -273,34 +304,64 @@ def build():
     scene.unit_settings.system='METRIC'
     scene.unit_settings.scale_length=1
     scene.unit_settings.length_unit='METERS'
-    scene['origin_convention']='Placement datum: nave (0,-1), front -Y; entrance ground (0,-6.5,0)'
+    scene['origin_convention']='Placement datum: nave (0,-1), front -Y; terrace ground (0,-6.5,0); porch/door floor z=1.4'
     stone=material('Stone','C9A87C')
     roof=material('Roof','A06B4A')
     wood=material('Wood','6B4A32')
     box('Terrace',(0,-1,-.6),(34,24,1.2),stone)
     front=box('Nave_Front',(0,-6.2,6.25),(18,.6,12.5),stone)
-    subtract(front,arch('Door_Cutter',(0,-6.2,-.01),2.6,3.61,1.4))
+    subtract(front,arch('Door_Cutter',(0,-6.2,1.4),3,4.2,1.4))
+    for x in (-4.8,4.8):
+        subtract(front,arch('Front_Window_Cutter',(x,-6.2,5.3),1,2.4,1.4))
+        backing=arch('Front_Window_Wood',(x,-6.2,5.3),1,2.4,.1)
+        backing.data.materials.append(wood)
+    door=arch('Door_Wood',(0,-5.85,1.4),3,4.2,.1)
+    door.data.materials.append(wood)
     back=box('Nave_Back',(0,4.2,6.25),(18,.6,12.5),stone)
     subtract(back,arch('Rear_Window_Cutter',(0,4.2,5),1.2,2.4,1.4))
     for name,x in [('Nave_West',-8.7),('Nave_East',8.7)]:
         wall=box(name,(x,-1,6.25),(.6,9.8,12.5),stone)
-        for y in (-3.8,-1,1.8):
-            subtract(wall,arch('Side_Window_Cutter',(x,y,5),1.2,2.4,1.4,math.pi/2))
-    # Thin low pitched roof: drum begins at wall top, without adding a storey.
-    mesh('Nave_Roof',[(x,y,z) for y in (-6.5,4.5)
-         for x,z in [(-9,12.35),(9,12.35),(0,13.5)]],
-         [(0,1,2),(3,5,4),(0,3,4,1),(1,4,5,2),(2,5,3,0)],roof)
+        for y in (-3.4,1.4):
+            subtract(wall,arch('Side_Window_Cutter',(x,y,5.4),.9,2.2,1.4,math.pi/2))
+            backing=arch('Side_Window_Wood',(x,y,5.4),.9,2.2,.1,math.pi/2)
+            backing.data.materials.append(wood)
+    # Front gable rises 3.5m above the unchanged 12.5m eave.
+    gable=mesh('Gable_Stone',[(x,y,z) for y in (-6.5,-5.9)
+        for x,z in [(-9,12.5),(9,12.5),(0,16)]],
+        [(0,1,2),(3,5,4),(0,3,4,1),(1,4,5,2),(2,5,3,0)],stone)
+    subtract(gable,arch('Gable_Window_Cutter',(0,-6.2,13.1),.9,1.6,1.4))
+    backing=arch('Gable_Window_Wood',(0,-6.2,13.1),.9,1.6,.1)
+    backing.data.materials.append(wood)
+    # Matching roof slopes, 0.25m thick and 0.4m overhang.
+    for side in (-1,1):
+        mesh('Gable_Roof',[(x,y,z) for y in (-6.9,4.9)
+             for x,z in [(0,16),(side*9.4,12.344),(side*9.4,12.594),(0,16.25)]],
+             [(0,1,2,3),(4,7,6,5),(0,4,5,1),(1,5,6,2),(2,6,7,3),(3,7,4,0)],roof)
+    # Porch floor is five 0.28m risers above the existing terrace.
+    box('Porch_Floor',(0,-7.4,1.3),(6,1.8,.2),stone)
+    for x in (-2.525,2.525):
+        box('Porch_Column',(x,-7.95,3.6),(.7,.7,4.4),stone)
+        box('Porch_Capital',(x,-7.95,5.875),(.95,.7,.15),stone)
+    porch=box('Porch_Arch',(0,-8.15,5.275),(6,.3,2.75),stone)
+    subtract(porch,arch('Porch_Cutter',(0,-8.15,1.4),3.2,4.6,1))
+    box('Porch_Roof',(0,-7.4,6.775),(6,1.8,.25),roof)
+    for i in range(5):
+        height=(i+1)*.28
+        box('Steps_%02d'%(i+1),(0,-10.55+i*.45+.225,height/2),
+            (8,.45,height),stone)
     cone('Drum_12',(0,-1),12.5,4.3,4.6,12,stone,4.6)
     cone('Dome_12',(0,-1),16.8,7,4.6,12,roof)
     cross('Dome_Cross',(0,-1),23.8,1.6,stone)
-    tower=cone('BellTower_8',(10,-6),0,13,2,8,stone,2)
-    core=cone('Belfry_Core',(10,-6),9.35,3.85,1.35,8,stone,1.35)
+    tower=cone('BellTower_8',(10,-6),0,13,3.2,8,stone,3.2)
+    core=cone('Belfry_Core',(10,-6),9.35,3.85,2.5,8,stone,2.5)
     subtract(tower,core)
-    for nx,ny in ((0,1),(1,0),(0,-1),(-1,0)):
+    for i in range(8):
+        theta=i*math.pi/4
+        nx,ny=math.sin(theta),math.cos(theta)
         angle=math.atan2(-nx,ny)
-        subtract(tower,arch('Belfry_Cutter',(10+nx*1.65,-6+ny*1.65,9.4),
-                             1.6,3,1.8,angle))
-    cone('BellTower_Roof_8',(10,-6),13,3.2,2,8,roof)
+        subtract(tower,arch('Belfry_Cutter',(10+nx*2.9,-6+ny*2.9,9.4),
+                             2.2,3.2,2,angle))
+    cone('BellTower_Roof_8',(10,-6),13,3.2,3.2,8,roof)
     cross('BellTower_Cross',(10,-6),16.2,1,stone)
     # Annex x=-17..-10, y=-8..6, highest roof point z=5.
     # Hollow walls, single slope roof; high side faces the nave.
@@ -315,17 +376,10 @@ def build():
     mesh('Annex_SingleSlope_Roof',[(x,y,z) for y in (-8,6)
          for x,z in [(-17,4),(-10,4.7),(-10,5),(-17,4.3)]],
          [(0,1,2,3),(4,7,6,5),(0,4,5,1),(1,5,6,2),(2,6,7,3),(3,7,4,0)],roof)
-    # Open door leaves stand against the inner jambs, preserving a visible passage.
-    for side in (-1,1):
-        box('Door_Open_'+str(side),(side*1.25,-5.65,1.25),(.1,1,2.5),wood)
-    for i in range(4):
-        height = .48+i*.24
-        box('Entrance_Step_%02d'%i,(0,-7.8+i*.3,-1.2+height/2),
-            (4.4,.6,height),stone)
     # Stone courses/cornices add readable scale, with real bevelled geometry.
     for z in (1,4.1,8.5,12.1):
         # Front cornice is split around the doorway below its crown.
-        if z<3.6:
+        if z<5.6:
             for side in (-1,1):
                 box('Front_Course', (side*5.25,-6.52,z),(7.3,.12,.16),stone)
         else:
@@ -334,6 +388,7 @@ def build():
     # Rear course at z=4.1 is below the window sill; others clear its head.
     objects=prepare()
     openings_check()
+    facade_check()
     total,size=report(objects)
     scene['triangle_count']=total
     scene['bbox_xyz']=size
@@ -342,10 +397,22 @@ def build():
     bpy.ops.object.select_all(action='DESELECT')
     for o in objects:
         o.select_set(True)
-    bpy.ops.export_scene.fbx(filepath=str(FBX),use_selection=True,object_types={'MESH'},
-        global_scale=1,apply_unit_scale=True,apply_scale_options='FBX_SCALE_UNITS',
-        axis_forward='-Z',axis_up='Y',use_space_transform=True,bake_space_transform=True,
-        mesh_smooth_type='FACE',use_triangles=True,add_leaf_bones=False,bake_anim=False)
+    # Unity normalizes FBX axis metadata, mapping Blender -Y to Unity +Z.
+    # Bake a half-turn for the export only, so the church front faces Unity -Z
+    # and the existing downhill path/cameras. Keep the BLEND datum unchanged.
+    export_turn=Matrix.Rotation(math.pi,4,'Z')
+    for o in objects:
+        o.data.transform(export_turn)
+    try:
+        bpy.ops.export_scene.fbx(filepath=str(FBX),use_selection=True,object_types={'MESH'},
+            global_scale=1,apply_unit_scale=True,apply_scale_options='FBX_SCALE_UNITS',
+            axis_forward='-Z',axis_up='Y',use_space_transform=True,bake_space_transform=True,
+            mesh_smooth_type='FACE',use_custom_props=True,use_triangles=True,
+            add_leaf_bones=False,bake_anim=False)
+    finally:
+        for o in objects:
+            o.data.transform(export_turn.inverted())
+    bpy.context.view_layer.update()
     render_views(objects)
     bpy.context.preferences.filepaths.save_version=0
     bpy.ops.wm.save_as_mainfile(filepath=str(BLEND))
@@ -357,6 +424,7 @@ def verify():
     objects=[o for o in bpy.context.scene.objects if o.type=='MESH']
     expected,size=report(objects)
     openings_check()
+    facade_check()
     assert all(o.matrix_world.is_identity and o.data.uv_layers.active for o in objects)
     for name in ('front','side','top','iso'):
         img=bpy.data.images.load(str(VIEWS/(name+'.png')),check_existing=False)
@@ -370,7 +438,14 @@ def verify():
     assert all(abs(a-b)<.001 for a,b in zip(hi-lo,size))
     assert sum(triangle_count(o) for o in objects)==expected
     assert all(o.data.uv_layers.active for o in objects)
+    # Undo the documented Unity-facing export half-turn for source-space ray tests.
+    for o in objects:
+        activate(o)
+        bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
+        o.data.transform(Matrix.Rotation(-math.pi,4,'Z'))
+    bpy.context.view_layer.update()
     openings_check()
+    facade_check()
     print('[VERIFY] saved BLEND + FBX metre/triangle/UV round-trip + four PNG sizes PASS')
 
 

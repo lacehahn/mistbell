@@ -29,10 +29,16 @@
 3. ~~**程序化像素贴图**~~ ✅ 已完成（2026-11-01 23:46）：`tools/make_textures.py` 出草/石/瓦三套（128×128 可平铺 + 法线图），`SpikeArt.cs` 米制 UV 盒体 + 反照率归一；近景 `art_ground.png` 可见草叶颗粒与石块起伏。**遗留**：石墙偏白、缺脏污/AO 渐变（并入队列 4 的光照一起调）
 4. **雾的分层**：3 层半透明雾片（近/中/远，不同密度与色温）+ 现有线性雾，制造纵深。
    - 附：石墙仍偏"干净"，同批加 SSAO（RendererFeature）+ 环境色调，把「积木感」压下去
-5. **角色动画与朝向**：3 帧循环 + 按相机方位切换 down/up/left/right；顺带修「角色在图集里偏小」的问题（当前屏高仅约 35 px，认不出是人）
+   - 附 2（2026-11-02 新增）：远山三层现在是**平涂纸片**（Unlit 纯色、无雾衰减、白白一道雪线描边），必须与雾同批处理
+5. **角色动画与朝向**：3 帧循环 + 按相机方位切换 down/up/left/right；顺带修「角色在图集里偏小」的问题
+   - 现状（2026-11-02）：角色屏高已达标（14.5%，略高于目标 10–13%），但放大后读起来像「深色木桩」——图集本体只占格子 45% 且配色太暗，必须重画图集而不是继续放大 quad
 6. **带状移轴 RendererFeature**：URP 的 Bokeh DoF 是体积式，不是《歧路旅人》那种上下带状遮罩；需自定义 Pass（排除角色与 UI）
 7. **D03 的 12 张 A/B 截图**（低透视 vs 正交 × 6 机位 × 关/开后期）——`ShotRig` + `-shots` 机制已就绪，直接扩机位表即可
-8. **Codex D1**：用 Blender 建真正的教堂外壳替换体块（走 `spike/tools/codex.sh`）
+8. ~~**Codex D1**：用 Blender 建真正的教堂外壳替换体块~~ ✅ 已完成（2026-11-02 00:31）：`tools/build_church.py` → FBX → `ImportChurch()`
+9. **补材质与坏机位**（小活，下一轮先做）：
+   - 台地/挡土墙是**纯色未贴图**的板（`art_close.png` 下三分之一那片平涂米色），要套 `M_Stone` 的米制 UV
+   - `art_ground` 机位落在挡土墙里（整帧平涂、削顶 48%），要挪到草地上
+   - 教堂正面被阳光直打到近削顶（`art_close` 削顶 23%），与雾/曝光同批回调
 
 ## 日志
 
@@ -86,3 +92,6 @@
 | 00:30 | 重发 Blender v2 | `codex.sh`（自洽尺寸 + 三视图渲染 + 硬门槛） | 门槛：bbox_in_range=True、tris≥3000、nave_front_tris≥120、产出 views/{front,side,top,iso}.png；进行中 |
 | 00:38 | 验收 Codex Blender v2 | 独立 `check_church.py` + 看三视图 | **通过**：bbox 34.00×24.00×26.60（in_range=True）、tris 14864、前墙 944 tris（拱洞真切）；三视图 front/side/top/iso 已出；评：正立面缺拱窗、穹顶偏矮胖、檐口太厚 |
 | 00:40 | 派发 Unity 导入+相机重算 | `codex.sh`（第 5 轮） | 关键计算：相机距角色 20 m（≈150 px）、教堂推至 110 m（约 39% 画面高），解决"真实尺度下角色与教堂比例不可兼得"；硬门槛 35–45% / 120–170 px / tris>5000；进行中 |
+| 00:47 | Blender 教堂接入 Unity（D1 ✅） | `codex.sh` 读 `spike/brief-church-massing.md`；`SpikeScene.ImportChurch()` 载 FBX | 弃用 14 m 盒体，改 Blender 模型（12 边穹顶 + 8 边钟楼 + 台地）；地形扩 200×260、坡 6°、石板路 12 段；机位改**贴地平视** `EyeAt=地面+1.9 m`；新增 `[SPIKE] frame` 自检日志。人工独立复跑：`frame church heightPct=54.4 pitch=13.0 pilgrim=10.8 ridge1/2/3=33.8/35.8/28.1`，EXIT=0、双平台 Build Success（109 MB / 92 MB）、三机位出图。commit `4185326` |
+| 01:00 | 正面立面：山墙/门廊/台阶/窗（D2 ✅） | `codex.sh` 读 `spike/brief-facade.md`（**超时 420 s 被杀**，但文件已落盘） | 人工补验收：`build_church.py -- --verify` VERIFY=0（gable + porch 6×1.8×5.5 + 两柱 + 5 级 0.28×0.45 台阶 + 7 盏内凹窗 + 钟室 8 拱洞，全 UV 有限）；FBX 547 KB→1.8 MB；`frame church heightPct=49.8 widthPct=34.4 pitch=11.8 porch heightPct=10.0 centerX=924`；EXIT=0、Build Success ×2。**教训：codex.sh 只在 420 s 内有效，任务大于此必须拆或改后台轮询** |
+| 01:03 | 目视判定（HD-2D 像不像） | `vision_analyze` on `art_runtime/art_close/art_ground` + `blend/views/front.png` | **形对了**：山墙三角、双柱拱门廊、凹进门洞、立面拱窗、8 拱钟室、台地与台阶，一眼能认出是格鲁吉亚教堂；平视机位（pitch 11.8°）与参考图气质接近。**还差**：① 远山是平涂纸片 + 白描雪线，无雾无纵深；② 台地/挡土墙**纯色未贴图**（近景下三分之一一片平涂米色）；③ `art_ground` 机位掉进挡土墙（整帧平涂、削顶 48%）；④ 正面被阳光直打，`art_close` 削顶 23%；⑤ 角色像深色木桩；⑥ 无雪（目标风格是冬季） |

@@ -51,8 +51,8 @@ public static class SpikeScene
 
         // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
         var church = ImportChurch(stone, roofMat, wood);
-        var cameraRotation = Quaternion.Euler(8f, 6f, 0f);
-        var cameraPosition = new Vector3(0f, 13f, 0f) - cameraRotation * Vector3.forward * 110f;
+        var cameraPosition = EyeAt(28f, -100f);
+        var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
 
         // ---------- 像素角色（Billboard）----------
         var sprite = ImportSprite("Assets/Art/Character/pilgrim.png");
@@ -140,7 +140,14 @@ public static class SpikeScene
         var rig = rigGo.AddComponent<ShotRig>();
 
         rig.poses.Add(ShotRig.Look("art_runtime", cameraPosition, new Vector3(0f, 13f, 0f), Fov));
-        rig.poses.Add(ShotRig.Look("art_close", EyeAt(5f, -22f), new Vector3(0f, 6f, -10f), 36f));
+        // Ground-level close shot: 8.5m before the terrace, 8 degrees upward.
+        // At this 6-degree slope a 3m aim point would require ~12 degrees;
+        // preserve the requested eye position/pitch and aim at the lower doorway.
+        var closeEye = EyeAt(6f, -21.5f);
+        var closeAim = new Vector3(0f, 0f, -7.4f);
+        closeAim.y = closeEye.y + Mathf.Tan(8f * Mathf.Deg2Rad) *
+            Vector2.Distance(new Vector2(closeEye.x, closeEye.z), new Vector2(closeAim.x, closeAim.z));
+        rig.poses.Add(ShotRig.Look("art_close", closeEye, closeAim, 36f));
         var groundPose = ShotRig.Make("art_ground", Vector3.zero, 26f, 7f, 15f, 36f);
         groundPose.position = EyeAt(0f, -14f);
         rig.poses.Add(groundPose);
@@ -255,6 +262,25 @@ public static class SpikeScene
         }
         Debug.Log($"[SPIKE] proj church_top py={(1-high)*H:F1} church_bottom py={(1-low)*H:F1} (占比 {(high-low)*100:F1}%)");
         Debug.Log($"[SPIKE] frame church top={(1-high)*H:F1} bottom={(1-low)*H:F1} heightPct={(high-low)*100:F1} widthPct={(right-left)*100:F1} centerX={(left+right)*.5f*W:F1}");
+        var porchBounds = new Bounds();
+        bool hasPorch = false;
+        foreach (var r in renderers)
+        {
+            if (!r.name.ToLowerInvariant().Contains("porch")) continue;
+            if (!hasPorch) { porchBounds = r.bounds; hasPorch = true; }
+            else porchBounds.Encapsulate(r.bounds);
+        }
+        if (!hasPorch) throw new System.InvalidOperationException("Church has no porch renderers");
+        float porchLeft=float.PositiveInfinity, porchRight=float.NegativeInfinity;
+        float porchLow=float.PositiveInfinity, porchHigh=float.NegativeInfinity;
+        for (int i=0;i<8;i++)
+        {
+            var p=cam.WorldToViewportPoint(porchBounds.center+Vector3.Scale(porchBounds.extents,
+                new Vector3((i&1)==0?-1:1,(i&2)==0?-1:1,(i&4)==0?-1:1)));
+            porchLeft=Mathf.Min(porchLeft,p.x); porchRight=Mathf.Max(porchRight,p.x);
+            porchLow=Mathf.Min(porchLow,p.y); porchHigh=Mathf.Max(porchHigh,p.y);
+        }
+        Debug.Log($"[SPIKE] frame porch heightPct={(porchHigh-porchLow)*100:F1} centerX={(porchLeft+porchRight)*.5f*W:F1}");
         var feet=cam.WorldToViewportPoint(pilgrim); var head=cam.WorldToViewportPoint(pilgrim+Vector3.up*1.75f);
         Debug.Log($"[SPIKE] proj pilgrim px_height={(head.y-feet.y)*H:F1}");
         Debug.Log($"[SPIKE] pilgrim viewport feet={feet} head={head}");
