@@ -42,15 +42,14 @@ public static class SpikeScene
         EditorUtility.SetDirty(roofMat);
         EditorUtility.SetDirty(ground);
 
-        // ---------- 地形：一段上坡（坡面在 z 方向的解析式 y = GroundY(z)）----------
-        var slope = SpikeArt.Box(null, "Slope", new Vector3(200f, 2f, 260f),
-                                 new Vector3(0f, SlopeOriginY(), -30f), ground);
-        slope.transform.localRotation = Quaternion.Euler(-SlopeDeg, 0f, 0f);
+        // ---------- 地形：近景保留 6° 坡面，远景下沉成谷 ----------
+        var terrainCollider = BuildTerrain(ground);
 
         Physics.SyncTransforms();
         BuildMountains();
         BuildMist();
-        BuildStonePath(slope.GetComponent<Collider>(), stone);
+        BuildTerrainEdgeMist();
+        BuildStonePath(terrainCollider, stone);
 
         // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
         var church = ImportChurch(stone, roofMat, wood);
@@ -70,10 +69,12 @@ public static class SpikeScene
         var pilgrimPos = cameraPosition + cameraRotation * Vector3.forward * 20f;
         Physics.SyncTransforms();
         float terrainY = 0f;
-        if (slope.GetComponent<Collider>().Raycast(
+        if (terrainCollider.Raycast(
                 new Ray(new Vector3(pilgrimPos.x, 500f, pilgrimPos.z), Vector3.down),
                 out RaycastHit terrainHit, 1000f))
             terrainY = terrainHit.point.y;
+        else
+            throw new System.InvalidOperationException("Pilgrim ray missed terrain collider");
         pilgrimPos.y = terrainY;
         Debug.Log($"[SPIKE] pilgrim y={pilgrimPos.y:F4} terrain y={terrainY:F4}");
 
@@ -308,6 +309,102 @@ public static class SpikeScene
         return color;
     }
 
+    static float TerrainHeight(float x, float z)
+    {
+        float crestZ = 28f + 10f * Mathf.Sin(x / 38f);
+        float height = z <= crestZ ? GroundY(z)
+            : GroundY(crestZ) - 0.32f * (z - crestZ);
+        return height
+            + 7f * Mathf.Sin(x / 37f + 0.9f)
+                * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(8f, 50f, z))
+            + 3f * Mathf.Sin(x / 13f - 1.1f)
+                * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(8f, 40f, z));
+    }
+
+    static MeshCollider BuildTerrain(Material ground)
+    {
+        const int xCells = 150; // x=-150..150，每 2 m 一列。
+        var rows = new System.Collections.Generic.List<float>();
+        for (int z = -160; z < -100; z += 10) rows.Add(z);
+        for (int z = -100; z <= 100; z += 2) rows.Add(z);
+        for (int z = 110; z <= 560; z += 10) rows.Add(z);
+        int columns = xCells + 1;
+        int triangleCount = xCells * (rows.Count - 1) * 2; // 150 * 152 * 2 = 45600 < 60000。
+        if (triangleCount >= 60000)
+            throw new System.InvalidOperationException("Terrain triangle budget exceeded");
+        var vertices = new Vector3[columns * rows.Count];
+        var uv = new Vector2[vertices.Length];
+        var triangles = new int[triangleCount * 3];
+        for (int row = 0; row < rows.Count; row++)
+        {
+            float z = rows[row];
+            for (int col = 0; col < columns; col++)
+            {
+                float x = -150f + col * 2f;
+                int v = row * columns + col;
+                vertices[v] = new Vector3(x, TerrainHeight(x, z), z);
+                uv[v] = new Vector2(x, z); // 世界米 UV；对象保持单位变换。
+                if (row == rows.Count - 1 || col == xCells) continue;
+                int t = (row * xCells + col) * 6;
+                triangles[t] = v;
+                triangles[t + 1] = v + columns;
+                triangles[t + 2] = v + 1;
+                triangles[t + 3] = v + 1;
+                triangles[t + 4] = v + columns;
+                triangles[t + 5] = v + columns + 1;
+            }
+        }
+        var mesh = new Mesh { name = "Terrain", vertices = vertices, uv = uv, triangles = triangles };
+        mesh.RecalculateNormals();
+        mesh.RecalculateTangents();
+        mesh.RecalculateBounds();
+        // 场景引用持久化网格资产，避免保存/重开场景后丢失程序化网格。
+        const string meshPath = "Assets/Settings/Terrain.asset";
+        AssetDatabase.DeleteAsset(meshPath);
+        AssetDatabase.CreateAsset(mesh, meshPath);
+        var terrain = new GameObject("Terrain");
+        terrain.AddComponent<MeshFilter>().sharedMesh = mesh;
+        terrain.AddComponent<MeshRenderer>().sharedMaterial = ground;
+        var collider = terrain.AddComponent<MeshCollider>();
+        collider.convex = false;
+        collider.sharedMesh = mesh;
+        Debug.Log($"[SPIKE] terrain mesh verts={vertices.Length} tris={triangleCount} extent=x150 z-160..560");
+        // 直接读取 x=0 的网格顶点（含横向起伏），而非简报中的近似参考值。
+        float z100 = vertices[rows.IndexOf(100f) * columns + xCells / 2].y;
+        float z200 = vertices[rows.IndexOf(200f) * columns + xCells / 2].y;
+        float z400 = vertices[rows.IndexOf(400f) * columns + xCells / 2].y;
+        float z560 = vertices[rows.IndexOf(560f) * columns + xCells / 2].y;
+        Debug.Log($"[SPIKE] terrain edge sample z100={z100:F4} z200={z200:F4} z400={z400:F4} z560={z560:F4}");
+        return collider;
+    }
+
+    static void BuildTerrainEdgeMist()
+    {
+        var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "M_Mist_TerrainEdge" };
+        mat.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/mist.png"));
+        var tint = Hex("#A7B7CB");
+        tint.a = 0.45f;
+        mat.SetColor("_BaseColor", tint);
+        mat.SetTextureScale("_BaseMap", new Vector2(6f, 1f));
+        mat.SetFloat("_Surface", 1f);
+        mat.SetFloat("_Blend", 0f);
+        mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+        mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+        mat.SetFloat("_ZWrite", 0f);
+        mat.SetFloat("_Cull", 0f);
+        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        mat.SetOverrideTag("RenderType", "Transparent");
+        mat.renderQueue = (int)RenderQueue.Transparent;
+        // 水平 900×220 m，中心 z=95，落在地形上方 5 m。
+        var vertices = new[] { new Vector3(-450f, 0f, -110f), new Vector3(450f, 0f, -110f),
+                               new Vector3(-450f, 0f, 110f), new Vector3(450f, 0f, 110f) };
+        var band = SaveMountainMesh(null, "Mist_TerrainEdge", vertices, new[] { 0, 2, 1, 1, 2, 3 }, mat);
+        var mesh = band.GetComponent<MeshFilter>().sharedMesh;
+        mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
+        EditorUtility.SetDirty(mesh);
+        band.position = new Vector3(0f, TerrainHeight(0f, 95f) + 5f, 95f);
+    }
+
     // 沿揭示机位视轴横向展开；指定色板与远距薄雾共同形成层次。
     static void BuildMountains()
     {
@@ -438,7 +535,7 @@ public static class SpikeScene
         Debug.Log($"[SPIKE] mist near z=170 y={GroundY(170f) + 6f:F2} far z=330 y={GroundY(330f) + 14f:F2}");
     }
 
-    static void BuildStonePath(Collider terrain, Material stone)
+    static void BuildStonePath(MeshCollider terrainCollider, Material stone)
     {
         // 12 段 S 形石板路，自下坡连接正面台阶。
         var points = new Vector3[13];
@@ -448,7 +545,7 @@ public static class SpikeScene
             points[i] = new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI), 0f, Mathf.Lerp(-70f, -13.25f, t));
         }
         for (int i = 0; i < points.Length; i++)
-            if (terrain.Raycast(new Ray(points[i] + Vector3.up * 100f, Vector3.down),
+            if (terrainCollider.Raycast(new Ray(points[i] + Vector3.up * 100f, Vector3.down),
                                 out RaycastHit hit, 200f))
                 points[i].y = hit.point.y + 0.035f;
         var root = new GameObject("Stone Path").transform;
@@ -458,7 +555,7 @@ public static class SpikeScene
             var segment = SpikeArt.Box(root, "Paving_" + (i + 1),
                 new Vector3(3.2f, 0.07f, delta.magnitude + 0.08f),
                 (points[i] + points[i + 1]) * 0.5f - Vector3.up * 0.035f, stone);
-            segment.transform.rotation = Quaternion.LookRotation(delta, terrain.transform.up);
+            segment.transform.rotation = Quaternion.LookRotation(delta, terrainCollider.transform.up);
         }
         Debug.Log($"[SPIKE] stone path segments={points.Length - 1} material=existing M_Stone (stone_ashlar; no Substance material available)");
     }
@@ -466,9 +563,6 @@ public static class SpikeScene
     /// <summary>坡面解析式：6° 上坡，z=0 处地面 y=0。</summary>
     static float GroundY(float z) => Mathf.Tan(SlopeDeg * Mathf.Deg2Rad) * z;
 
-    // 顶面：y = posY + tan(a)*(z-posZ) + 1/cos(a)。
-    // posZ=-30；半深 130 只控制覆盖范围，不能作为中心偏移代入。
-    static float SlopeOriginY() => GroundY(-30f) - 1f / Mathf.Cos(SlopeDeg * Mathf.Deg2Rad);
     static Vector3 EyeAt(float x, float z) => new Vector3(x, GroundY(z) + 1.9f, z);
 
     static void LogPoint(Camera cam, string label, Vector3 world)
