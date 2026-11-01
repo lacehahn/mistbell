@@ -155,6 +155,34 @@ def make_grass(rnd):
     return img, 1.15
 
 
+# ---------------------------------------------------------------- 灌木叶簇
+def make_bush(rnd):
+    palette = ((26, 40, 23), (42, 58, 32), (58, 76, 43))
+    noise = fbm([16, 8, 4], rnd)
+    img = new_img()
+    for y in range(SZ):
+        for x in range(SZ):
+            img[y][x] = palette[min(2, int(noise[y][x] * 3))]
+    for i in range(260):
+        x, y = rnd.randrange(SZ), rnd.randrange(SZ)
+        w, h = rnd.randint(3, 7), rnd.randint(3, 7)
+        color = palette[2 if i % 2 else 0]
+        if rnd.random() < 0.045:
+            color = (0x8A, 0x96, 0x5A)
+        for dy in range(h):
+            inset = rnd.choice((0, 1)) if dy in (0, h - 1) else 0
+            for dx in range(inset, w - inset):
+                put(img, x + dx, y + dy, color)
+        if i % 5 == 0:
+            put(img, x + w // 2, y, (87, 102, 63))
+    # 所有通道共用同一个逐像素偏移，避免彩色颗粒。
+    for y in range(SZ):
+        for x in range(SZ):
+            jitter = rnd.randint(-10, 10)
+            img[y][x] = tuple(clamp8(c + jitter) for c in img[y][x])
+    return img, 1.2
+
+
 # ---------------------------------------------------------------- 石砌墙面
 def block_widths(rnd, total):
     """随机块宽（4 的倍数）拼满一圈，避免等宽网格那种「瓷砖」观感。"""
@@ -466,6 +494,7 @@ def main():
         ("grass", make_grass, 11),
         ("stone_ashlar", make_stone, 23),
         ("roof_slate", make_roof, 37),
+        ("bush", make_bush, 53),
     ]
     for name, fn, seed in jobs:
         rnd = random.Random(seed)

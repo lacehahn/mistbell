@@ -60,6 +60,7 @@ public static class SpikeScene
         BuildMist();
         BuildTerrainEdgeMist();
         BuildStonePath(terrainCollider, stone);
+        BuildProps(terrainCollider, stone, wood);
 
         // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
         var church = ImportChurch(stone, roofMat, wood);
@@ -595,6 +596,138 @@ public static class SpikeScene
             segment.transform.rotation = Quaternion.LookRotation(delta, terrainCollider.transform.up);
         }
         Debug.Log($"[SPIKE] stone path segments={points.Length - 1} material=existing M_Stone (stone_ashlar; no Substance material available)");
+    }
+
+    static void BuildProps(MeshCollider terrain, Material stone, Material wood)
+    {
+        const string TEX = "Assets/Art/Textures/";
+        var bush = SpikeArt.MakeTextured("Assets/Settings/M_Bush.mat", TEX + "bush.png",
+            TEX + "bush_n.png", 1.0f, Hex("#3A4A24"), 0f, 0.7f);
+        bush.SetColor("_BaseColor", new Color(0.9f, 0.95f, 0.82f, 1f));
+        // 栅栏使用独立副本，以免改变教堂里共用的 wood 材质。
+        var fenceWood = new Material(wood) { name = "M_FenceWood" };
+        fenceWood.SetColor("_BaseColor", Hex("#827767"));
+        const string woodPath = "Assets/Settings/M_FenceWood.mat";
+        AssetDatabase.DeleteAsset(woodPath);
+        AssetDatabase.CreateAsset(fenceWood, woodPath);
+        EditorUtility.SetDirty(bush);
+        EditorUtility.SetDirty(fenceWood);
+        var root = new GameObject("Props").transform;
+        var near = new GameObject("Foreground Props").transform;
+        near.SetParent(root, false);
+        var roadside = new GameObject("Roadside Props").transform;
+        roadside.SetParent(root, false);
+        var rnd = new System.Random(20261102);
+        float Range(float a, float b) => Mathf.Lerp(a, b, (float)rnd.NextDouble());
+        Vector3 Snap(Vector3 p)
+        {
+            if (!terrain.Raycast(new Ray(p + Vector3.up * 100f, Vector3.down), out var hit, 300f))
+                throw new System.InvalidOperationException("Prop ray missed terrain: " + p);
+            return hit.point;
+        }
+        void Bush(Transform parent, string name, Vector3 p, float scale)
+        {
+            p = Snap(p);
+            var clump = new GameObject(name).transform;
+            clump.SetParent(parent, false);
+            clump.position = p;
+            float width = Range(0.9f, 1.4f);
+            float[] widths = { width, 0.7f, 0.45f };
+            float[] heights = { 0.35f, 0.32f, 0.28f };
+            float bottom = -0.08f;
+            for (int j = 0; j < 3; j++)
+            {
+                SpikeArt.Box(clump, "Leaves_" + j,
+                    new Vector3(widths[j], heights[j], widths[j]) * scale,
+                    new Vector3(Range(-0.09f, 0.09f), bottom + heights[j] * scale * 0.5f,
+                        Range(-0.09f, 0.09f)), bush, false, Range(0f, 360f));
+                bottom += heights[j] * scale * 0.87f;
+            }
+        }
+        void Rock(Transform parent, string name, Vector3 p)
+        {
+            p = Snap(p);
+            var size = new Vector3(Range(0.3f, 0.7f), Range(0.3f, 0.7f), Range(0.3f, 0.7f));
+            var rotation = Quaternion.Euler(Range(-8f, 8f), Range(0f, 360f), Range(-10f, 10f));
+            // 旋转后以实际垂直半径决定埋深，仍有约 60% 露在地面上。
+            float extent = (Mathf.Abs((rotation * Vector3.right).y) * size.x
+                + Mathf.Abs((rotation * Vector3.up).y) * size.y
+                + Mathf.Abs((rotation * Vector3.forward).y) * size.z) * 0.5f;
+            var rock = SpikeArt.Box(parent, name, size, p + Vector3.up * extent * 0.2f, stone, false);
+            rock.transform.rotation = rotation;
+        }
+        var eye = EyeAt(28f, -100f);
+        var forward = (new Vector3(0f, 13f, 0f) - eye).normalized;
+        var right = new Vector3(forward.z, 0f, -forward.x).normalized;
+        Vector3 NearPoint(int i, int count)
+        {
+            float f = Mathf.Lerp(9.2f, 16.5f, (i / 2f) / (count / 2f));
+            float l = Range(3.25f, 5.6f) * (i % 2 == 0 ? -1f : 1f);
+            return eye + forward * f + right * l;
+        }
+        for (int i = 0; i < 12; i++) Bush(near, "NearBush_" + i, NearPoint(i, 12), 1f);
+        for (int i = 0; i < 16; i++) Rock(near, "NearRock_" + i, NearPoint(i, 16));
+        Vector3 RoadPoint(float t, float offset)
+        {
+            return new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI) + offset, 0f,
+                Mathf.Lerp(-70f, -13.25f, t));
+        }
+        for (int i = 0; i < 10; i++)
+            Bush(roadside, "RoadBush_" + i, RoadPoint(i / 9f * 0.85f,
+                Range(2.4f, 4.2f) * (i % 2 == 0 ? -1f : 1f)), Range(0.8f, 1.2f));
+        for (int i = 0; i < 14; i++)
+            Rock(roadside, "RoadRock_" + i, RoadPoint(i / 13f * 0.85f,
+                Range(2.4f, 4.2f) * (i % 2 == 0 ? 1f : -1f)));
+        int posts = 0, rails = 0;
+        Vector3 previous = Vector3.zero;
+        // 包含两端，32 段的 z 间隔 1.5625m，沿弯路实际柱距约 1.6m。
+        for (int i = 0; i <= 32; i++)
+        {
+            float z = Mathf.Lerp(-66f, -16f, i / 32f);
+            Vector3 p = Snap(RoadPoint((z + 70f) / 56.75f, -2.6f));
+            SpikeArt.Box(roadside, "FencePost_" + posts++, new Vector3(0.12f, 0.95f, 0.12f),
+                p + Vector3.up * (0.475f - 0.08f), fenceWood);
+            if (i > 0)
+                foreach (float height in new[] { 0.42f, 0.74f })
+                {
+                    Vector3 a = previous + Vector3.up * height, b = p + Vector3.up * height;
+                    var delta = b - a;
+                    var rail = SpikeArt.Box(roadside, "FenceRail_" + rails++,
+                        new Vector3(0.08f, 0.06f, delta.magnitude), (a + b) * 0.5f, fenceWood);
+                    rail.transform.rotation = Quaternion.LookRotation(delta);
+                }
+            previous = p;
+        }
+        Debug.Log($"[SPIKE] props bushes=22 rocks=30 fencePosts={posts} fenceRails={rails} seed=20261102");
+        // 用独立投影计算诊断，不创建或改动任何相机。
+        var inverseView = Quaternion.Inverse(Quaternion.LookRotation(forward));
+        float focal = H * 0.5f / Mathf.Tan(Fov * Mathf.Deg2Rad * 0.5f);
+        float x0 = W, y0 = H, x1 = 0f, y1 = 0f;
+        int visible = 0;
+        foreach (Transform prop in near)
+        {
+            float left = float.PositiveInfinity, top = float.PositiveInfinity;
+            float rightPx = float.NegativeInfinity, bottom = float.NegativeInfinity;
+            foreach (var renderer in prop.GetComponentsInChildren<Renderer>())
+            {
+                var bounds = renderer.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    var world = bounds.center + Vector3.Scale(bounds.extents,
+                        new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    var v = inverseView * (world - eye);
+                    float x = W * 0.5f + focal * v.x / v.z;
+                    float y = H * 0.5f - focal * v.y / v.z;
+                    left = Mathf.Min(left, x); rightPx = Mathf.Max(rightPx, x);
+                    top = Mathf.Min(top, y); bottom = Mathf.Max(bottom, y);
+                }
+            }
+            if (rightPx < 0 || left > W || bottom < 918 || top > H) continue;
+            visible++;
+            x0 = Mathf.Min(x0, Mathf.Max(0, left)); y0 = Mathf.Min(y0, Mathf.Max(0, top));
+            x1 = Mathf.Max(x1, Mathf.Min(W, rightPx)); y1 = Mathf.Max(y1, Mathf.Min(H, bottom));
+        }
+        Debug.Log($"[SPIKE] propScreen nearMinY={y0:F1} union=({x0:F1},{y0:F1},{x1:F1},{y1:F1}) visible={visible} bandIntersection=({x0:F1},{Mathf.Max(918f,y0):F1},{x1:F1},{y1:F1})");
     }
 
     /// <summary>坡面解析式：6° 上坡，z=0 处地面 y=0。</summary>
