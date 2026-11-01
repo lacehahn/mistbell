@@ -1,0 +1,33 @@
+# Unity/Blender 工程与资产（可抛弃的 spike 产物）
+spike/project/
+spike/export/
+spike/blend/*.blend1
+
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+*.csproj
+*.sln
+*.unityproj
+*.user
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+sysinfo.txt
+*.apk
+*.aab
+*.unitypackage
+
+# 大二进制走 LFS（见 docs/04-tech-stack.md §7），此处只挡临时文件
+*.fbx.meta.bak
+*.tmp
+.DS_Store
