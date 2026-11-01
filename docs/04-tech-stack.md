@@ -2,13 +2,16 @@
 
 > 状态：实现前建议，不创建工程、代码、数据文件或依赖。本轮只定义将来的实现与验收方式。
 > 假设：2 人小团队，其中 1 人能承担 C#、基础着色器与渲染调试，另 1 人承担 Blender／像素资产与资料；实际能力见 D04。
+> ⚠️ **能力修正（2026-11-01）**：团队**当前无游戏引擎经验**（D01 定稿时确认）。本文件中所有 C#／着色器／渲染调试工时，都是"有经验者"的估算，不能直接当作新手的工期；D04 的 8 周 / 320 人时须在 M1 前按实际学习曲线重估，或先执行下面的 3 天管线 spike 再定排期。
 > 引擎能力与授权资料核查于 2026-11-01；性能、工时、硬件与资源数均为本项目设计预算，尚未实测。
 
 ## 1. 明确推荐：Unity 6 LTS + URP
 
 推荐 **Unity 6 LTS、URP 的 3D Renderer、单台场景相机**。角色作为 3D 空间中的 Billboard 像素贴片，与教堂共用深度和光雾；不用 2D Renderer 再拼接一套独立 3D 画面。理由是本项目的主要难点为受控相机、建筑近读、混合遮挡和外部文本，并非大规模动态光照。
 
-⚠️ 待决策 D01：推荐进入实现时从 Unity 6.3 LTS 的稳定补丁开始，锁定编辑器与配套 URP 的精确版本；本文部分能力依据 Unity 6.0 手册，不假设自定义渲染接口跨版本完全一致。备选 Godot 4 可减少引擎许可支出，但需重做导入与后期验证；Unreal 5 更方便搭体积光雾，但会增加本项目像素角色、打包与性能管理的工作量。先用 M1 验证同一镜头，再定版本，不并行制作三个完整原型。
+✅ **已定（2026-11-01）D01**：引擎与版本锁定为 **Unity 6.3 LTS（6000.3）**，补丁 **6000.3.27f1**（2026-10-20，LTS 支持至 2027-12-04），渲染管线 **URP 3D Renderer**。定稿理由：①团队无引擎经验，决定产能的是生态、教程密度与 Windows 打包成熟度，Unity 在这三项上优势最大；②本项目的技术难点是受控相机、建筑近读、混合遮挡与外部文本驱动，属于工程活而非光照活，Unity 的 C#／UI／数据读取链路最短；③UE 的体积光雾优势改用「3 层雾片 + 局部光雾缓冲」降级方案替代，M1 只给最多 8 人时验证，超时即降级、不切引擎。Godot 4 与 Unreal 5 作为记录保留，不再并行做原型。
+
+⚠️ 版本纪律：Unity 6.0 LTS 已于 2026-10 EOL，**凡引用 6.0 手册的接口结论一律按 6000.3 手册复核**后才可开工；Unity 6.4–6.6 属于 Supported Update 流（生命期只到下个版本发布），不得用于生产分支。升级只允许发生在里程碑边界，并重跑混合遮挡与揭示镜头的回归。
 
 ### 引擎比较
 
@@ -23,9 +26,9 @@
 | 团队能力 | 若具备 C# 与基础图形调试，最易把文本、相机、UI 与渲染接在一起 | 若已有 GDScript／Godot 经验可缩短上手，但不能省去渲染验证 | 若已有 Blueprint／材质与 UE 制作经验可降低成本；本轮不假定已具备 |
 | macOS 开发／Windows 验证 | Metal 开发，Windows DX11 独立验证；平台 shader 与压缩需分别检查 | 需验证选用渲染器在 Mac 和 Windows 上的一致性，不能从 Compatibility 推断 Forward+ | Mac 可开发，但需单独核对渲染特性与目标硬件；不能用 Windows 高端效果推定 Mac 试玩能力 |
 | 发行成本 | 符合 Personal 条件时引擎许可可为 0；超过门槛需付订阅；Runtime Fee 已取消 | MIT，可商业发行、无引擎收入分成；需保留许可与第三方声明 | 标准游戏授权通常按单产品终身总收入超过 100 万美元的部分计 5% 版税，另有排除／优惠规则 |
-| 本项目结论 | **首选**；接受受限雾方案以换取可控产能 | **第一备选**；适合已有相关经验或更看重许可可控性 | **暂不选**；其强项不足以抵消本规模项目的集成成本 |
+| 本项目结论 | **已选**（D01 已定）：以受限雾方案换取可控产能、生态与打包成熟度 | 记录保留：适合已有 GDScript／Godot 经验、或把许可确定性放在第一位的团队 | 记录保留：**《歧路旅人》本体即由 Acquire 以 UE4 开发（峰值 6 名程序）**，说明该风格的光雾栈确实在 UE 上最顺；但像素清晰度、抗锯齿与打包成本对本规模不利，故不选 |
 
-能力依据：[Unity 渲染管线功能表](https://docs.unity3d.com/6000.0/Documentation/Manual/render-pipelines-feature-comparison.html)、[Godot Sprite3D](https://docs.godotengine.org/en/stable/classes/class_sprite3d.html)、[Godot 体积雾](https://docs.godotengine.org/en/stable/tutorials/3d/volumetric_fog.html)、[Godot Compositor](https://docs.godotengine.org/en/stable/tutorials/rendering/compositor.html)、[Unreal Paper 2D](https://dev.epicgames.com/documentation/unreal-engine/paper-2d-in-unreal-engine?application_version=5.2)、[Unreal 体积雾](https://dev.epicgames.com/documentation/en-us/unreal-engine/volumetric-fog-in-unreal-engine)。Godot 体积雾限 Forward+，Compositor 的渲染器支持范围也有限；这影响低配降级，不能统一写成「所有模式都有」。
+能力依据：[Unity 6.3 渲染管线功能表](https://docs.unity3d.com/6000.3/Documentation/Manual/render-pipelines-feature-comparison.html)、[Godot Sprite3D](https://docs.godotengine.org/en/stable/classes/class_sprite3d.html)、[Godot 体积雾](https://docs.godotengine.org/en/stable/tutorials/3d/volumetric_fog.html)、[Godot Compositor](https://docs.godotengine.org/en/stable/tutorials/rendering/compositor.html)、[Unreal Paper 2D](https://dev.epicgames.com/documentation/unreal-engine/paper-2d-in-unreal-engine?application_version=5.2)、[Unreal 体积雾](https://dev.epicgames.com/documentation/en-us/unreal-engine/volumetric-fog-in-unreal-engine)、[Acquire 访谈：歧路旅人的 HD-2D 与 UE4 管线](https://www.unrealengine.com/spotlights/octopath-traveler-s-hd-2d-art-style-and-story-make-for-a-jrpg-dream-come-true)。Godot 体积雾限 Forward+，Compositor 的渲染器支持范围也有限；这影响低配降级，不能统一写成「所有模式都有」。参考作的实际管线（UE4）只用于解释风格成因，不构成本项目选型依据。
 
 ### 授权与成本口径
 
@@ -34,6 +37,18 @@
 - Unreal 的比较采用标准游戏版税模式，不把非游戏 seat 价格套入本项目；具体收入排除与优惠以发行时条款核对。[Unreal 授权页面](https://www.unrealengine.com/license)。
 
 以上只用于技术预算比较，尚未发生采购。商店、签名、素材、音频、字体与测试设备费用不包含在「引擎许可费」里。D01 在 M1 前核对适用授权；不在本文写死付费订阅单价，以免过期数字成为预算承诺。
+
+### D01 落地前的 3 天管线 spike（团队无引擎经验，必做）
+
+目的：在写任何游戏逻辑前，用一个**可抛弃**的最小工程证明「Blender → Unity → 目标包」这条链路真的成立。工程不进主仓库，3 天后连测试结论一起归档，只保留记录。
+
+| 天 | 验证项 | 通过标准 | 不通时的退路 |
+| --- | --- | --- | --- |
+| 1 | Blender 教堂外壳（约 2 万面简化体）→ FBX → URP：单位／朝向／缩放、材质映射到 URP Lit、法线与 UV | Unity 内比例与 Blender 一致（1 m = 1 unit），石材无黑面／翻面；同一套材质设置能在 6 小时内第二次复现 | 改用 Unity 的 glTF 导入包；或在 Blender 内烘顶点色／顶点 AO 兜底 |
+| 2 | 光照烘焙（Lightmap）＋混合遮挡：Billboard 像素角色与 3D 建筑的前后关系 | 用 Generate Lightmap UVs 烘焙无接缝、无漏光；角色走到石柱后与门内时被正确遮挡，不出现整片贴片穿墙 | 改实时阴影＋雾层伪装纵深；或在 D03 里改正交投影以降低遮挡压力 |
+| 3 | 两个自定义 Pass：带状移轴模糊、局部光雾缓冲（仅覆盖揭示方向约 80 m） | 1080p 下两者叠加仍 ≥ 60 fps（M1 参考机）；雾边无硬边、不污染 UI／文字层 | 降级为全屏 tilt-shift ＋ 3 层雾片；或把雾推后到 M3 再试 |
+
+预算：3 天 × 2 人 = **48 人时**。这 48 人时不包含在 M1 的 80 人时里——要么把 M1 从 2 周延到 2.5 周，要么从美术／内容的 M1 任务里挪。spike 的结论直接决定 D04 的 8 周 / 320 人时能否成立；**结论未出之前不要开始批量建模，也不要写游戏逻辑**。
 
 ## 2. HD-2D 的实现路径
 
