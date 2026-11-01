@@ -3,7 +3,7 @@
 > 规则：每完成一步就在「日志」里追加一行（时间 | 步骤 | 命令/产物 | 结果）。任何新会话先读本文件末尾 3 条 + `git log --oneline -5` 再动手。
 > Codex 限流时：在日志记「Codex 限额耗尽，等待重置」，本步跳过，下一次调度再试；**不要**因此中断其它不依赖 Codex 的工作。
 
-## 当前状态（最后更新：2026-11-02 05:24）
+## 当前状态（最后更新：2026-11-02 06:25）
 
 - 环境：Unity Hub 3.22.5 / Unity 6000.3.27f2 / Windows Mono 模块 / macOS 目标内置 / Blender 5.2.3 LTS / Unity Personal 已激活
 - 闭环已验证：
@@ -14,7 +14,7 @@
 - **⏰ 截图必须预热 1.0 s**：只等 3 帧会抓到窗口「合成/淡入中」的帧，整帧均一压暗（连天空都暗），同一份构建两次亮度差近 2 倍（sky 均值 139 / 75 / 100）。改成 `WaitForSecondsRealtime(1.0f)` 后三次连拍 sky 均值完全一致 (166,182,202)。
 - 场景几何约定（后续沿用）：坡地 4°、`GroundY(z)=tan4°·z`（z=0 处 y=0）；教堂整体抬高 `ChurchBaseY=0.6`；**门廊朝 -z（来路侧）**，玩家自下坡上来看到的是正立面。
 - **✅ 截图现在是可复现的测量工具**：`tools/frame.py`（原 pngstat.py）可直接对 PNG 求区域均值/削顶率，曝光改动用它验，不要只靠肉眼。
-- **尺子清单**（都不许为了过门槛而改）：`frame.py` 曝光/过曝 · `edge.py` 地平线硬边（单行跳变 + 距离提亮）· `horizon.py` 地平线跨度 · `sharp.py` 三带高频（移轴）· `texstat.py` 贴图统计 · `region.py` 画面矩形均值（含 `p5/p50/tail`：判凹陷压暗而非整体变暗）· `probe_col.py` 逐列 RGB · `seam.py` 贴图**真实尺寸**环绕接缝 · `patchwork.py` 块级明度/色度离散（判「迷彩拼布」；**开了 SSAO 后 `blockSpread` 会被 AO 梯度污染，必须与 `neighborDiff` 一起读**）
+- **尺子清单**（都不许为了过门槛而改）：`frame.py` 曝光/过曝 · `edge.py` 地平线硬边（单行跳变 + 距离提亮）· `horizon.py` 地平线跨度 · `sharp.py` 三带高频（移轴）· `texstat.py` 贴图统计 · `region.py` 画面矩形均值（含 `p5/p50/tail`：判凹陷压暗而非整体变暗）· `probe_col.py` 逐列 RGB · `seam.py` 贴图**真实尺寸**环绕接缝 · `patchwork.py` 块级明度/色度离散（判「迷彩拼布」；**开了 SSAO 后 `blockSpread` 会被 AO 梯度污染，必须与 `neighborDiff` 一起读**）· `foliage.py` 灌木/草地亮度比（**矩形必须落在灌木本体内部，先用掩码验一遍**）· `bushmask.py` 反照率归零差分 → 灌木掩码 → 量「本体」而不是矩形（诊断协议，见队列 23）
 - **SSAO 约定（2026-11-02 04:26 起）**：参数只写在 `SpikeURP.SSAO()`（`Intensity 2.2 / DirectLightingStrength 0.85 / Radius 0.5 m / Source=Depth`），资产 `Assets/Settings/SSAOFeature.asset` 是独立 `.asset`、被 `.gitignore` 忽略，**改参数必须改代码再跑一次 `SSAO`**。它只能压暗几何凹角（台阶/门廊/拱洞/墙-台地交界），**压不动贴图砖缝**。差分验证：`.asset` 里 `m_Active: 0` → 出包 → 截图 → 对比，是判断「AO 到底有没有生效」的唯一可靠办法。
 - 材质约定（后续沿用）：
   - 所有网格 UV 以**米**为单位，材质 `_BaseMap` tiling = `1/每张贴图覆盖的米数`（草 3.2 m、**石 4.8 m**、瓦 2.4 m）；**不要**用 `PrimitiveType.Cube`（每面 0..1 UV，不同立面的纹理密度会差 1.4 倍）。石材 tiling 必须写在 `SpikeScene.cs` 里（`.mat` 被 `.gitignore` 忽略，写进 `.mat` 等于不可复现）。
@@ -75,11 +75,19 @@
 20. ✅ **灌木/石块去掉「纸箱塔」造型**（2026-11-02 05:24 完成）：`SpikeArt.Blob()` —— 二十面体 subdiv1（42 顶点 / 80 面）、确定性哈希沿法线位移 ±22%（石块 ±32% + 硬棱）、UV 按主法线轴以米计、12 个网格分档复用；灌木改为两团错位叠合 + `M_Bush`/`M_BushLight` 两档配色。
    - 实测：`blobs meshes=12 verts=42 tris=80 bushVariants=8`、`sharp runtime bottom 3.43→3.84`、前景两矩形 `Lstd 23.6/17.5→24.3/25.9`、`sky/clipped/heightPct/pitch` 未动、双平台 Succeeded、`props`/`blobs` 两行确定性一致
    - 目视：方盒感消失，接地有软阴影；**但灌木读成「绿色石头」**（表面光滑有光泽、饱和度高于草地、轮廓无叶簇破口）→ 队列 21
-21. **灌木的叶簇破轮廓 + 去塑感**（2026-11-02 05:24 目视新增，优先）：现在 blob 表面是光滑的绿色塑料块。三件事一起做：
-   (a) 主体 blob 周围加 5–8 片小 blob（0.18–0.35 m，位移 ±40%，随机 yaw）做出「叶团」断口与外轮廓毛边；
-   (b) `bush.png` 的叶簇对比加强（亮部/暗部差 ≥ 2 倍、加 1 px 枝条与透光缝隙），并让 `_BaseColor` 往草地色板靠（现在比草地更饱和更亮，显得浮）；
-   (c) 材质 smoothness 0.7→0.35（现在有高光，像塑料）。
-   验收：`sharp art_runtime bottom ≥ 3.8`、前景 `Lstd ≥ 25`、`region` 前景矩形 `sat ≤ 0.60`（现在 0.580/0.621，要往 0.55 落）、其余守卫全守住；目视为准——`art_ground` 里灌木轮廓有毛边、不再是光泽绿石。
+21. ⚠️ **灌木的叶簇破轮廓 + 去塑感** —— 部分完成（2026-11-02 06:15，Codex 第 23 轮，`spike/brief-props3.md`）
+   - (a) ✅ `Bush()` 加 5–8 片叶簇（`Blob(size, displace 0.40, subdiv 1)` 三种尺寸 × 2 变体、6 个缓存网格、独立 RNG `9200+i` 不动主体抽样）：`[SPIKE] bushLeaves total=141 min=5 max=8 meshes=6 height=[0.842,1.136]`
+   - (b) ✅ `bush.png` 重写：`meanRGB(42,58,32)→(58,73,43)`、`sat 0.445→0.407`、**`edge% 9.4→18.4`**（草地 17.7）、`coarseStd 2.03→3.15`、`seam 1.14/0.83`；5 档调色板 + 520 个月牙叶簇 + 1 px 枝条 + 透光缝
+   - (c) ⚠️ 简报里写的「`smoothness 0.7→0.35`」**是我读错参数位**：`MakeTextured(path, albedo, normal, metersPerTile, targetAlbedo, smoothness, bumpScale)` 的第 6 参才是 smoothness，实际传的是 `0f, 0.7f` → **smoothness 一直是 0、bumpScale 是 0.7**。本轮改为：`_SpecularHighlights=0` + `_SPECULARHIGHLIGHTS_OFF` 进 `m_ValidKeywords`（真·关直射高光）、`bumpScale 0.7→0.35`、反照率按实测推导（起点线性 `(0.10,0.14,0.06)` → 实测比 1.80 → ×0.5 唯一校正 → 终值 tint `(1.045,0.962,1.113)`）
+   - 守卫未破：`sky(167,183,203)`、`clipped 0.00%`、`heightPct 49.8 / pitch 11.8 / porch 924.6 / pilgrim y=terrain y`、`region` 前景 `sat 0.580/0.621→0.524/0.538`、`sharp runtime bottom 3.84→4.50`、六张保护贴图 `MD5_OK`、双平台 `Succeeded / error CS 0`、两次场景日志逐字相同
+   - ❌ 未过：`sharp art_ground middle 12.21→12.10`（门槛 13.5，等于没动）；**目视仍是「长苔的绿石头」** → 队列 23
+23. **灌木为什么还像石头：法线/着色频率，不是高光**（2026-11-02 06:20 探针实证，优先）
+   - **探针**：`spike/scratch/probe_black.py 0` 把 `M_Bush`/`M_BushLight` 的 `_BaseColor` 置 0 → `SpikeBuild.Run`（不重跑场景）→ `caffeinate capture_runtime.sh` → 用 `tools/bushmask.py`（黑白差分取掩码，93815 px = 画面的 4.52%）量掩码内残余：**黑反照率下残余只有 luma 1.7（占 3%）**。→ **specular + 间接镜面合计 ≤3%**，「油亮抛光感」与高光无关，前两轮方向都错了。
+   - **掩码内的真值**：`mean(59,64,42) luma 61.1 sat 0.337 p5 21.8 p50 51.1 p95 132.7 clipped **0.00%**`；草地 luma 77.1 → **灌木比草地暗（0.79）**。上一版报的「灌木比草亮 57%、clipped 0.99%」是**矩形污染的假数**（`(330,430,500,560)` 里约八成像素是背景草与石板路）。
+   - **真因三件**：① `Blob(subdiv 1)` 只有 42 顶点 + 平滑法线 → 表面法线是一条连续渐变，任何贴图都压不住「大块缓慢明暗」；② 法线图来自低频高度场，波长 20–30 cm，主视角 143 px/m 下就是 30–40 px 的宽波 → 读成流纹；③ 141 片叶簇水平偏移只有 `0.42–0.62 × 主体半径`，全部**埋在主体轮廓内**，只贡献表面疙瘩、不贡献轮廓断口。
+   - 下一轮（都要做）：(a) 叶簇外推 `0.62–0.92 × 半径`、尺寸 0.25–0.42 m，每丛至少 3 片露出 ≥40% 体积；(b) 主体 `subdiv 1→2`（162 顶点/320 面）+ `displace 0.22→0.34`；(c) 法线图改 256² 叶簇高度场 + `bumpScale 0.35→0.9`；
+     验收用掩码协议（`bushmask.py` 的 `bush-only` 行）：`clipped ≤0.05%`、`p95/p50 ≥ 2.4`、`sharp art_ground middle ≥ 13.5`，目视轮廓断口 ≥4 处。
+24. ⚠️ **待决策：植被是否改「像素叶片卡片」**（2026-11-02 06:22）：HD-2D 的植被在原作里是 alpha-clip 的像素卡片，不是 3D blob。卡片路线：每丛 2–3 张交叉 quad + `bush.png` 的叶簇 alpha、`PixelBillboard.shader` 已有 alpha clip 可改 → 轮廓天然是像素毛边，与角色像素密度一致。代价：要处理卡片阴影（`alpha clips shadow`）与相机朝向偏转时卡片穿插；blob 路线则永远在近景读成石头。→ 队列 23 做完再做 A/B 对比再定。
 22. **远山体积**（2026-11-02 05:24 目视新增，次优先）：三层山现在是**纯雾色剪影**，没有明暗面、没有雪、层间距靠颜色硬凑。要做：山体正面叠一层方向光渐变（迎光面比背光面亮 15–25%）、雪线只在最高层出现且带破碎边缘、层与层之间用轻微色温差（近层偏冷青、远层偏紫灰）。验收用新尺子判「山体内部有没有明暗」：山体矩形内 `Lstd` 从当前 ~3 提到 ≥ 8，且三层均值差 ≥ 6。
    - 基线（05:26 量，`region.py art_runtime`）：左山 `40,340,520,700 → mean(160,176,195) sat 0.183 Lstd 10.0`、右山 `1520,340,1900,700 → (151,168,184) Lstd 7.7`——**这两个 Lstd 主要是山脊与天空之间的锯齿边贡献的，山体内部几乎无明暗**；量「内部」时要把矩形往下压到山腰（避免框进天空）。
 
@@ -188,3 +196,9 @@
 | 05:20 | 派发 Codex 第 22 轮（队列 20） | `spike/brief-props2.md` → `codex.sh`（日志 `logs/126_codex_blob.log`，42.0k tokens） | 任务：`SpikeArt.Blob()`（二十面体 subdiv1 = 42 顶点/80 面、确定性哈希沿法线位移、UV 以米计）替换灌木与石块的方盒堆；栅栏与落点不动；灌木配色分两档 `M_Bush`/`M_BushLight` |
 | 05:22 | 人工复跑（8 条门槛） | `sharp` / `region` / `frame` / `164_scene.log` / `166_build.log` | **与自报逐项一致**：`blobs meshes=12 verts=42 tris=80 bushVariants=8`；`sharp runtime bottom 3.43→3.84`、`ground middle 11.02→12.21`；前景两矩形 `Lstd 23.6/17.5→24.3/25.9`；`sky(167,183,203)`、`clipped 0.01%`、`heightPct 49.8 / pitch 11.8 / pilgrim y=terrain y` 未动；macOS 123.1 MB / Windows 105.1 MB、`error CS` 0 |
 | 05:24 | 目视判定（队列 20 部分通过） | `vision_analyze` on `art_ground` / `art_runtime` | **「纸箱塔」消失**：灌木成了两团错位叠合的凹凸体块，接地有软阴影，主视角左右两组前景 + 左侧栅栏 + 石板路形成完整前后景层次；`art_close` 三带数字仍未变（机位里没有物件）。**但灌木读成「绿色石头」**：表面光滑有光泽、饱和度高于草地、轮廓无叶簇破口 → 队列 21 |
+| 05:40 | 量灌木基线 + 新尺子 `tools/foliage.py` | `region.py` 采样 6 个矩形 + 新建 `foliage.py`（灌木/草地亮度比、clipped、Lstd） | 基线：`art_ground` bush `(330,430,500,560)` luma **121.3** sat 0.459 Lstd 43.2 **clipped 0.99%**、草地 luma 77.1 → **比值 1.57**；`art_runtime` 比值 1.07、clipped 0.17%。同时发现简报里「smoothness 0.7」是读错参数位：`MakeTextured` 第 6 参才是 smoothness，实际传的是 `0f, 0.7f` |
+| 05:45 | 派发 Codex 第 23 轮（队列 21） | `spike/brief-props3.md` → `codex.sh`（日志 `logs/168_codex_bush.log`，56.3k tokens） | 任务：叶簇 5–8 片 + `bush.png` 重写（5 档调色板/月牙叶簇/枝条/透光缝）+ 关直射高光 + 反照率按实测推导；14 条门槛 |
+| 06:05 | 人工复跑（13 条数字门槛） | `foliage` / `texstat` / `seam` / `sharp` / `region` / `frame` / `170,171_scene` / `172_build` / md5 | **与 Codex 自报逐项一致**：`bushLeaves total=141 min=5 max=8 meshes=6 height=[0.842,1.136]`；`texstat bush sat 0.407 edge% 18.4 coarseStd 3.15`（原 0.445 / 9.4 / 2.03）；`seam 1.14/0.83`；`sharp runtime bottom 3.84→4.50 middle 4.58→4.14`、`ground middle 12.21→12.10`；`region` 前景 `sat 0.580/0.621→0.524/0.538`；`sky/clipped/heightPct 49.8/pitch 11.8/porch 924.6` 全未动；`MD5_OK`；双平台 Succeeded / error CS 0；两次场景日志逐字相同。`M_Bush.mat` 的 `m_ValidKeywords` 确认含 `_SPECULARHIGHLIGHTS_OFF` |
+| 06:10 | **反照率归零差分探针**（推翻前两轮根因） | `spike/scratch/probe_black.py 0` → `SpikeBuild.Run`（`logs/174_build_blackbush.log`）→ `caffeinate capture_runtime.sh` → 还原后重出（`logs/175_build_restore.log`） | 黑反照率下灌木像素残余 **luma 1.7（占 3%）** → **直射高光 + 间接镜面合计 ≤3%，「油亮抛光感」与高光无关**。旁证：`_BaseColor` 置 0 后 `art_runtime` 灌木矩形 79.0→20.3，而 `art_ground` 矩形只 101.2→60.6（说明那个矩形里大半是背景） |
+| 06:20 | 新尺子 `tools/bushmask.py`（掩码协议） | 黑白差分取灌木掩码 + 积分图找干净矩形 | 掩码 93815 px（4.52%）：**灌木本体 `mean(59,64,42) luma 61.1 sat 0.337 p5 21.8 p50 51.1 p95 132.7 clipped 0.00%`** → **灌木比草地暗（0.79）**、**本体零削顶**；此前报的「亮 57% / clipped 0.99%」是**矩形污染的假数**（旧矩形约八成是背景草与石板路）。`foliage.py` 的 `art_ground` 矩形改为掩码验证过的 `(360,540,780,620)`（比值 **0.84**） |
+| 06:24 | 目视判定（队列 21 部分通过） | `vision_analyze` on `art_ground` / `art_runtime` | 主视角灌木从「单个油亮绿石」变成「几团凹凸的橄榄绿体块」，轮廓有**约 2 处**凹口（要求 ≥4），表面仍有 30–40 px 宽的光滑明暗波；**判定：仍是「长苔的绿石头」，没到「灌木丛」** → 队列 23（叶簇全埋在轮廓内 + 42 顶点平滑法线 + 低频法线图） |

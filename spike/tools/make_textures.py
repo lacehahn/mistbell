@@ -157,30 +157,56 @@ def make_grass(rnd):
 
 # ---------------------------------------------------------------- 灌木叶簇
 def make_bush(rnd):
-    palette = ((26, 40, 23), (42, 58, 32), (58, 76, 43))
-    noise = fbm([16, 8, 4], rnd)
+    import math
+
+    palette = ((18, 28, 17), (30, 42, 24), (44, 58, 34),
+               (60, 76, 44), (84, 100, 62))
+    noise = fbm([32, 16, 8], rnd)
     img = new_img()
+    # 低频仅作底明度（0.35 权重），不能支配叶簇；高度与颜色分别绘制。
+    height = [[0.0] * SZ for _ in range(SZ)]
     for y in range(SZ):
         for x in range(SZ):
-            img[y][x] = palette[min(2, int(noise[y][x] * 3))]
-    for i in range(260):
-        x, y = rnd.randrange(SZ), rnd.randrange(SZ)
-        w, h = rnd.randint(3, 7), rnd.randint(3, 7)
-        color = palette[2 if i % 2 else 0]
-        if rnd.random() < 0.045:
-            color = (0x8A, 0x96, 0x5A)
-        for dy in range(h):
-            inset = rnd.choice((0, 1)) if dy in (0, h - 1) else 0
-            for dx in range(inset, w - inset):
-                put(img, x + dx, y + dy, color)
-        if i % 5 == 0:
-            put(img, x + w // 2, y, (87, 102, 63))
-    # 所有通道共用同一个逐像素偏移，避免彩色颗粒。
-    for y in range(SZ):
-        for x in range(SZ):
-            jitter = rnd.randint(-10, 10)
-            img[y][x] = tuple(clamp8(c + jitter) for c in img[y][x])
-    return img, 1.2
+            shade = 0.65 * 0.60 + 0.35 * noise[y][x]
+            img[y][x] = palette[min(4, int(shade * 5))]
+            height[y][x] = 0.10 + 0.035 * noise[y][x]
+
+    # 恰好 520 个旋转椭圆，长短径均为 6–11 px；环绕写点，跨边叶片不截断。
+    for _ in range(520):
+        cx, cy = rnd.randrange(SZ), rnd.randrange(SZ)
+        w, h = rnd.randint(6, 11), rnd.randint(6, 11)
+        angle = rnd.uniform(0, math.tau)
+        co, si = math.cos(angle), math.sin(angle)
+        tier = rnd.choices((1, 2, 3, 4), weights=(5, 15, 24, 56))[0]
+        for dy in range(-8, 9):
+            for dx in range(-8, 9):
+                u, v = co * dx + si * dy, -si * dx + co * dy
+                outer = (u / (w * 0.5)) ** 2 + (v / (h * 0.5)) ** 2
+                if outer > 1:
+                    continue
+                inner = ((u + 0.35) / (w * 0.5 - 1)) ** 2 + ((v + 0.35) / (h * 0.5 - 1)) ** 2
+                yy, xx = (cy + dy) % SZ, (cx + dx) % SZ
+                img[yy][xx] = palette[tier if inner <= 1 else tier - 1]
+                height[yy][xx] = 0.18 + 0.36 * max(0.0, 1.0 - outer)
+
+    # 18 条枝条，各 3–5 段 1px 折线，自下部向上偏斜；不以大色块覆盖叶面。
+    for _ in range(18):
+        x, y = rnd.randrange(SZ), rnd.randint(85, 127)
+        for _ in range(rnd.randint(3, 5)):
+            nx, ny = x + rnd.randint(-4, 4), y - rnd.randint(4, 8)
+            steps = max(abs(nx - x), abs(ny - y))
+            for step in range(steps + 1):
+                xx = round(x + (nx - x) * step / steps) % SZ
+                yy = round(y + (ny - y) * step / steps) % SZ
+                img[yy][xx] = (46, 38, 28)
+                height[yy][xx] = 0.08
+            x, y = nx, ny
+    # 恰好 36 个不同位置的单像素亮缝，独立于叶色高度，不制造发亮的法线脊。
+    for pos in rnd.sample(range(SZ * SZ), 36):
+        y, x = divmod(pos, SZ)
+        img[y][x] = (110, 124, 84)
+        height[y][x] = 0.06
+    return img, 1.2, height
 
 
 # ---------------------------------------------------------------- 石砌墙面

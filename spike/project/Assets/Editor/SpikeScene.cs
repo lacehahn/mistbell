@@ -601,11 +601,27 @@ public static class SpikeScene
     static void BuildProps(MeshCollider terrain, Material stone, Material wood)
     {
         const string TEX = "Assets/Art/Textures/";
+        // 线性目标约为草地 (0.27,0.35,0.13) 的 37%/40%/46%，保持暗叶色。
+        // TintFor 按 target / meanLin 归一化并应用 p99 守卫；保留 targetLinear=(0.10,0.14,0.06) 起点。
+        // brief B 唯一一次比例校正：art_ground 实测 138.6/77.1=1.80，目标比 0.90，倍率 0.90/1.80=0.5。
+        // 在 TintFor 之后缩放 RGB，保留 alpha；不改贴图、门槛及其他保护范围。
+        var bushTarget = new Color(0.10f, 0.14f, 0.06f, 1f);
         var bush = SpikeArt.MakeTextured("Assets/Settings/M_Bush.mat", TEX + "bush.png",
-            TEX + "bush_n.png", 1.0f, Hex("#3A4A24"), 0f, 0.7f);
-        bush.SetColor("_BaseColor", new Color(0.9f, 0.95f, 0.82f, 1f));
+            TEX + "bush_n.png", 1.0f, bushTarget, 0f, 0.35f);
+        bush.SetFloat("_SpecularHighlights", 0f);
+        bush.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+        const float bushCorrection = 0.90f / 1.80f; // 唯一校正倍率 = 0.5。
+        var bushTint = bush.GetColor("_BaseColor");
+        bushTint = new Color(bushTint.r * bushCorrection, bushTint.g * bushCorrection,
+            bushTint.b * bushCorrection, bushTint.a);
+        bush.SetColor("_BaseColor", bushTint);
         var bushLight = new Material(bush) { name = "M_BushLight" };
-        bushLight.SetColor("_BaseColor", new Color(1.15f, 1.20f, 0.98f, 1f));
+        // 仅在最终校正 tint 基础上增加 6%，让交替叶片略亮而不恢复镜面反光。
+        var lightTint = new Color(bushTint.r * 1.06f, bushTint.g * 1.06f, bushTint.b * 1.06f, bushTint.a);
+        bushLight.SetColor("_BaseColor", lightTint);
+        bushLight.SetFloat("_SpecularHighlights", 0f);
+        bushLight.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+        Debug.Log($"[SPIKE] bushAlbedo targetLinear=(0.100,0.140,0.060) measuredRatio=1.80 targetRatio=0.90 correction={bushCorrection:F1} correctionCount=1 tint=({bushTint.r:F4},{bushTint.g:F4},{bushTint.b:F4}) lightMultiplier=1.06 bushSpecular={bush.GetFloat("_SpecularHighlights")} bushKeywordOff={bush.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} lightSpecular={bushLight.GetFloat("_SpecularHighlights")} lightKeywordOff={bushLight.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF")} bump=0.35");
         const string lightPath = "Assets/Settings/M_BushLight.mat";
         AssetDatabase.DeleteAsset(lightPath);
         AssetDatabase.CreateAsset(bushLight, lightPath);
@@ -614,6 +630,13 @@ public static class SpikeScene
             new Vector3(0.75f, 0.48f, 0.85f), new Vector3(0.9f, 0.55f, 0.7f) };
         for (int i = 0; i < bushMeshes.Length; i++)
             bushMeshes[i] = SpikeArt.Blob(bushSizes[i / 2], 0.22f, 1, false, 6100 + i);
+        var bushLeafMeshes = new Mesh[6];
+        var leafSizes = new[] { new Vector3(0.20f, 0.17f, 0.20f),
+            new Vector3(0.27f, 0.22f, 0.25f), new Vector3(0.34f, 0.27f, 0.31f) };
+        for (int i = 0; i < bushLeafMeshes.Length; i++)
+            bushLeafMeshes[i] = SpikeArt.Blob(leafSizes[i / 2], 0.40f, 1, false, 9100 + i);
+        int leavesTotal = 0, leavesMin = 8, leavesMax = 0;
+        float bushHeightMin = float.PositiveInfinity, bushHeightMax = 0f;
         var rockMeshes = new Mesh[4];
         for (int i = 0; i < rockMeshes.Length; i++)
             rockMeshes[i] = SpikeArt.Blob(Vector3.one * 0.5f, 0.32f, 1, true, 7200 + i);
@@ -657,6 +680,7 @@ public static class SpikeScene
             float top = Mathf.Max(lowerY + lower.bounds.max.y * scale,
                 upperY + upper.bounds.max.y * scale);
             float heightScale = Mathf.Clamp(top, 0.7f, 1.1f) / top;
+            float bodyMin = float.PositiveInfinity, bodyTop = float.NegativeInfinity, bodyRadius = 0f;
             for (int j = 0; j < 2; j++)
             {
                 var leaf = new GameObject("Leaves_" + j);
@@ -668,8 +692,67 @@ public static class SpikeScene
                 leaf.transform.localRotation = Quaternion.Euler(0f, ShapeRange(0f, 360f), 0f);
                 leaf.transform.localScale = new Vector3(scale, scale * heightScale, scale);
                 leaf.AddComponent<MeshFilter>().sharedMesh = j == 0 ? lower : upper;
-                leaf.AddComponent<MeshRenderer>().sharedMaterial = index % 2 == 0 ? bush : bushLight;
+                leaf.AddComponent<MeshRenderer>().sharedMaterial = j % 2 == 0 ? bush : bushLight;
+                foreach (var v in leaf.GetComponent<MeshFilter>().sharedMesh.vertices)
+                {
+                    var q = leaf.transform.localPosition + leaf.transform.localRotation * Vector3.Scale(v, leaf.transform.localScale);
+                    bodyMin = Mathf.Min(bodyMin, q.y); bodyTop = Mathf.Max(bodyTop, q.y);
+                    bodyRadius = Mathf.Max(bodyRadius, new Vector2(q.x, q.z).magnitude);
+                }
             }
+            // 不消耗 shape / rnd：保留主体与所有其它道具的随机序列及几何位置。
+            var leaves = new System.Random(9200 + index);
+            float LeafRange(float lo, float hi) => Mathf.Lerp(lo, hi, (float)leaves.NextDouble());
+            int count = leaves.Next(5, 9);
+            float clumpHeight = bodyTop - bodyMin;
+            float maxTop = Mathf.Min(bodyTop + 0.10f, bodyMin + 1.20f);
+            float allTop = bodyTop;
+            for (int j = 0; j < count; j++)
+            {
+                var mesh = bushLeafMeshes[leaves.Next(bushLeafMeshes.Length)];
+                float yaw = LeafRange(0f, 360f);
+                float radius = LeafRange(0.42f, 0.62f) * bodyRadius;
+                var center = new Vector3(Mathf.Sin(yaw * Mathf.Deg2Rad) * radius,
+                    bodyMin + LeafRange(j < 2 ? 0.70f : 0.30f, 0.95f) * clumpHeight,
+                    Mathf.Cos(yaw * Mathf.Deg2Rad) * radius);
+                var rotation = Quaternion.Euler(LeafRange(-20f, 20f), yaw, LeafRange(-20f, 20f));
+                float minY = 0f, maxY = 0f, radialExtent = 0f;
+                foreach (var v in mesh.vertices)
+                {
+                    var q = rotation * v;
+                    minY = Mathf.Min(minY, q.y); maxY = Mathf.Max(maxY, q.y);
+                    radialExtent = Mathf.Max(radialExtent, new Vector2(q.x, q.z).magnitude);
+                }
+                // 三角不等式约束所有旋转顶点的半径，实际顶点约束上下界；不依赖未旋转 bounds。
+                float fit = Mathf.Min(1f, (bodyRadius * 1.35f - radius) / radialExtent);
+                fit = Mathf.Min(fit, (maxTop - center.y) / maxY, (center.y - bodyMin) / -minY);
+                // 最矮主体也用第一片补足 0.70m；中心仍保持顶部区间且不移动主体。
+                if (j == 0 && allTop < bodyMin + 0.70f)
+                    center.y = Mathf.Max(center.y, bodyMin + 0.70f - maxY * fit);
+                fit = Mathf.Min(fit, (maxTop - center.y) / maxY);
+                var leaf = new GameObject("LeafCluster_" + j);
+                leaf.transform.SetParent(clump, false);
+                leaf.transform.localPosition = center;
+                leaf.transform.localRotation = rotation;
+                leaf.transform.localScale = Vector3.one * fit;
+                leaf.AddComponent<MeshFilter>().sharedMesh = mesh;
+                leaf.AddComponent<MeshRenderer>().sharedMaterial = j % 2 == 0 ? bush : bushLight;
+                foreach (var v in mesh.vertices)
+                {
+                    var q = center + rotation * (v * fit);
+                    allTop = Mathf.Max(allTop, q.y);
+                    if (q.y < bodyMin - 0.0001f || q.y > maxTop + 0.0001f ||
+                        new Vector2(q.x, q.z).magnitude > bodyRadius * 1.35f + 0.0001f)
+                        throw new System.InvalidOperationException("Bush leaf vertex outside envelope");
+                }
+            }
+            float actualHeight = allTop - bodyMin;
+            if (actualHeight < 0.6999f || actualHeight > 1.2001f)
+                throw new System.InvalidOperationException("Bush height outside 0.7–1.2m");
+            leavesTotal += count; leavesMin = Mathf.Min(leavesMin, count); leavesMax = Mathf.Max(leavesMax, count);
+            bushHeightMin = Mathf.Min(bushHeightMin, actualHeight); bushHeightMax = Mathf.Max(bushHeightMax, actualHeight);
+            if (bushIndex == 22)
+                Debug.Log($"[SPIKE] bushLeaves total={leavesTotal} min={leavesMin} max={leavesMax} meshes=6 height=[{bushHeightMin:F3},{bushHeightMax:F3}]");
         }
         void Rock(Transform parent, string name, Vector3 p)
         {
