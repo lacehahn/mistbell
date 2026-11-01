@@ -6,9 +6,13 @@
 
 ## 进入条件
 
-- [ ] Unity Hub 已登录，6.3 LTS（6000.3.27f1）已安装，含 macOS IL2CPP + Windows Mono 模块
-- [ ] Blender 已安装并记录版本（当前 brew cask 为 5.2.3，需在可行性确认后写回 `docs/04-tech-stack.md`）
-- [ ] `unity -batchmode` 能在空工程上完成一次编译并落日志
+- [x] Unity Hub 3.22.5 已装（`/Applications/Unity Hub.app`）
+- [x] Unity 编辑器 6000.3.27f2 已装（`/Applications/Unity/Hub/Editor/6000.3.27f2`，10 GB）
+- [x] Windows Mono 构建模块已装（`PlaybackEngines/WindowsStandaloneSupport`）
+- [ ] macOS 构建模块待确认（Hub CLI 拒绝 `mac-macos-arm64` 这个 id；需在 Hub GUI → Installs → Add modules 里核对是否已内置或需补装）
+- [x] Blender 5.2.3 LTS 已装（`/Applications/Blender.app`，CLI `/opt/homebrew/bin/blender`）
+- [ ] Unity 授权未激活（`~/Library/Application Support/Unity/licenses` 为空）→ 需人工用 Unity ID 登录，确认 Personal 资格
+- [ ] `Unity -batchmode` 能在空工程上完成一次编译并落日志
 
 ## 三天任务
 
