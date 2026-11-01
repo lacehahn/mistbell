@@ -73,6 +73,61 @@ public static class SpikeURP
             + " entry0=" + loadedFeature.GetType().Name + " materialSet=" + (loadedFeature.passMaterial != null));
     }
 
+    public static void SSAO()
+    {
+        const string featurePath = "Assets/Settings/SSAOFeature.asset";
+        const string rendererPath = "Assets/Settings/MistbellRenderer.asset";
+        var renderer = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(rendererPath);
+        if (renderer == null)
+            throw new System.InvalidOperationException("Missing renderer: " + rendererPath);
+        var feature = AssetDatabase.LoadAssetAtPath<ScreenSpaceAmbientOcclusion>(featurePath);
+        if (feature == null)
+        {
+            feature = ScriptableObject.CreateInstance<ScreenSpaceAmbientOcclusion>();
+            feature.name = "SSAOFeature";
+            AssetDatabase.CreateAsset(feature, featurePath);
+        }
+        var settings = new SerializedObject(feature);
+        settings.FindProperty("m_Settings.Intensity").floatValue = 2.2f;
+        settings.FindProperty("m_Settings.DirectLightingStrength").floatValue = 0.85f;
+        settings.FindProperty("m_Settings.Radius").floatValue = 0.5f;
+        // TerrainHaze has DepthOnly but no DepthNormals pass: reconstruct from depth.
+        settings.FindProperty("m_Settings.Source").enumValueIndex = 0;
+        settings.FindProperty("m_Settings.AOMethod").enumValueIndex = 1;
+        settings.FindProperty("m_Settings.Samples").enumValueIndex = 1;
+        settings.FindProperty("m_Settings.BlurQuality").enumValueIndex = 0;
+        settings.FindProperty("m_Settings.Falloff").floatValue = 100f;
+        settings.FindProperty("m_Settings.Downsample").boolValue = false;
+        settings.FindProperty("m_Settings.AfterOpaque").boolValue = false;
+        settings.FindProperty("m_Settings.NormalSamples").enumValueIndex = 1;
+        settings.ApplyModifiedPropertiesWithoutUndo();
+        feature.SetActive(true);
+        EditorUtility.SetDirty(feature);
+
+        // Keep the existing tilt-shift object and its parameters; normalize only SSAO entries.
+        for (int i = renderer.rendererFeatures.Count - 1; i >= 0; i--)
+            if (renderer.rendererFeatures[i] is ScreenSpaceAmbientOcclusion)
+                renderer.rendererFeatures.RemoveAt(i);
+        renderer.rendererFeatures.Add(feature);
+        renderer.SetDirty();
+        EditorUtility.SetDirty(renderer);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.ImportAsset(featurePath, ImportAssetOptions.ForceUpdate);
+        AssetDatabase.ImportAsset(rendererPath, ImportAssetOptions.ForceUpdate);
+        renderer = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(rendererPath);
+        if (renderer.rendererFeatures.Count != 2
+            || AssetDatabase.GetAssetPath(renderer.rendererFeatures[0]) != "Assets/Settings/TiltShiftFeature.asset"
+            || AssetDatabase.GetAssetPath(renderer.rendererFeatures[1]) != featurePath
+            || !AssetDatabase.IsMainAsset(renderer.rendererFeatures[1]))
+            throw new System.InvalidOperationException("SSAO renderer serialization assertion failed");
+        var saved = new SerializedObject(renderer.rendererFeatures[1]);
+        if (saved.FindProperty("m_Settings.Source").enumValueIndex != 0)
+            throw new System.InvalidOperationException("SSAO must use Depth");
+        Debug.Log("[POST] ssao feature=" + featurePath + " intensity=2.2 radius=0.5 source=Depth");
+        Debug.Log("[POST] renderer features=" + renderer.rendererFeatures.Count
+            + " entry0=" + renderer.rendererFeatures[0].name + " entry1=" + renderer.rendererFeatures[1].name);
+    }
+
     public static void Run()
     {
         const string dir = "Assets/Settings";

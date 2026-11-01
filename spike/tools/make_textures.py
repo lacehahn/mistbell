@@ -194,7 +194,7 @@ def make_stone(rnd, size=256):
         return noise
 
     courses = 4
-    mortar = (0x4A, 0x46, 0x42)
+    mortar = (0x46, 0x46, 0x46)
     img = [[mortar for _ in range(size)] for _ in range(size)]
     height = [[0.05] * size for _ in range(size)]
     grain = stone_noise(size // 16)
@@ -221,12 +221,21 @@ def make_stone(rnd, size=256):
 
         for width in widths:
             left_joint, right_joint, top_joint, bottom_joint = [rnd.randint(1, 5) for _ in range(4)]
-            joint_colors = [(0x6E, 0x66, 0x5C) if rnd.random() < 0.15 else
-                            tuple(c - rnd.randint(25, 45) for c in (110, 106, 100))
-                            for _ in range(4)]
+            joint_colors = []
+            for _ in range(4):
+                # 灰缝三通道共用偏移和抖动，饱和度为零；保留 15% 浅缝。
+                pale = rnd.random() < 0.15
+                offset = 0
+                if not pale:
+                    offset = rnd.randint(25, 45)
+                    # 保留既有随机序列，避免后续块宽/布局随灰缝修正而变化。
+                    rnd.randint(25, 45)
+                    rnd.randint(25, 45)
+                value = 104 if pale else 106 - offset
+                joint_colors.append((value, value, value))
             hue = base_h + rnd.uniform(-2.5, 2.5) / 360
             direction = rnd.choice((-1, 1))
-            # 低频斑驳缩小后由块间明度承担层次，亮块收窄以避免运行时过曝。
+            # 块间明度抖动保持原值；块内起伏另由连续高度场承担。
             light = base_l + direction * rnd.uniform(0.025, 0.035)
             color = tuple(v * 255 for v in colorsys.hls_to_rgb(hue % 1, light, min(0.12, base_s)))
             gradient = rnd.uniform(0.03, 0.06)
@@ -243,12 +252,18 @@ def make_stone(rnd, size=256):
                         continue
                     variation = ((grain[y][x] - 0.5) * 44 +
                                  (fine_grain[y][x] - 0.5) * 20 +
-                                 (blotch[y][x] - 0.5) * 40)
-                    # 颜色只留一像素不规则暗边；倒角的亮暗由高度场响应灯光。
-                    edge_dark = rnd.uniform(-10, 0) if edge == 0 else 0
-                    img[y][x] = tuple(clamp8(c * (1 - gradient * t) + variation + edge_dark)
+                                 (blotch[y][x] - 0.5) * 88 - 7)
+                    # 三像素倒角：0.30 → 0.50 → 0.70；块心浅凹，幅度不超过 0.05。
+                    u = (xx - x0 - left_joint) / max(1, width - left_joint - right_joint - 1)
+                    v = (y - y0 - top_joint) / max(1, y1 - y0 - top_joint - bottom_joint - 1)
+                    bowl = max(0.0, 1 - (2 * u - 1) ** 2) * max(0.0, 1 - (2 * v - 1) ** 2)
+                    bevel = (0.30, 0.50, 0.70)[min(edge, 2)]
+                    relief = -0.04 * bowl + (blotch[y][x] - 0.5) * 0.02
+                    height[y][x] = bevel + relief + (grain[y][x] - 0.5) * 0.30
+                    edge_dark = rnd.uniform(-12, -8) if edge == 0 else (-8 if edge == 1 else 0)
+                    relief_color = edge_dark + 4 * bowl
+                    img[y][x] = tuple(clamp8(c * (1 - gradient * t) + variation + relief_color)
                                       for c in color)
-                    height[y][x] = (0.35 if edge == 0 else 0.6) + (grain[y][x] - 0.5) * 0.30
             x0 += width
 
     # 3–5 条整墙竖向流痕，软边横向环绕，避免贴图边界截断。
@@ -266,6 +281,8 @@ def make_stone(rnd, size=256):
         dust = 0.08 * smooth(max(0.0, (y / (size - 1) - 0.8) / 0.2))
         for x in range(size):
             fine = rnd.uniform(-9, 9)
+            if height[y][x] <= 0.1:
+                fine *= 2 / 9  # 灰缝只用三通道共用的 ±2 抖动。
             # 少量砂眼打断平滑石面；不沿边界描出闭合轮廓。
             if height[y][x] > 0.1 and rnd.random() < 0.008:
                 fine -= rnd.uniform(22, 38)

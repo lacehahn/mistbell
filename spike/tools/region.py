@@ -84,5 +84,9 @@ for spec in rects:
     mr, mg, mb = sr / n, sg / n, sb / n
     mu = sum(Ls) / n
     std = (sum((v - mu) ** 2 for v in Ls) / n) ** 0.5
-    print("   rect %-24s mean=(%3.0f,%3.0f,%3.0f) sat=%.3f R-B=%+5.1f Lstd=%5.1f clipped=%.2f%%" %
-          (spec, mr, mg, mb, sat / n, mr - mb, std, 100.0 * clip / n))
+    # 暗尾（p5）与中位数（p50）：判断「凹陷/接触阴影有没有真的压暗」，而不是整体变暗/变亮。
+    order = sorted(Ls)
+    p5 = order[max(0, int(0.05 * (n - 1)))]
+    p50 = order[max(0, int(0.50 * (n - 1)))]
+    print("   rect %-24s mean=(%3.0f,%3.0f,%3.0f) sat=%.3f R-B=%+5.1f Lstd=%5.1f clipped=%.2f%% p5=%5.1f p50=%5.1f tail=%.3f" %
+          (spec, mr, mg, mb, sat / n, mr - mb, std, 100.0 * clip / n, p5, p50, p5 / max(p50, 1e-6)))

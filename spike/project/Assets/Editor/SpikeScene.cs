@@ -31,7 +31,11 @@ public static class SpikeScene
         var stone = ChurchMaterial("stone", "#C9A87C");
         stone.SetTextureScale("_BaseMap", new Vector2(1f / 4.8f, 1f / 4.8f));
         stone.SetTextureScale("_BumpMap", new Vector2(1f / 4.8f, 1f / 4.8f));
-        Debug.Log("[SPIKE] stone tiling=" + stone.GetTextureScale("_BaseMap").ToString("F8"));
+        stone.SetFloat("_BumpScale", 1.8f);
+        Debug.Log("[SPIKE] stone bump=" + stone.GetFloat("_BumpScale").ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+        var stoneTiling = stone.GetTextureScale("_BaseMap");
+        Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "[SPIKE] stone tiling=({0:F8}, {1:F8})", (double)stoneTiling.x, (double)stoneTiling.y));
         // 固定曝光补偿：原石材 tint × (目标反照率 0.30 / 原目标 0.36)，重复生成不累乘。
         stone.SetColor("_BaseColor", new Color(0.675f, 0.63f, 0.575f, 1f));
         var roofMat = ChurchMaterial("roof", "#A06B4A");

@@ -14,7 +14,8 @@
 - **⏰ 截图必须预热 1.0 s**：只等 3 帧会抓到窗口「合成/淡入中」的帧，整帧均一压暗（连天空都暗），同一份构建两次亮度差近 2 倍（sky 均值 139 / 75 / 100）。改成 `WaitForSecondsRealtime(1.0f)` 后三次连拍 sky 均值完全一致 (166,182,202)。
 - 场景几何约定（后续沿用）：坡地 4°、`GroundY(z)=tan4°·z`（z=0 处 y=0）；教堂整体抬高 `ChurchBaseY=0.6`；**门廊朝 -z（来路侧）**，玩家自下坡上来看到的是正立面。
 - **✅ 截图现在是可复现的测量工具**：`tools/frame.py`（原 pngstat.py）可直接对 PNG 求区域均值/削顶率，曝光改动用它验，不要只靠肉眼。
-- **尺子清单**（都不许为了过门槛而改）：`frame.py` 曝光/过曝 · `edge.py` 地平线硬边（单行跳变 + 距离提亮）· `horizon.py` 地平线跨度 · `sharp.py` 三带高频（移轴）· `texstat.py` 贴图统计 · `region.py` 画面矩形均值 · `probe_col.py` 逐列 RGB · `seam.py` 贴图**真实尺寸**环绕接缝 · `patchwork.py` 块级明度/色度离散（判「迷彩拼布」）
+- **尺子清单**（都不许为了过门槛而改）：`frame.py` 曝光/过曝 · `edge.py` 地平线硬边（单行跳变 + 距离提亮）· `horizon.py` 地平线跨度 · `sharp.py` 三带高频（移轴）· `texstat.py` 贴图统计 · `region.py` 画面矩形均值（含 `p5/p50/tail`：判凹陷压暗而非整体变暗）· `probe_col.py` 逐列 RGB · `seam.py` 贴图**真实尺寸**环绕接缝 · `patchwork.py` 块级明度/色度离散（判「迷彩拼布」；**开了 SSAO 后 `blockSpread` 会被 AO 梯度污染，必须与 `neighborDiff` 一起读**）
+- **SSAO 约定（2026-11-02 04:26 起）**：参数只写在 `SpikeURP.SSAO()`（`Intensity 2.2 / DirectLightingStrength 0.85 / Radius 0.5 m / Source=Depth`），资产 `Assets/Settings/SSAOFeature.asset` 是独立 `.asset`、被 `.gitignore` 忽略，**改参数必须改代码再跑一次 `SSAO`**。它只能压暗几何凹角（台阶/门廊/拱洞/墙-台地交界），**压不动贴图砖缝**。差分验证：`.asset` 里 `m_Active: 0` → 出包 → 截图 → 对比，是判断「AO 到底有没有生效」的唯一可靠办法。
 - 材质约定（后续沿用）：
   - 所有网格 UV 以**米**为单位，材质 `_BaseMap` tiling = `1/每张贴图覆盖的米数`（草 3.2 m、**石 4.8 m**、瓦 2.4 m）；**不要**用 `PrimitiveType.Cube`（每面 0..1 UV，不同立面的纹理密度会差 1.4 倍）。石材 tiling 必须写在 `SpikeScene.cs` 里（`.mat` 被 `.gitignore` 忽略，写进 `.mat` 等于不可复现）。
   - 贴图导入：Point 过滤 + 无压缩 + Repeat + mipmap + `isReadable`。
@@ -41,8 +42,10 @@
 9. ~~**补材质与坏机位**~~ ✅ 已完成（2026-11-02 01:06）：根因是 **UV 单位错**（`smart_project` 归一化 0..1 vs 材质约定「1 UV = 1 m」）→ `build_church.py` 改按面主导轴写入世界坐标（米）UV，`--verify` 新增 `UVSCALE OK` 断言；`art_ground` 挪到台地外草地；sun 2.2→1.8。削顶 art_runtime 1.41%→0.00%、art_close 23.20%→0.23%、art_ground 48.05%→0.10%
    - 遗留（2026-11-02 01:10 目视）：**门洞/窗洞内部是平涂棕**（`wood` 材质没贴图）；台阶与台地同材质且无 AO，读不出级差；石材 tile 2 m 下块体偏大、「太新」缺脏污渐变 → 并入队列 4 一起调
 10. **wood 贴图 + AO 分离**（小活）：`M_Wood` 套一张 128×128 木纹/暗部贴图（`make_textures.py` 加一类），门洞内凹面与台阶侧面靠 AO/顶点色压暗，让台阶读得出 5 级
-11. **SSAO（RendererFeature）★ 下一优先**：石材 v4 之后近读仍像「现代砌块」——块面平滑、砖缝没有接触阴影。`UniversalRendererData` 上挂 `ScreenSpaceAmbientOcclusion`（intensity≈0.6 / radius≈0.5 m），把石砌的「积木感」压下去；与 10（wood 贴图 + 台阶级差）同批做。顺带修 v4 的 `coarseStd 9.60`（块内起伏不足）——在 `make_stone` 里给法线加块内凹陷，而不是再加块间色差
-   - ⚠️ 已踩过的坑：RendererFeature 必须存成**独立 `.asset`**（子资产不进构建包，VolumeProfile 与 TiltShift 都栽过）
+11. ✅ **SSAO（RendererFeature）** 已完成（2026-11-02 04:26）：`SpikeURP.SSAO()` 建独立 `Assets/Settings/SSAOFeature.asset` 挂进 `MistbellRenderer.asset`（features=2：TiltShift + SSAO），`Source=Depth`（`TerrainHaze.shader` 无 DepthNormals pass）、`Intensity 2.2 / DirectLightingStrength 0.85 / Radius 0.5 m`。
+   - **关键认知（写给下一轮）**：SSAO 只能压暗**几何凹角**（台阶/门廊内凹/拱洞/墙与台地交界），**压不动贴图上的砖缝** —— 砖缝的接触阴影只能靠高度场倒角 + 法线。第一轮 `Intensity 0.75 / DLS 0.15` 几乎看不见（墙面 tail 只降 1.4%、平墙 0%），是因为 URP 默认 `AfterOpaque=false` 时 AO 主要作用在间接光上，而正立面被太阳直打。
+   - 差分验证协议（以后照用）：`m_Active: 0` → `SpikeBuild.Run` → `capture_runtime.sh` → `region.py`，再对比。证据 `Shots/ssao_off_close.png` vs `Shots/art_close.png`。
+   - ⚠️ 代价：`region.py` 的 `blockSpread` 从 21.4% 升到 **27.8%**（超过 24% 门槛）—— 这是 **AO 梯度**造成的矩形内亮度不均，不是块间色差（`neighborDiff` 仍 7.7% ≤ 10%）。**该尺子从此不能单独判「迷彩拼布」，必须与 `neighborDiff` 一起读。**
 12. **地形远边收口**（2026-11-02 01:25 新增，优先）：坡地远端 z=+100 直接断成直线；要把地形做成「远端下沉/起伏 + 一层可见的地平雾」，否则无论山做多好都是「桌面模型」
    - 进展（01:48）：坡地换成程序化地形网格（X±150、Z -160..560、23103 顶点 / 45600 三角面），脊线 `crestZ(x)=28+10·sin(x/38)` 之后以 32% 坡下坠，脊线处就有 7 m 振幅横向起伏 → `horizon.py` 五列地平线跨度 **44 → 129 px**，画面里草地轮廓不再是一条等深直线
    - ⚠️ 仍未解决：**地平线还是一条硬边**（草地直接切到天空，没有空气渗染）。原因：全局线性雾 start=90 m，而脊线在 125 m 处，雾因子只有 ~2.5%；把雾调重就会把 110 m 的教堂一起洗掉
@@ -56,7 +59,9 @@
    - v3：**块尺度才是病根** —— `patchwork.py` 证明颜色方差与参考持平（邻块明度差 5.4% vs 参考 10.8–14.2%），真因是块太小（0.53×0.6 m → 主视角 12 px）；`m_Scale` 1/2.4→1/4.8
    - v4：贴图块间明度抖动 ±0.09→±0.03、色相 ±6→±2.5°、sat→0.12 → 贴图 `blockSpread 74.3%→29.2%`；tiling 从 `.mat`（**被 gitignore 忽略、不可复现**）挪进 `SpikeScene.cs`；移轴 `_MaxRadius 10→12`
    - ⚠️ 遗留（近读仍像「现代砌块」）：① 块面太平滑、无接触阴影 → **SSAO（队列 11）**；② 灰缝部分偏绿、亮度不均；③ `Lstd 44.5→28.1` 与 `coarseStd 27→9.6` 偏低，需要块内起伏/凹陷把细节补回来
-15. **前景细节物件**：草地是一整片平涂绿色，缺《歧路旅人》那种「近景点缀」——需要灌木丛/碎石/路边栅栏/路缘石各若干（可用体块 + 像素材质快速做），既补画面层次，也让移轴的虚化有东西可虚
+15. **前景细节物件**：草地是一整片平涂绿色，缺《歧路旅人》那种「近景点缀」——需要灌木丛/碎石/路边栅栏/路缘石各若干（可用体块 + 像素材质快速做），既补画面层次，也让移轴的虚化有东西可虚。**主视角最致命的一项**（HD-2D 观感一半来自近景细节 + 移轴虚化）
+16. **石缝锐度 + 砂岩颗粒**（2026-11-02 04:30 新增，次优先）：倒角现在是 3 texel 阶梯，在 art_close 尺度（约 143 px/m）摊成 8 px 宽灰晕 → 砖缝读成「软灰带」而不是「清晰凹槽 + 接触阴影」；块面像石膏/泡沫，砂岩粒感弱。修法：`make_stone` 倒角收到 1–2 texel（高度 0.35→0.6）、缝宽 1–3 px、`blotch` 振幅 88→50（低频斑驳现在把颗粒盖住了），并考虑 256→512（106 texel/m；4 皮 × 512 要整除，`seam.py` 必须复测）
+17. **屋顶色病态**（2026-11-02 04:30 新增）：主视角屋顶是番茄红 + 黑噪点，要压到「深石板青灰」并去掉黑点；与 16 同批（都是 `make_textures.py`）
 
 ## 日志
 
@@ -142,3 +147,9 @@
 | 03:16 | Codex 第 16 轮（石材 v3：块尺度） | `codex.sh` 读 `spike/brief-stone3.md` | `m_Scale` 1/2.4→1/4.8，主视角块 12→**21 px**，块终于可数；`region R-B +46.6/+39.8`。副作用：`sharp bottom/mid 0.34→0.49`、`art_ground clipped→1.18%`。**副产物发现**：`M_Stone.mat` 被 `.gitignore`（`spike/project/Assets/*`）忽略 → 改 `.mat` 等于改了不可复现的隐藏状态 |
 | 03:18 | Codex 第 17 轮（石材 v4：块间色差） | `codex.sh` 读 `spike/brief-stone4.md` | 贴图块间明度抖动 ±0.09→±0.03、色相 ±6→±2.5°、块内 sat 上限 0.18→0.12；**石材 tiling 挪进 `SpikeScene.cs`**（`[SPIKE] stone tiling=(0.2083,0.2083)`，新克隆可复现）；移轴 `_MaxRadius 10→12`。我独立复跑：贴图 `blockSpread 74.3→**29.2%**`、`neighborDiff 14.3→7.4%`；`region R-B +46.9/+41.6`、`sat 0.295/0.291`、`clipped 三张全 0.00%`、`sharp bottom/mid 0.45`（恢复）、`heightPct 49.8`、双平台 Succeeded / error CS 0。**代价**：`Lstd 44.5→28.1`（<32）、`coarseStd 27.06→9.60` —— 近读变「干净的水泥砌块」 |
 | 03:19 | 目视判定（石材 v3+v4） | `vision_analyze` on `art_runtime` / `art_close` | **主视角拼布消失**：立面读成统一的暖砂岩石墙，块可数、色温接近目标参考 `target-front-hd2d`；这是石材第一次「像一面墙」而不是「贴纸网格」。**近读仍像现代砌块**：块面平滑、无接触阴影、部分灰缝偏绿。剩余三块：屋顶番茄红+黑噪点、远山纸片、前景空无一物 → 队列 11 / 15 |
+| 03:46 | 新尺子：`region.py` 加 `p5/p50/tail` | 追加字段（不改原有门槛） | 基线（石材 v4 + 无 AO）：墙 `1400,200` p5=77.1 p50=145.9 **tail=0.529**；台阶 `700,600` 0.517；台地平墙 `1300,760` 0.557。用来判「凹陷有没有真的压暗」，而不是整体变暗/变亮 |
+| 03:48 | 派发 Codex 第 18 轮（SSAO + 块面起伏） | `codex.sh` 读 `spike/brief-ssao.md`（日志 `logs/118_codex_ssao.log`） | `SpikeURP.SSAO()` 建独立 `SSAOFeature.asset`（**Source=Depth**：`TerrainHaze.shader` 只有 Forward/ShadowCaster/DepthOnly，没有 DepthNormals pass）；`make_stone` 加块面倒角+块心微凹、灰缝改**三通道共用偏移**（消掉粉/绿彩线）；`_BumpScale=1.8` 挪进 `SpikeScene.cs` |
+| 04:05 | 人工验收（8 条全复跑） | `region`/`patchwork`/`texstat`/`seam`/`sharp`/`frame`/构建日志 | **全过**：墙 tail **0.529→0.489**、三块 p50 **145.9/141.7/160.0**（0.00%/−2.75%/+3.76%）、clipped 0/0.07/0%；`blockSpread 21.4%`、`neighborDiff 7.3%`；`coarseStd 9.60→16.39`、`sat 0.104`、`edge% 4.9`；`seam 0.64/1.30`；`sharp middle 10.85`；`heightPct 49.8 / pitch 11.8` 未动；双平台 Succeeded、error CS 0；`ssao feature=… intensity=0.75 radius=0.6 source=Depth`、`features=2` |
+| 04:12 | **差分验证**：SSAO 到底贡献了多少 | `m_Active:0` → `SpikeBuild.Run` → `capture_runtime.sh` → `region.py`；证据 `Shots/ssao_off_close.png` | 同一份贴图下 SSAO(0.75/0.15/0.6) 只让墙面 tail **0.496→0.489（-1.4%）**、台阶 0.462→0.459、**平墙 0.583 一动不动**。结论：**SSAO 只能压暗几何凹角，压不动贴图砖缝**；且 URP 默认 `AfterOpaque=false` 时 AO 主要作用在间接光上，正立面被太阳直打 → 强度太低等于没开 |
+| 04:26 | SSAO 调参（写进代码，可复现） | `SpikeURP.cs`：`Intensity 0.75→2.2`、`DirectLightingStrength 0.15→0.85`、`Radius 0.6→0.5`；重跑 `SSAO`→`Build`→`capture` | 墙面 p50 **147.7→140.3（-5.0%）**、Lstd 31.8→33.5、tail 0.496→0.477；台阶/门廊 p50 **151.9→100.8（-34%）**（门廊凹角重，台阶级差终于读出来）；平墙 0.583 仍不动。`frame`：sky (167,183,203)、ground_near (67,90,28)、clipped 0.00% **一字未动**；双平台 Succeeded / error CS 0 |
+| 04:30 | 目视判定（SSAO + 块面起伏） | `vision_analyze` on `art_close` / `art_ground` / `art_runtime` | **通过**：灰缝粉/绿彩线消失（改中性后肉眼确认）；块面有倒角与微凹、拱洞与门廊有接触阴影、台阶读得出 5 级、石板路与草地交界有接地感；`art_ground` 无 AO 脏斑。**新问题**：① 倒角 3 texel 在 art_close 摊成 8 px 灰晕，砖缝变成「软灰带」而非「清晰凹槽」；② 块面像石膏/泡沫，砂岩粒感弱；③ 主视角屋顶番茄红+黑噪点、前景仍空 → 队列 16 / 17 / 15 |
