@@ -14,6 +14,7 @@
 - **⏰ 截图必须预热 1.0 s**：只等 3 帧会抓到窗口「合成/淡入中」的帧，整帧均一压暗（连天空都暗），同一份构建两次亮度差近 2 倍（sky 均值 139 / 75 / 100）。改成 `WaitForSecondsRealtime(1.0f)` 后三次连拍 sky 均值完全一致 (166,182,202)。
 - 场景几何约定（后续沿用）：坡地 4°、`GroundY(z)=tan4°·z`（z=0 处 y=0）；教堂整体抬高 `ChurchBaseY=0.6`；**门廊朝 -z（来路侧）**，玩家自下坡上来看到的是正立面。
 - **✅ 截图现在是可复现的测量工具**：`tools/frame.py`（原 pngstat.py）可直接对 PNG 求区域均值/削顶率，曝光改动用它验，不要只靠肉眼。
+- **尺子清单**（都不许为了过门槛而改）：`frame.py` 曝光/过曝 · `edge.py` 地平线硬边（单行跳变 + 距离提亮）· `horizon.py` 地平线跨度 · `sharp.py` 三带高频（移轴）· `texstat.py` 贴图统计 · `region.py` 画面矩形均值 · `probe_col.py` 逐列 RGB · `seam.py` 贴图**真实尺寸**环绕接缝 · `patchwork.py` 块级明度/色度离散（判「迷彩拼布」）
 - 材质约定（后续沿用）：
   - 所有网格 UV 以**米**为单位，材质 `_BaseMap` tiling = `1/每张贴图覆盖的米数`（草 3.2 m、石 2.4 m、瓦 2.4 m）；**不要**用 `PrimitiveType.Cube`（每面 0..1 UV，不同立面的纹理密度会差 1.4 倍）。
   - 贴图导入：Point 过滤 + 无压缩 + Repeat + mipmap + `isReadable`。
@@ -48,7 +49,11 @@
 13. ~~**地平雾气帘 `haze.png`**~~ ✅ 改为**地形距离雾**并已完成（2026-11-02 02:35）：放弃「竖直雾气帘」——相机贴地平视 + 4° 坡，靠地平线的地面在屏幕上被透视压到几十像素，帘幕平面只能涂到薄薄一条，而且帘幕从地面「长出来」的交线本身就是新的硬边。改为 `Mistbell/TerrainHaze` 着色器（光照后在**水平视距** 45→135 m 上 lerp 到天空色 `#A7B7CB`），`edge.py` 量得地平线单行最大跳变 **86.3 → 4.1**、地面距离提亮 **-15.2 → +21.5**，近景草地 `(68,90,28)` 一字未动
 6. ~~**带状移轴 RendererFeature**~~ ✅ 已完成（2026-11-02 02:52）：用 URP 17 内置 `FullScreenPassRendererFeature` + `Mistbell/TiltShift`（单 Pass 24 抽样黄金角螺旋、`_FocusBand 0.26 / _Falloff 0.24 / _MaxRadius 10 px`），Feature 存成独立资产 `Assets/Settings/TiltShiftFeature.asset`。`sharp.py` 三带高频能量：mid **完全不变**（4.58 / 15.76 / 12.58），top **-59%**，bottom **-58%~-75%**。`art_close` 目视已出现《歧路旅人》式微缩景深
    - ⚠️ 但 `art_runtime` 里肉眼读不出：前景草地本来就没有细节可虚化（hf 7.76 是纯纹理噪声）。**要等前景有可辨认物件（灌木/石头/栅栏/路缘）之后这一层的视觉收益才成立** → 并入下方「前景细节」
-14. **石材重做（下一优先，简报已就绪）**：`art_close` 近景暴露最大美术问题——石墙是**规则等宽米色砖网格**。已量化拆成两个成因：① 偏黄来自材质 `_BaseColor` 硬编码米色 `(0.647,0.549,0.425)`（贴图本身是中性灰 sat=0.090），墙面实测 `sat=0.415 / R-B=+57.7`；② 块尺寸分布太窄，`coarseStd=17.61`。**`spike/brief-stone.md` 已写好（含 11 条数值门槛与基线），下一轮直接派发**
+14. **石材重做**（进行中，第 3 轮待派发）：`art_close` 近景暴露最大美术问题——石墙是**规则等宽米色砖网格**。
+   - ✅ v1（128→256 / 5 皮随机块宽 / 灰缝 / 流痕 / 灰褐基色）：`sat 0.415→0.242`、`R-B +57.7→+31.5`、`blockW std/mean 0.417`；但丢了细颗粒（`sharp middle 15.76→11.05`）且 5 皮不整除 256 → 上下环绕有缝
+   - ✅ v2（4 皮 / 拆统一描边 / 灰缝每条独立 / 法线 256 直出 / 更好暖度）：15 条门槛**全过** —— `R-B +39.9/+38.3`、`sat 0.293`、`sharp middle 13.54`、`seam` stone `0.75/1.23` + roof `0.40/0.17`（顺带修掉屋顶早有的横缝）
+   - ⚠️ 但主视角**更难看**：立面成「迷彩拼布」。`patchwork.py` 量得邻块明度差 5.4%、块间饱和度离散 26.2%，**都与目标参考持平** → 颜色不是病根；真因是**块太小**（0.53×0.6 m，主视角一块石头只有 12 px）
+   - ⏭️ **v3 待派发**：`spike/brief-stone3.md` 已就绪，只改 `M_Stone.mat` 两处 `m_Scale`（1/2.4 → 1/4.8，块 1.05×1.2 m / 主视角约 21 px）。**下一轮第一条就发它**
 15. **前景细节物件**：草地是一整片平涂绿色，缺《歧路旅人》那种「近景点缀」——需要灌木丛/碎石/路边栅栏/路缘石各若干（可用体块 + 像素材质快速做），既补画面层次，也让移轴的虚化有东西可虚
 
 ## 日志
@@ -127,4 +132,8 @@
 | 02:40 | 新工具 `tools/sharp.py` + 派发队列 6 | 三带高频能量（邻像素亮度差均值）；简报 `spike/brief-tiltshift.md` | 基线 top/mid/bottom：runtime 0.00/4.58/7.76、close 13.87/15.76/12.03、ground 8.42/12.58/4.98。判据：middle 变化 ≤12%、top/mid 与 bottom/mid 降 ≥30% |
 | 02:44 | Codex 第 13 轮（带状移轴） | `codex.sh` 读 `spike/brief-tiltshift.md`（日志 `logs/97_codex_tilt.log`） | 新增 `TiltShift.shader`（24 抽样黄金角、`smoothstep(_FocusBand,_FocusBand+_Falloff,d)` 带形遮罩）+ `SpikeURP.TiltShift()`（材质 `M_TiltShift.mat`、Feature 独立资产 `TiltShiftFeature.asset` 挂进 `MistbellRenderer.asset`）。**关键点**：Feature 必须是独立 `.asset`，不能用子资产（重蹈 VolumeProfile 不进包的坑） |
 | 02:52 | 人工验收（我独立复跑） | `sharp.py` / `frame.py` / `edge.py` / 构建日志 / `vision_analyze` ×2 | **通过**：hf bottom 7.76→**1.95**（-75%）、close top 13.87→**5.67**（-59%）、bottom 12.03→**5.01**（-58%）、ground 8.42→3.62 / 4.98→2.73，**middle 三张全部一个数字都没变**（4.58/15.76/12.58）——证明模糊只发生在带外、主体一点没糊；`frame sky (167,183,203)` 与 `ground_near (67,90,28)` 未漂、削顶 0.00/0.15/0.07%；`edge.py mean jump 4.1` 未破；church heightPct 49.8；双平台 Succeeded（120 MB / 102 MB）、error CS 0。**目视**：`art_close` 已出现微缩模型景深（顶墙上缘与底部草地虚、门廊与台阶锐），`art_runtime` 看不出——前景草地本来就没细节可虚。**判断：像 HD-2D 了，但离参考还差两块——石材是规则米色砖网格、前景空无一物** → 队列 14 / 15 |
-| 03:02 | 新工具 `texstat.py` / `region.py` + 石材基线 | `texstat.py stone_ashlar.png`、`region.py art_close.png 1400,200,1750,420` | 关键发现：**贴图本身是中性灰**（meanRGB 126,123,116 sat=0.090），墙面却是米色（sat=0.415 R-B=+57.7）→ 偏黄全来自材质 `_BaseColor` 硬编码 `(0.647,0.549,0.425)`；块规整度用 `coarseStd=17.61` 量化。简报 `spike/brief-stone.md` 已写好（11 条门槛），**本轮不派发**——避免与下个调度并行跑 Unity 构建 |
+| 03:02 | 新工具 `texstat.py` / `region.py` + 石材基线 | `texstat.py stone_ashlar.png`、`region.py art_close.png 1400,200,1750,420` | 关键发现：**贴图本身是中性灰**（meanRGB 126,123,116 sat=0.090），墙面却是米色（sat=0.415 R-B=+57.7）→ 偏黄全来自材质 `_BaseColor` 硬编码 `(0.647,0.549,0.425)`；块规整度用 `coarseStd=17.61` 量化。简报 `spike/brief-stone.md` 写好（11 条门槛），上一轮不派发以免与调度撞车 |
+| 03:05 | Codex 第 14 轮（石材 v1） | `codex.sh` 读 `spike/brief-stone.md`（日志 `logs/100_codex_stone.log`） | 贴图 128→256、5 皮随机块宽、灰缝 2–4 px、流痕/积尘、材质 `_BaseColor` 米色→灰褐。我独立复跑：`region` sat 0.415→**0.242/0.243**、R-B +57.7→**+31.5/+28.1**、Lstd 39.4/38.6、`texstat` coarseStd 24.55 / edge% 5.0 / sat 0.126、blockW std/mean 0.417；`edge.py 4.1` 与 `church heightPct 49.8` 未破。**两项未过**：`sharp art_close middle 15.76→11.05`（-30%，细颗粒丢了）；`make_textures` 打印的 `seam 12.56/19.52` 是**度量失效**（seam_score 用全局 SZ=128 索引，256 贴图量的是左上象限的内部边） |
+| 03:10 | 新工具 `tools/seam.py` | 按 PNG **真实尺寸**量环绕边 vs 内部相邻像素差 | 发现两处真缺陷：**stone row ratio 3.11**（5 皮 × 51.2 px 不整除，末行落在块体中间）、**roof_slate col/row 9.39/13.24**（屋顶每 2.4 m 一条可见横缝，早已存在但没人量过） |
+| 03:12 | Codex 第 15 轮（石材 v2） | `codex.sh` 读 `spike/brief-stone2.md` | 4 皮（256 整除）、拆掉每块统一描边、灰缝每条独立 1–5 px、blotch ±72→±20、grain ±13→±22 + 细颗粒、法线改 256 直出、stone `_BaseColor` (0.675,0.63,0.575)。我独立复跑 15 条：**全过** —— R-B **+39.9/+38.3**、sat 0.293/0.286、Lstd 46.6/45.6、`sharp middle 13.54`、`seam` stone **0.75/1.23** / roof **0.40/0.17** / grass 0.89/1.05、clipped 0.00/0.35/0.79%、heightPct 49.8、双平台 Succeeded / error CS 0 |
+| 03:20 | 目视判定 + 新工具 `tools/patchwork.py` | `vision_analyze` ×4 + 概念图/目标图对照 | **v2 指标全过但主视角更难看**：立面成了「白块+深灰块」迷彩拼布。改量：邻块明度差中位数 **5.4%**（目标参考 target-front 10.8–14.2%）、块间饱和度离散 **26.2%**（参考 26.2–28.2%）→ **颜色方差与参考持平，不是病根**。真因是**块尺度**：一张贴图 2.4 m / 4 皮 → 块 0.53×0.6 m，主视角 19.4 px/m → 一块石头只有 **12 px**、立面 60+ 块 = 细碎噪声；参考里石块约占建筑宽度 9–10%（2.4–2.8 m）。简报 `spike/brief-stone3.md` 写好（只改 `M_Stone.mat` 两处 m_Scale：1/2.4 → 1/4.8，块变 1.05×1.2 m、主视角约 21 px） |

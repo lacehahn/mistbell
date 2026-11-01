@@ -169,72 +169,115 @@ def block_widths(rnd, total):
     return widths
 
 
-def make_stone(rnd):
-    courses, row_h = 4, SZ // 4          # 4 皮，每皮 0.6 m
-    img = new_img((0x4E, 0x49, 0x42))    # 灰浆底色
-    height = [[0.5] * SZ for _ in range(SZ)]
+def make_stone(rnd, size=256):
+    import colorsys
+    import math
 
-    grain = fbm([16, 8, 2], rnd, 0.55)
-    blotch = fbm([32, 16], rnd)
+    # 独立尺寸与周期值噪声，不改变其他材质使用的 SZ / 随机序列。
+    def stone_noise(cell):
+        assert size % cell == 0
+        count = size // cell
+        lattice = [[rnd.random() for _ in range(count)] for _ in range(count)]
+        noise = []
+        for y in range(size):
+            iy, fy = divmod(y, cell)
+            ty = smooth(fy / cell)
+            row = []
+            for x in range(size):
+                ix, fx = divmod(x, cell)
+                tx = smooth(fx / cell)
+                top = lerp(lattice[iy][ix], lattice[iy][(ix + 1) % count], tx)
+                bot = lerp(lattice[(iy + 1) % count][ix],
+                           lattice[(iy + 1) % count][(ix + 1) % count], tx)
+                row.append(lerp(top, bot, ty))
+            noise.append(row)
+        return noise
 
-    # 每皮一套宽度布局并错缝半块，接缝处靠取模环绕
-    layouts = []
+    courses = 4
+    mortar = (0x4A, 0x46, 0x42)
+    img = [[mortar for _ in range(size)] for _ in range(size)]
+    height = [[0.05] * size for _ in range(size)]
+    grain = stone_noise(size // 16)
+    fine_grain = stone_noise(size // 32)
+    blotch = stone_noise(size // 2)
+    low, high = min(map(min, blotch)), max(map(max, blotch))
+    blotch = [[(v - low) / (high - low) for v in row] for row in blotch]
+    base_h, base_l, base_s = colorsys.rgb_to_hls(0x8A / 255, 0x84 / 255, 0x78 / 255)
+    min_w, max_w = math.ceil(size * 0.28 / 2.4), math.floor(size * 1.05 / 2.4)
+    all_widths = []
     for course in range(courses):
-        widths = block_widths(rnd, SZ)
-        offset = widths[0] // 2 if course % 2 else 0
-        layouts.append((widths, offset))
-        x = offset
-        for w in widths:
-            tone = 0.56 + rnd.uniform(-0.15, 0.17)
-            warm = rnd.uniform(-0.04, 0.06)
-            y0 = course * row_h
-            top = y0 + 2
-            bottom = y0 + row_h - 3
-            for yy in range(top, bottom + 1):
-                for xx in range(x + 1, x + w - 1):
-                    g = grain[yy % SZ][xx % SZ]
-                    v = tone + (g - 0.5) * 0.20 + (blotch[yy % SZ][xx % SZ] - 0.5) * 0.12
-                    img[yy % SZ][xx % SZ] = (clamp8(v * 236 + warm * 90),
-                                             clamp8(v * 232 + warm * 40),
-                                             clamp8(v * 222 - warm * 30))
-                    height[yy % SZ][xx % SZ] = 0.6 + (g - 0.5) * 0.45
-            # 柔和的手工明暗：上缘受光、下缘与灰浆接触处压暗（低分辨率下也读得出体积）
-            for xx in range(x + 1, x + w - 1):
-                add(img, xx, top, 8)
-                add(img, xx, top + 1, 4)
-                add(img, xx, bottom, -14)
-                height[y0 % SZ][xx % SZ] = 0.0
-            for yy in range(top, bottom + 1):
-                add(img, x + 1, yy, 5)
-                add(img, x + w - 2, yy, -12)
-                height[yy % SZ][x % SZ] = 0.0
-            # 偶发裂纹
-            if rnd.random() < 0.28:
-                cx = x + 3 + rnd.randrange(max(1, w - 8))
-                cy = top + rnd.randrange(max(1, bottom - top - 6))
-                for k in range(rnd.randrange(3, 7)):
-                    put(img, cx + (k // 3), cy + k, (0x3C, 0x38, 0x33))
-            x += w
+        # 拒绝无法拼满一圈或宽度分布过窄的布局；不产生接缝窄条。
+        while True:
+            count = rnd.randint(4, 6)
+            widths = [rnd.randint(min_w, max_w) for _ in range(count - 1)]
+            widths.append(size - sum(widths))
+            mean = size / count
+            std = (sum((w - mean) ** 2 for w in widths) / count) ** 0.5
+            if min_w <= widths[-1] <= max_w and std / mean >= 0.28:
+                break
+        all_widths.extend(widths)
+        x0 = rnd.randrange(size)
+        y0, y1 = round(course * size / courses), round((course + 1) * size / courses)
 
-    # 皮间灰浆：2 px 暗缝 + 高度下陷
-    for course in range(courses):
-        for y in ((course * row_h) % SZ, (course * row_h + 1) % SZ, (course * row_h + row_h - 1) % SZ):
-            for x in range(SZ):
-                add(img, x, y, -22)
-                height[y][x] = 0.05
+        for width in widths:
+            left_joint, right_joint, top_joint, bottom_joint = [rnd.randint(1, 5) for _ in range(4)]
+            joint_colors = [(0x6E, 0x66, 0x5C) if rnd.random() < 0.15 else
+                            tuple(c - rnd.randint(25, 45) for c in (110, 106, 100))
+                            for _ in range(4)]
+            hue = base_h + rnd.uniform(-6, 6) / 360
+            direction = rnd.choice((-1, 1))
+            # 低频斑驳缩小后由块间明度承担层次，亮块收窄以避免运行时过曝。
+            light = base_l + direction * rnd.uniform(0.15 if direction < 0 else 0.12,
+                                                     0.19 if direction < 0 else 0.16)
+            color = tuple(v * 255 for v in colorsys.hls_to_rgb(hue % 1, light, min(0.18, base_s)))
+            gradient = rnd.uniform(0.03, 0.06)
+            for y in range(y0, y1):
+                t = (y - y0) / (y1 - y0)
+                for xx in range(x0, x0 + width):
+                    x = xx % size
+                    distances = (xx - x0, x0 + width - 1 - xx, y - y0, y1 - 1 - y)
+                    joints = (left_joint, right_joint, top_joint, bottom_joint)
+                    side = min(range(4), key=lambda i: distances[i] - joints[i])
+                    edge = distances[side] - joints[side]
+                    if edge < 0:
+                        img[y][x] = joint_colors[side]
+                        continue
+                    variation = ((grain[y][x] - 0.5) * 44 +
+                                 (fine_grain[y][x] - 0.5) * 20 +
+                                 (blotch[y][x] - 0.5) * 40)
+                    # 颜色只留一像素不规则暗边；倒角的亮暗由高度场响应灯光。
+                    edge_dark = rnd.uniform(-10, 0) if edge == 0 else 0
+                    img[y][x] = tuple(clamp8(c * (1 - gradient * t) + variation + edge_dark)
+                                      for c in color)
+                    height[y][x] = (0.35 if edge == 0 else 0.6) + (grain[y][x] - 0.5) * 0.30
+            x0 += width
 
-    # 竖向风化 streaks（顺墙流下的水痕），让墙面不再是均匀噪点
-    for _ in range(16):
-        x = rnd.randrange(SZ)
-        y = rnd.randrange(SZ)
-        n = rnd.randrange(6, 20)
-        d = rnd.choice((-10, -7, -5, 5))
-        for k in range(n):
-            add(img, x, y + k, d)
-            if rnd.random() < 0.3:
-                add(img, x + 1, y + k, d // 2)
-
-    return img, 3.0, height
+    # 3–5 条整墙竖向流痕，软边横向环绕，避免贴图边界截断。
+    for _ in range(rnd.randint(3, 5)):
+        center = rnd.randrange(size)
+        width = rnd.randint(6, 20)
+        alpha = rnd.uniform(0.05, 0.12)
+        for y in range(size):
+            for dx in range(-width // 2, (width + 1) // 2):
+                x = (center + dx) % size
+                weight = alpha * (1 - abs(dx) / (width / 2 + 1))
+                img[y][x] = tuple(clamp8(v) for v in mix(img[y][x], mortar, weight))
+    for y in range(size):
+        # 底部积尘；在皮间灰缝中回到起点，平铺时明暗跳变落在灰缝内。
+        dust = 0.08 * smooth(max(0.0, (y / (size - 1) - 0.8) / 0.2))
+        for x in range(size):
+            fine = rnd.uniform(-9, 9)
+            # 少量砂眼打断平滑石面；不沿边界描出闭合轮廓。
+            if height[y][x] > 0.1 and rnd.random() < 0.008:
+                fine -= rnd.uniform(22, 38)
+                height[y][x] -= 0.12
+            img[y][x] = tuple(clamp8(c * (1 - dust) + fine) for c in img[y][x])
+    mean = sum(all_widths) / len(all_widths)
+    std = (sum((w - mean) ** 2 for w in all_widths) / len(all_widths)) ** 0.5
+    scale = 2.4 / size
+    print("stone px=%d courses=%d blockW mean=%.4f std=%.4f min=%.4f max=%.4f" %
+          (size, courses, mean * scale, std * scale, min(all_widths) * scale, max(all_widths) * scale))
+    return img, 0.9, height
 
 
 # ---------------------------------------------------------------- 石板瓦屋面
@@ -246,9 +289,9 @@ def make_roof(rnd):
     grain = fbm([16, 8, 2], rnd, 0.55)
 
     for r in range(rows):
-        y0 = r * row_h
-        offset = (tw // 2) if r % 2 else 0
-        for col in range(-1, 5):
+        y0 = r * row_h + row_h // 2
+        offset = tw // 4 + ((tw // 2) if r % 2 else 0)
+        for col in range(4):
             x0 = col * tw + offset
             tone = 0.58 + rnd.uniform(-0.18, 0.18)
             for y in range(y0, y0 + row_h):
@@ -274,17 +317,20 @@ def make_roof(rnd):
 
 
 # ---------------------------------------------------------------- 法线
-def normal_map(img, height=None, strength=2.0):
+def normal_map(img, height=None, strength=2.0, size=SZ):
     """由亮度（或传入高度场）推切线空间法线，采样全程环绕以保持可平铺。"""
     if height is None:
         lum = [[(0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2]) / 255.0 for p in row] for row in img]
     else:
         lum = height
-    n_img = new_img()
-    for y in range(SZ):
-        for x in range(SZ):
-            dx = lum[y][(x + 1) % SZ] - lum[y][(x - 1) % SZ]
-            dy = lum[(y + 1) % SZ][x] - lum[(y - 1) % SZ][x]
+    # 调用方原样传入完整贴图；stone 使用自身的 256px 尺寸。
+    if size == SZ and len(img) != SZ:
+        return normal_map(img, height, strength, size=len(img))
+    n_img = [[(0, 0, 0) for _ in range(size)] for _ in range(size)]
+    for y in range(size):
+        for x in range(size):
+            dx = lum[y][(x + 1) % size] - lum[y][(x - 1) % size]
+            dy = lum[(y + 1) % size][x] - lum[(y - 1) % size][x]
             nx = -dx * strength
             ny = dy * strength          # Unity 法线图：绿通道指向上（+V）
             nz = 1.0

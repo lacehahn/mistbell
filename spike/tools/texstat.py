@@ -58,7 +58,7 @@ def read_png(path):
     return w, h, bpp, rows
 
 
-for path in sys.argv[1:]:
+for path in ([] if __name__ != "__main__" else sys.argv[1:]):
     w, h, bpp, rows = read_png(path)
     L = [[0.2126 * rows[y][x * bpp] + 0.7152 * rows[y][x * bpp + 1] + 0.0722 * rows[y][x * bpp + 2]
           for x in range(w)] for y in range(h)]

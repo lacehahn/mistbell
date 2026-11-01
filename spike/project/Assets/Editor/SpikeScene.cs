@@ -30,7 +30,7 @@ public static class SpikeScene
         const string TEX = "Assets/Art/Textures/";
         var stone = ChurchMaterial("stone", "#C9A87C");
         // 固定曝光补偿：原石材 tint × (目标反照率 0.30 / 原目标 0.36)，重复生成不累乘。
-        stone.SetColor("_BaseColor", new Color(0.6470588f, 0.5490196f, 0.4248366f, 1f));
+        stone.SetColor("_BaseColor", new Color(0.675f, 0.63f, 0.575f, 1f));
         var roofMat = ChurchMaterial("roof", "#A06B4A");
         var wood = ChurchMaterial("wood", "#6B4A32");
         var ground = SpikeArt.MakeTextured("Assets/Settings/M_Ground.mat", TEX + "grass.png", TEX + "grass_n.png",
