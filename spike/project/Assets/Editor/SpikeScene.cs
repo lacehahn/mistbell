@@ -63,7 +63,7 @@ public static class SpikeScene
         BuildProps(terrainCollider, stone, wood);
 
         // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
-        var church = ImportChurch(stone, roofMat, wood);
+        var church = ImportChurch(stone, roofMat);
         var cameraPosition = EyeAt(28f, -100f);
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
 
@@ -238,7 +238,7 @@ public static class SpikeScene
         return MakeLit(path, Hex(fallbackColor), 0f, 0.15f);
     }
 
-    static Transform ImportChurch(Material stone, Material roof, Material wood)
+    static Transform ImportChurch(Material stone, Material roof)
     {
         const string path = "Assets/Art/Church/gergeti_church.fbx";
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
@@ -248,33 +248,35 @@ public static class SpikeScene
         church.name = "Church";
         church.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
         church.localScale = Vector3.one;
-        int stoneCount = 0, roofCount = 0, woodCount = 0;
+        int stoneCount = 0, roofCount = 0, submeshes = 0;
         long triangles = 0;
         foreach (var filter in church.GetComponentsInChildren<MeshFilter>(true))
         {
             var mesh = filter.sharedMesh;
             if (mesh == null) continue;
-            for (int i = 0; i < mesh.subMeshCount; i++)
-                triangles += (long)mesh.GetIndexCount(i) / 3;
             var renderer = filter.GetComponent<Renderer>();
-            if (renderer == null) continue;
+            if (renderer == null) throw new System.InvalidOperationException("Church mesh has no renderer: " + filter.name);
             var materials = new Material[mesh.subMeshCount];
             var original = renderer.sharedMaterials;
             for (int i = 0; i < materials.Length; i++)
             {
-                string names = (filter.name + " " + mesh.name + " " +
-                    (i < original.Length && original[i] != null ? original[i].name : "")).ToLowerInvariant();
+                string sourceName = i < original.Length && original[i] != null ? original[i].name : "";
+                string names = (filter.name + " " + mesh.name + " " + sourceName).ToLowerInvariant();
                 if (names.Contains("roof")) { materials[i] = roof; roofCount++; }
-                else if (names.Contains("wood")) { materials[i] = wood; woodCount++; }
                 else { materials[i] = stone; stoneCount++; }
+                long submeshTriangles = (long)mesh.GetIndexCount(i) / 3;
+                triangles += submeshTriangles;
+                submeshes++;
+                Debug.Log($"[SPIKE] church submesh object={filter.name} mesh={mesh.name} index={i} source={sourceName} material={materials[i].name} tris={submeshTriangles}");
             }
             renderer.sharedMaterials = materials;
         }
         var bounds = ChurchBounds(church);
-        Debug.Log($"[SPIKE] church imported tris={triangles} bounds={bounds.size.x:F2}x{bounds.size.y:F2}");
+        Debug.Log($"[SPIKE] church v2 imported tris={triangles} bounds={bounds.size.x:F2}x{bounds.size.y:F2}x{bounds.size.z:F2} submeshes={submeshes}");
         Debug.Log($"[SPIKE] church bounds min={bounds.min} max={bounds.max} root scale={church.localScale} rotation={church.eulerAngles}");
-        Debug.Log($"[SPIKE] church materials stone={stoneCount} roof={roofCount} wood={woodCount} (submesh assignments; unclassified=stone)");
-        if (triangles <= 5000) throw new System.InvalidOperationException("Church must exceed 5000 triangles");
+        Debug.Log($"[SPIKE] church materials stone={stoneCount} roof={roofCount} (submesh assignments; unclassified=stone)");
+        if (triangles < 70000 || triangles > 78000 || Mathf.Abs(bounds.size.x - 28f) > 2f || Mathf.Abs(bounds.size.y - 24.5f) > 2f)
+            throw new System.InvalidOperationException("Church v2 outside triangle/bounds acceptance limits");
         return church;
     }
 
@@ -314,7 +316,8 @@ public static class SpikeScene
             if (!hasPorch) { porchBounds = r.bounds; hasPorch = true; }
             else porchBounds.Encapsulate(r.bounds);
         }
-        if (!hasPorch) throw new System.InvalidOperationException("Church has no porch renderers");
+        if (hasPorch)
+        {
         float porchLeft=float.PositiveInfinity, porchRight=float.NegativeInfinity;
         float porchLow=float.PositiveInfinity, porchHigh=float.NegativeInfinity;
         for (int i=0;i<8;i++)
@@ -325,6 +328,8 @@ public static class SpikeScene
             porchLow=Mathf.Min(porchLow,p.y); porchHigh=Mathf.Max(porchHigh,p.y);
         }
         Debug.Log($"[SPIKE] frame porch heightPct={(porchHigh-porchLow)*100:F1} centerX={(porchLeft+porchRight)*.5f*W:F1}");
+        }
+        else Debug.Log("[SPIKE] frame porch unavailable: church v2 porch geometry merged into Stone");
         var feet=cam.WorldToViewportPoint(pilgrim); var head=cam.WorldToViewportPoint(pilgrim+Vector3.up*1.75f);
         Debug.Log($"[SPIKE] proj pilgrim px_height={(head.y-feet.y)*H:F1}");
         Debug.Log($"[SPIKE] pilgrim viewport feet={feet} head={head}");
