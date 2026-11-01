@@ -43,3 +43,6 @@ sysinfo.txt
 *.fbx.meta.bak
 *.tmp
 .DS_Store
+
+# Codex 并发锁（2026-11-02）
+spike/.codexlock/
