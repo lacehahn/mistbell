@@ -43,7 +43,7 @@ public static class SpikeScene
         EditorUtility.SetDirty(ground);
 
         // ---------- 地形：近景保留 6° 坡面，远景下沉成谷 ----------
-        var terrainCollider = BuildTerrain(ground);
+        var terrainCollider = BuildTerrain(MakeGroundHaze(ground));
 
         Physics.SyncTransforms();
         BuildMountains();
@@ -185,6 +185,33 @@ public static class SpikeScene
 
         Debug.Log("[SPIKE] EDIT-TIME CAPTURES DONE（正式证据用播放器 -shots 产出）");
         Debug.Log("[SPIKE] ART DONE");
+    }
+
+    static Material MakeGroundHaze(Material ground)
+    {
+        var shader = Shader.Find("Mistbell/TerrainHaze");
+        if (shader == null) throw new System.InvalidOperationException("Missing Mistbell/TerrainHaze");
+        var material = new Material(ground) { name = "M_GroundHaze", shader = shader };
+        material.SetTexture("_BaseMap", ground.GetTexture("_BaseMap"));
+        material.SetTextureScale("_BaseMap", ground.GetTextureScale("_BaseMap"));
+        material.SetTextureOffset("_BaseMap", ground.GetTextureOffset("_BaseMap"));
+        material.SetColor("_BaseColor", ground.GetColor("_BaseColor"));
+        material.SetTexture("_NormalMap", ground.GetTexture("_BumpMap"));
+        material.SetFloat("_NormalScale", ground.GetFloat("_BumpScale"));
+        if (ground.GetTexture("_BumpMap") != null) material.EnableKeyword("_NORMALMAP");
+        else material.DisableKeyword("_NORMALMAP");
+        material.SetColor("_HazeColor", Hex("#A7B7CB"));
+        material.SetFloat("_HazeStart", 45f);
+        material.SetFloat("_HazeEnd", 135f);
+        material.SetFloat("_HazePower", 1.4f);
+        material.SetFloat("_HazeStrength", 0.92f);
+        const string path = "Assets/Settings/M_GroundHaze.mat";
+        var saved = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (saved == null) { AssetDatabase.CreateAsset(material, path); saved = material; }
+        else { EditorUtility.CopySerialized(material, saved); UnityEngine.Object.DestroyImmediate(material); }
+        EditorUtility.SetDirty(saved);
+        Debug.Log("[SPIKE] terrain haze shader=TerrainHaze start=45 end=135 strength=0.92 color=#A7B7CB");
+        return saved;
     }
 
     static Material ChurchMaterial(string category, string fallbackColor)
