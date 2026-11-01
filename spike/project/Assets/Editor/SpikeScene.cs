@@ -169,6 +169,9 @@ public static class SpikeScene
         var shotter = new GameObject("Screenshotter");
         shotter.AddComponent<Screenshotter>();
 
+        // Spike 直接进入场景，避免 macOS 无人值守验收停在启动画面的渲染等待。
+        PlayerSettings.SplashScreen.show = false;
+        PlayerSettings.MTRendering = false; // macOS Spike 截图使用单渲染线程，避免启动时线程等待。
         PlayerSettings.defaultScreenWidth = W;
         PlayerSettings.defaultScreenHeight = H;
         PlayerSettings.fullScreenMode = FullScreenMode.Windowed;

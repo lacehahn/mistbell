@@ -82,3 +82,5 @@
 | 00:05 | 派发 Codex 第 2 轮 | `codex.sh -i art-ref/concept-gergeti-sunny.jpg` | 任务：角色地形吸附、3 层远山、石板路、暖补光、色板对齐；进行中 |
 | 00:20 | 收入三张目标风格参考 | 用户提供设定画 + 两张成片 | 存 `art-ref/concept-sheet-hd2d.jpg`、`target-front-hd2d.jpg`、`target-path-hd2d.jpg`；规格写入 `art-ref/notes-winter-hd2d.md` |
 | 00:21 | 关键发现 | 设定画标注尺寸 | **教堂真实尺寸 34 m 宽 × 27 m 高 × 24 m 深**（此前按 14 m 建，是构图反复切顶的根因）；穹顶 12 边形、钟楼 8 边形开敞且独立 |
+| 00:28 | 验收 Codex Blender v1 | 独立跑 `check_church.py`（blender -b） | **不合格**：bbox 40.0×34.5×25.4 超限、tris=1560、拱门未开洞（前墙仅 88 tris）；根因含我的 spec 自相矛盾（台地40×32+侧屋30m+钟楼外偏塞不进 34×24） |
+| 00:30 | 重发 Blender v2 | `codex.sh`（自洽尺寸 + 三视图渲染 + 硬门槛） | 门槛：bbox_in_range=True、tris≥3000、nave_front_tris≥120、产出 views/{front,side,top,iso}.png；进行中 |
