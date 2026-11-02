@@ -836,24 +836,32 @@ public static class SpikeScene
         Vector3 RoadPoint(float t, float offset) => new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI) + offset, 0f,
             Mathf.Lerp(-70f, -13.25f, t));
         int posts = 0, rails = 0;
-        Vector3 previous = Vector3.zero;
-        // 包含两端，32 段的 z 间隔 1.5625m，沿弯路实际柱距约 1.6m。
-        for (int i = 0; i <= 32; i++)
+        // 两侧栏栅 + 高度抖动 + 柱顶积雪：单侧细栏在远景里会退化成一条悬浮的线。
+        for (int side = 0; side < 2; side++)
         {
-            float z = Mathf.Lerp(-66f, -16f, i / 32f);
-            Vector3 p = Snap(RoadPoint((z + 70f) / 56.75f, -2.6f));
-            SpikeArt.Box(roadside, "FencePost_" + posts++, new Vector3(0.12f, 0.95f, 0.12f),
-                p + Vector3.up * (0.475f - 0.08f), fenceWood);
-            if (i > 0)
-                foreach (float height in new[] { 0.42f, 0.74f })
-                {
-                    Vector3 a = previous + Vector3.up * height, b = p + Vector3.up * height;
-                    var delta = b - a;
-                    var rail = SpikeArt.Box(roadside, "FenceRail_" + rails++,
-                        new Vector3(0.08f, 0.06f, delta.magnitude), (a + b) * 0.5f, fenceWood);
-                    rail.transform.rotation = Quaternion.LookRotation(delta);
-                }
-            previous = p;
+            float offset = side == 0 ? -2.6f : 2.6f;
+            Vector3 previous = Vector3.zero;
+            for (int i = 0; i <= 32; i++)
+            {
+                float z = Mathf.Lerp(-66f, -16f, i / 32f);
+                Vector3 p = Snap(RoadPoint((z + 70f) / 56.75f, offset));
+                float jitter = 1f - ((i * 37) % 13) / 60f;
+                float h = 1.05f * jitter;
+                SpikeArt.Box(roadside, "FencePost_" + posts++, new Vector3(0.16f, h, 0.16f),
+                    p + Vector3.up * (h * 0.5f - 0.06f), fenceWood);
+                SpikeArt.Box(roadside, "FenceSnow_" + (posts - 1), new Vector3(0.19f, 0.05f, 0.19f),
+                    p + Vector3.up * (h - 0.05f), snowMat);
+                if (i > 0)
+                    foreach (float height in new[] { 0.44f, 0.80f })
+                    {
+                        Vector3 a = previous + Vector3.up * height, b = p + Vector3.up * height;
+                        var delta = b - a;
+                        var rail = SpikeArt.Box(roadside, "FenceRail_" + rails++,
+                            new Vector3(0.06f, 0.05f, delta.magnitude), (a + b) * 0.5f, fenceWood);
+                        rail.transform.rotation = Quaternion.LookRotation(delta);
+                    }
+                previous = p;
+            }
         }
         Debug.Log($"[SPIKE] fence posts={posts} rails={rails}");
     }

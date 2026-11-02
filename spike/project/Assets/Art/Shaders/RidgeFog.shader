@@ -99,26 +99,24 @@ Shader "Mistbell/RidgeFog"
                 float altitudeGate=smoothstep(_SnowWorldFloor-.4,_SnowWorldFloor+.4,
                     input.positionWS.y+wobble+breakup*8);
                 heightGate=min(heightGate,altitudeGate);
-                float slopeGate=smoothstep(.42,.74,n.y);
+                float slopeGate=smoothstep(.55,.86,n.y);
                 float snow=heightGate*slopeGate;
                 // A narrow exposed strip immediately below the snowline reads as cornice shadow.
                 float edgeLocal=step(snowHeight-.022,input.ridge.x+breakup)*altitudeGate;
                 float edgeAltitude=step(_SnowWorldFloor-2,input.positionWS.y)*step(_SnowWorldFloor,input.positionWS.y+2);
                 float underEdge=(1-heightGate)*max(edgeLocal,edgeAltitude)*slopeGate;
                 // Bedding carries the large-scale albedo; directional light only modulates it.
-                float rockFace=.30+.45*lightFace;
+                float rockFace=.22+.62*lightFace;
                 half3 rock=lerp(_RockShade.rgb,_ColorBottom.rgb,rockFace);
+                rock=lerp(rock,half3(.55,.52,.47),lightFace*.35);
                 rock = lerp(rock, lerp(half3(.156,.195,.246),half3(.34,.40,.48),rockFace),farRidge);
                 // Snow receives broad sky light on shelves; rock retains directional cliff shadows.
                 float snowLight=.72+.28*smoothstep(.1,.65,face);
                 half3 ice=lerp(_SnowShade.rgb,_SnowColor.rgb,snowLight);
-                // Quantize the strata phase to a screen pixel footprint; three hard albedo levels.
-                float strataPhase=input.positionWS.y*.9+sin(input.positionWS.x*.018)*.7+sin(input.positionWS.x*.0071)*3.2+sin(input.positionWS.z*.0043)*1.6;
-                float phasePixel=max(fwidth(strataPhase),.001);
-                strataPhase=floor(strataPhase/phasePixel)*phasePixel;
-                // Three beds, each 28 phase units (~31.1m), survive distance and the macro filter.
-                float stratum=floor(frac(strataPhase/84.0)*3);
-                rock *= (stratum < 1 ? .72 : (stratum < 2 ? .86 : 1.0));
+                // 岩层改为**局部噪声斑块**：连续 Y 分带会横穿整条山脉，读成胶合板横纹。
+                float bandA=SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,input.positionWS.xz/47.0+.13).r;
+                float bandB=SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,input.positionWS.xz/129.0+.71).r;
+                rock *= lerp(.80,1.06,bandA*.65+bandB*.35);
                 rock *= lerp(1,.38,farRidge);
                 rock *= lerp(1,.78,underEdge);
                 float2 pixelUV = input.positionWS.xy / 6.0;
