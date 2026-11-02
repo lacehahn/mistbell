@@ -359,4 +359,6 @@
 | 18:06–18:46 | **教堂内部（Codex）** | `[INTERIOR] wall=0.6 clear=12.0 door_leaf window=6 柱4 椅6 坛1 烛4 吊灯1 圣像屏1 旗2 tris=90774`、`[INTERIOR_U] door=100° walk_in=true inside=true fov=32 lights=5 shafts=4 colliders=66 pois=3` | 门可开可进，室内 3 个 POI（p04 圣像屏/p05 烛台/p06 壁画） |
 | 18:46–19:05 | 室内修正 | `[INT_FIX] cam_min_y=3.0 wall_gap=0.60 below_floor=false`、`interior_luma 0.109→0.3415`、furniture 全 true | 室内可读；遗留：相机过高像玩偶屋、光柱是实心楔形、吊灯空环、圣像屏素箱 → 已写 `interior_framing.md` |
 | 19:16 | 派发台地/远山那轮 | `terrace_and_mountains.md` | 台地加雪堆/石墩/矮墙/石堆/墙根雪裙、墙顶 0.7m 外倾；远山雪帽按坡度、双层锯齿、三层亮度差≥0.18、山脚 12% 地雾 |
+| 19:54 | 台地/远山这轮生成达标但**打断 reveal** | `[TERRACE2] mounds=18 skirt=81 coping=0.70`、`[MTN9] gradient=0.307 foot_jump=0.0039` 通过；`-demo-reveal` exit=1（教堂顶 top=-0.706，机位未随底座 37×27 重算） | 已 WIP 提交 `5496a54`；任务书 `reveal_framing_fix.md`（重算三档机位 + 雪帽≥5px + 主角点采样 + 围栏台阶让位） |
+| 19:54 | **Codex 配额再次耗尽**（22:47 重置） | `try again at 10:47 PM`，本轮 tokens 51,746 | 按用户指示不手写代码；已武装 `handoff_queue 22:48`，顺序跑 reveal 修正 → 室内构图 |
 
