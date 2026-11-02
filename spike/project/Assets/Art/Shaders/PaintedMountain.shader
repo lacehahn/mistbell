@@ -3,12 +3,13 @@ Shader "Mistbell/PaintedMountain"
     Properties { _MainTex ("Painted mountain RGBA", 2D) = "white" {} }
     SubShader
     {
-        Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="TransparentCutout" "Queue"="AlphaTest" }
+        Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Transparent" "Queue"="AlphaTest" }
         Pass
         {
             Tags { "LightMode"="UniversalForward" }
             Cull Off
-            ZWrite On
+            ZWrite Off
+            Blend SrcAlpha OneMinusSrcAlpha
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
@@ -31,7 +32,7 @@ Shader "Mistbell/PaintedMountain"
             half4 Frag(Varyings i):SV_Target
             {
                 half4 c=SAMPLE_TEXTURE2D(_MainTex,sampler_MainTex,i.uv);
-                clip(c.a-.5); return half4(c.rgb,1);
+                clip(c.a-.001); return c;
             }
             ENDHLSL
         }
