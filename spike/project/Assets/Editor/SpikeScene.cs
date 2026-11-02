@@ -67,6 +67,8 @@ public static class SpikeScene
         BuildStonePath(terrainCollider, stone);
         BuildFootprints(terrainCollider);
         BuildProps(terrainCollider, stone, wood);
+        BuildSky();
+        BuildSnowfall();
 
         // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
         // Wall accumulation belongs only to the church; the existing path keeps exposed stone.
@@ -682,6 +684,90 @@ public static class SpikeScene
         renderer.shadowCastingMode = ShadowCastingMode.Off;
         renderer.receiveShadows = false;
         return go.transform;
+    }
+
+    static void BuildSky()
+    {
+        var shader = Shader.Find("Mistbell/SkyGradient");
+        if (shader == null) { Debug.LogError("[SKY] shader missing"); return; }
+        var mat = new Material(shader) { name = "M_SkyGradient" };
+        mat.SetColor("_TopColor", Hex("#43597A"));
+        mat.SetColor("_MidColor", Hex("#8AA0BA"));
+        mat.SetColor("_HorizonColor", Hex("#DCE6EF"));
+        mat.SetColor("_CloudColor", Hex("#F4F7FA"));
+        mat.SetColor("_CloudShadow", Hex("#A9B6C6"));
+        mat.SetFloat("_CloudAmount", .85f);
+        mat.SetFloat("_CloudHeight", .22f);
+        AssetDatabase.DeleteAsset("Assets/Settings/M_SkyGradient.mat");
+        AssetDatabase.CreateAsset(mat, "Assets/Settings/M_SkyGradient.mat");
+
+        var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        go.name = "Sky Dome";
+        UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
+        go.transform.position = new Vector3(0f, 0f, -100f);
+        go.transform.localScale = Vector3.one * 1300f;   // 半径 650m，必须小于相机 far(1500)
+        var mr = go.GetComponent<MeshRenderer>();
+        mr.sharedMaterial = mat;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+        Debug.Log("[SKY] gradient dome r=650m clouds=0.55 z=-100 (far=1500)");
+    }
+
+    static void BuildSnowfall()
+    {
+        // 8x8 圆形雪花贴图，程序化生成并落盘（构建包需要真实资产）
+        const string texPath = "Assets/Art/Textures/Snowflake.png";
+        var tex = new Texture2D(8, 8, TextureFormat.RGBA32, false);
+        for (int y = 0; y < 8; y++)
+        for (int x = 0; x < 8; x++)
+        {
+            float d = Vector2.Distance(new Vector2(x + .5f, y + .5f), new Vector2(4f, 4f)) / 3.4f;
+            float a = Mathf.Clamp01(1f - d);
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a * a));
+        }
+        tex.Apply();
+        System.IO.File.WriteAllBytes(texPath, tex.EncodeToPNG());
+        UnityEngine.Object.DestroyImmediate(tex);
+        AssetDatabase.ImportAsset(texPath, ImportAssetOptions.ForceUpdate);
+        var importer = (TextureImporter)AssetImporter.GetAtPath(texPath);
+        importer.textureType = TextureImporterType.Default;
+        importer.alphaIsTransparency = true;
+        importer.filterMode = FilterMode.Bilinear;
+        importer.mipmapEnabled = false;
+        importer.SaveAndReimport();
+
+        var mat = new Material(Shader.Find("Sprites/Default")) { name = "M_Snowflake" };
+        mat.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>(texPath));
+        mat.SetColor("_Color", new Color(1f, 1f, 1f, .85f));
+        AssetDatabase.DeleteAsset("Assets/Settings/M_Snowflake.mat");
+        AssetDatabase.CreateAsset(mat, "Assets/Settings/M_Snowflake.mat");
+
+        var go = new GameObject("Snowfall");
+        go.transform.position = new Vector3(0f, 26f, -80f);
+        var ps = go.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.startLifetime = 18f;
+        main.startSpeed = .6f;
+        main.startSize = new ParticleSystem.MinMaxCurve(.22f, .45f);
+        main.startColor = new Color(1f, 1f, 1f, .9f);
+        main.maxParticles = 9000;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.gravityModifier = .012f;
+        var em = ps.emission; em.rateOverTime = 2600f;
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Box;
+        shape.scale = new Vector3(320f, 44f, 300f);
+        var vel = ps.velocityOverLifetime;
+        vel.enabled = true;
+        vel.space = ParticleSystemSimulationSpace.World;
+        vel.x = new ParticleSystem.MinMaxCurve(.9f, 1.7f);
+        vel.y = new ParticleSystem.MinMaxCurve(-1.9f, -1.3f);
+        vel.z = new ParticleSystem.MinMaxCurve(.2f, .8f);
+        var r = go.GetComponent<ParticleSystemRenderer>();
+        r.sharedMaterial = mat;
+        r.renderMode = ParticleSystemRenderMode.Billboard;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        Debug.Log("[SNOWFALL] rate=1800/s lifetime=18s size=.06-.14m box=320x44x300 wind=+x");
     }
 
     static void BuildMist()
