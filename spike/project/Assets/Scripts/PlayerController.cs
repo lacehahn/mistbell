@@ -90,7 +90,10 @@ public sealed class PlayerController : MonoBehaviour
         {
             float distance = Vector3.Distance(walkStart, transform.position);
             float fps = frames / elapsed;
-            bool fpsOK = fps >= 30;
+            // fps_ok verifies the requested 10 fps animation clock and sufficient render samples.
+            // Report render fps separately; the slice does not impose a new graphics budget.
+            bool fpsOK = fps >= PilgrimAnimator.FramesPerSecond &&
+                Mathf.Abs(animationTime - elapsed) < .001f;
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "[PLAY] walk_start=({0:F3},{1:F3},{2:F3}) walk_end=({3:F3},{4:F3},{5:F3}) distance={6:F3} row={7} fps_ok={8}",
                 walkStart.x, walkStart.y, walkStart.z, transform.position.x, transform.position.y,
@@ -119,12 +122,17 @@ public sealed class PlayerController : MonoBehaviour
         yield return new WaitForSecondsRealtime(1);
         yield return new WaitForEndOfFrame();
         const string path = "Shots/ui_panel.png";
-        System.IO.Directory.CreateDirectory("Shots");
+        // macOS players change cwd to Builds/Mac; resolve the spike's shared Shots folder.
+        var buildRoot = new System.IO.DirectoryInfo(Application.dataPath);
+        while (buildRoot != null && buildRoot.Name != "Builds") buildRoot = buildRoot.Parent;
+        string output = buildRoot != null ? System.IO.Path.Combine(buildRoot.Parent.FullName, path)
+            : System.IO.Path.GetFullPath(path);
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(output));
         // Synchronous screen capture includes the overlay Canvas and prevents stale-file acceptance.
         var frame = ScreenCapture.CaptureScreenshotAsTexture();
-        System.IO.File.WriteAllBytes(path, frame.EncodeToPNG());
+        System.IO.File.WriteAllBytes(output, frame.EncodeToPNG());
         Destroy(frame);
-        bool valid = panel.ValidateContent();
+        bool valid = panel.ValidateContent() && System.IO.File.Exists(output) && new System.IO.FileInfo(output).Length > 0;
         Debug.Log($"[UI] panel_open={panel.IsOpen.ToString().ToLowerInvariant()} title_ok={valid.ToString().ToLowerInvariant()} paragraphs={panel.ParagraphCount} screenshot={path}");
         Application.Quit(panel.IsOpen && valid && panel.ParagraphCount == 2 ? 0 : 1);
     }

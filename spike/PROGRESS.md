@@ -326,4 +326,7 @@
 | 11:30 | 剩余两项写成 Codex 任务书 | `spike/tasks/` | mountain_triplanar.md（山体横向拉伸）、rock_boulders.md（石头改 icosphere 巨石）；等 12:46 配额恢复按序派发 |
 | 14:08 | **用户拍板 A**：美术 spike 收为技术基线，转玩法验证 | — | 新增 `docs/06-spike-baseline.md`（管线/硬数字/指标口径/11 条坑）；`docs/README.md` 补 D07（程序化=技术基线，手绘留正式制作）D08（重心转玩法） |
 | 14:08 | 派发玩法切片（Codex） | `spike/tasks/gameplay_slice.md` | 键盘 WASD 走路 + 贴地 + 四向 6 帧动画 + 跟随相机 + 门口 E 交互弹中英面板；验收 `[PLAY] distance≥15m`、`[UI] ui_panel.png`、原截图链路不退化 |
+| 14:15 | 玩法切片落地（Codex）：PlayerController / Interactable / InfoPanel | `[PLAY] distance=18.106m ground_error=0.000000 row=3`、`[UI] panel_open=true paragraphs=2` | 走路 6 秒 18.1m、贴地误差 0、四向 6 帧动画；门口 E 弹出中英面板，截图 `Shots/ui_panel.png` |
+| 14:15 | 中文换行修了三轮 | 改 InfoPanel.cs | 根因：Unity legacy Text 在**空格**和**中日韩/数字边界**都会断行 → 用显式 `\n` 手工排版 5 行才稳定；面板 720×600、细金边、正文 656 宽 |
+| 14:15 | **操作教训** | — | 我手改 InfoPanel 时 Codex 还在跑（9 分 59 秒），它最后一次写盘把我的修改覆盖了 → 此后**必须先确认 codex 进程退出再手改同一文件** |
 
