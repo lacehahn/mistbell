@@ -62,12 +62,22 @@ public sealed class MistReveal : MonoBehaviour
             StartCoroutine(DemoReveal());
     }
 
+    // 两段式显现：远处厚重 → 70m 起微透 → 45m（钟声）后明显散 → 30m 快散 → 20m 全清。
+    // 单一 SmoothStep 会让"听见钟声"那一刻没有视觉回应，这里把曲线做得前缓后陡。
+    static float MistCurve(float d)
+    {
+        if (d >= 70f) return Mathf.Lerp(0f, .12f, Mathf.InverseLerp(FarDistance, 70f, d));
+        if (d >= 45f) return Mathf.Lerp(.12f, .30f, Mathf.InverseLerp(70f, 45f, d));
+        if (d >= 30f) return Mathf.Lerp(.30f, .62f, Mathf.InverseLerp(45f, 30f, d));
+        return Mathf.Lerp(.62f, 1f, Mathf.InverseLerp(30f, NearDistance, d));
+    }
+
     float Distance() => Vector2.Distance(new Vector2(player.transform.position.x, player.transform.position.z),
         new Vector2(Anchor.x, Anchor.z));
 
     void ApplyMist(float d)
     {
-        float t = Mathf.SmoothStep(0, 1, Mathf.InverseLerp(FarDistance, NearDistance, d));
+        float t = MistCurve(d);
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Linear;
         RenderSettings.fogStartDistance = Mathf.Lerp(FarStart, NearStart, t);

@@ -42,6 +42,12 @@ public sealed class AudioDirector : MonoBehaviour
         return source;
     }
 
+    /// <summary>风声随与教堂的距离缩放（1.0 = 默认 0.18 音量）。</summary>
+    public void SetWindScale(float scale)
+    {
+        if (windSource != null) windSource.volume = Mathf.Clamp(.18f * scale, .02f, .32f);
+    }
+
     AudioClip MakeBell()
     {
         var samples = new float[SampleRate * 4];

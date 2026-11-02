@@ -462,8 +462,19 @@ public sealed class PlayerController : MonoBehaviour
 
     void LateUpdate()
     {
-        follow.transform.position = Vector3.Lerp(follow.transform.position,
-            transform.position + FollowOffset, .12f);
+        // 风声随接近教堂而减弱：越靠近，人越"进入"圣地，环境声让位给钟声与脚步。
+        float d = Vector2.Distance(new Vector2(transform.position.x, transform.position.z), new Vector2(0f, -9f));
+        audioDirector.SetWindScale(Mathf.Lerp(.45f, 1f, Mathf.InverseLerp(20f, 80f, d)));
+        // 跟随相机防穿过墙/地形：从头部向理想机位做球形扫掠，撞到东西就拉近。
+        Vector3 target = transform.position + FollowOffset;
+        Vector3 head = transform.position + Vector3.up * (LookHeight + .4f);
+        Vector3 delta = target - head;
+        float span = delta.magnitude;
+        const int ignoreMask = ~((1 << PlayerLayer) | (1 << TraversalLayer));
+        if (span > .05f && Physics.SphereCast(head, .35f, delta / span, out var hit, span,
+                ignoreMask, QueryTriggerInteraction.Ignore))
+            target = head + delta / span * Mathf.Max(2.5f, hit.distance - .15f);
+        follow.transform.position = Vector3.Lerp(follow.transform.position, target, .20f);
         follow.transform.rotation = Quaternion.Lerp(follow.transform.rotation,
             Quaternion.LookRotation(transform.position + Vector3.up * LookHeight - follow.transform.position), .12f);
     }
