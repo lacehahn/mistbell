@@ -138,6 +138,18 @@ public static class SpikeScene
         pilgrim.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.On;
         pilgrim.AddComponent<PilgrimAnimator>();
 
+        // Runtime-only playable slice; screenshot flags disable all three components in Awake.
+        var player = pilgrim.AddComponent<PlayerController>();
+        player.ground = terrainCollider;
+        var panel = new GameObject("Church Info Canvas").AddComponent<InfoPanel>();
+        var entrance = new GameObject("Church Entrance Interaction").AddComponent<Interactable>();
+        entrance.transform.SetParent(church, true);
+        entrance.transform.position = new Vector3(0f, churchSeatY + .4f, -13f);
+        entrance.player = player;
+        entrance.panel = panel;
+        player.panel = panel;
+        player.entrance = entrance;
+
         // ---------- 光与雾（曝光整体提亮：HD-2D 要能看清像素细节）----------
         var sun = new GameObject("Sun").AddComponent<Light>();
         sun.type = LightType.Directional;

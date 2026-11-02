@@ -324,4 +324,6 @@
 | 11:30 | 队列㉒：地形延伸 560→1200m（原处地面截断压成硬地平线）；三角预算守卫 6万→9万 | 改 BuildTerrain | 首次触发 "Terrain triangle budget exceeded"，抬高守卫后通过 |
 | 11:30 | 队列㉓：脚印 20→64 个，沿路径从相机脚下铺到台阶 | 改 BuildFootprints | 只调 _Footprint 8% 压暗在 0.86 albedo 雪上不可见 → 直接压 _BaseColor #AFC0D2 + albedo 0.62，现在可辨 |
 | 11:30 | 剩余两项写成 Codex 任务书 | `spike/tasks/` | mountain_triplanar.md（山体横向拉伸）、rock_boulders.md（石头改 icosphere 巨石）；等 12:46 配额恢复按序派发 |
+| 14:08 | **用户拍板 A**：美术 spike 收为技术基线，转玩法验证 | — | 新增 `docs/06-spike-baseline.md`（管线/硬数字/指标口径/11 条坑）；`docs/README.md` 补 D07（程序化=技术基线，手绘留正式制作）D08（重心转玩法） |
+| 14:08 | 派发玩法切片（Codex） | `spike/tasks/gameplay_slice.md` | 键盘 WASD 走路 + 贴地 + 四向 6 帧动画 + 跟随相机 + 门口 E 交互弹中英面板；验收 `[PLAY] distance≥15m`、`[UI] ui_panel.png`、原截图链路不退化 |
 
