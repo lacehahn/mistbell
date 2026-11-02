@@ -134,35 +134,114 @@ public static class MountainBackdrop
     {
         var pixels=new Color32[W*H];
         var rock=new[]{Hex("#4A5666"),Hex("#5E6B7C"),Hex("#74828F")};
-        Color snow=Hex("#EAF1F7");
+        Color snow=Hex("#EAF1F7"), haze=Hex("#C9D6E3");
         Color air=layer==1?Hex("#8FA0B4"):Hex("#C3D2E0");
         float mix=layer==0?0:layer==1?.35f:.60f;
+        int seed=Seeds[layer], bands=5-layer, gullies=20-layer*4;
+        var snowMask=new float[W*H];
+        // Separate deterministic stream: painting cannot alter props, snow or characters.
+        var rng=new System.Random(seed+600);
+        for(int g=0;g<gullies;g++)
+        {
+            int startX=Mathf.Clamp(Mathf.RoundToInt((g+.25f+(float)rng.NextDouble()*.5f)*W/gullies),4,W-5);
+            int length=rng.Next(20,91), width=rng.Next(2,7);
+            int startY=ridge[startX]-rng.Next(0,4);
+            float slope=(ridge[startX+4]-ridge[startX-4])/8f;
+            float drift=-Mathf.Clamp(slope,-1.5f,1.5f)*.42f;
+            for(int d=0;d<length;d++)
+            {
+                float t=d/(float)(length-1);
+                int cx=Mathf.RoundToInt(startX+drift*d+Noise(d/22f,seed+g*37)*2);
+                int cy=startY-d;
+                // Retain a 2..6px channel, fade snow into rock at its tapered end.
+                int w=Mathf.Clamp(Mathf.RoundToInt(width*(1-.5f*t)),2,6);
+                float opacity=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.55f,1,t));
+                for(int dx=0;dx<w;dx++)
+                {
+                    int x=cx+dx-w/2;
+                    if(x<0 || x>=W || cy<0 || cy>ridge[x]) continue;
+                    int index=cy*W+x;
+                    snowMask[index]=Mathf.Max(snowMask[index],opacity);
+                }
+            }
+        }
         for(int x=0;x<W;x++)
         {
             int l=Mathf.Max(0,x-4),r=Mathf.Min(W-1,x+4);
-            // Upward component of the outward normal (-dy/dx,1).
             float slope=(ridge[r]-ridge[l])/(float)Mathf.Max(1,r-l);
             float up=1/Mathf.Sqrt(1+slope*slope);
-            // 8..36px cap, two-pixel hard steps, with deterministic 1..3px teeth.
-            int snowDepth=2*Mathf.RoundToInt(Mathf.Lerp(8,36,up)/2);
-            int jag=(int)(Hash(x/2+Seeds[layer])*3)+1;
-            int cap=Mathf.Clamp(snowDepth+(Hash(x/4+Seeds[layer]+13)>.5f?jag:-jag),8,36);
+            // Patchy crest deposits replace the former continuous 8..36px white border.
+            float deposit=Mathf.Clamp01(.45f+Noise(x/19f,seed+13)*.85f);
+            int cap=Mathf.RoundToInt(Mathf.Lerp(2,12,up)*deposit);
             for(int y=0;y<=ridge[x];y++)
             {
                 int depth=ridge[x]-y;
-                // Slope exposure selects the three inks: steep 0..30%, middle 30..70%,
-                // gentle 70..100%. Angular drainage shifts the facet down the face.
-                // Broad intersecting angular faces, biased by the absolute crest slope.
-                // Two oblique drainages avoid both vertical columns and repeated crest echoes.
-                float facet=Noise((x+depth*.63f)/47f,Seeds[layer]+42)
-                    +.5f*Noise((x-depth*.35f)/83f,Seeds[layer]+109);
+                float facet=Noise((x+depth*.63f)/47f,seed+42)
+                    +.5f*Noise((x-depth*.35f)/83f,seed+109);
                 float exposure=Mathf.Clamp01(up+facet*.45f-depth/(float)H*.1f);
-                int ink=exposure<.30f?0:exposure<.70f?1:2;
-                Color c=rock[ink];
-                if(depth<cap) c=snow;
+                // Broad planes with softer transitions keep texture from reading as cut paper.
+                Color c=Color.Lerp(rock[0],rock[1],Mathf.SmoothStep(0,1,Mathf.InverseLerp(.12f,.65f,exposure)));
+                c=Color.Lerp(c,rock[2],Mathf.SmoothStep(0,1,Mathf.InverseLerp(.55f,1,exposure))*.75f);
+                for(int band=0;band<bands;band++)
+                {
+                    int bandSeed=seed+band*193;
+                    int height=6+Mathf.FloorToInt(Hash(bandSeed)*13);
+                    // Bed edges track the local ridge angle at 65% dip, never horizontal.
+                    float edge=ridge[x]*.65f+90-band*34
+                        +Noise(x/55f,bandSeed+51)*4;
+                    int gapWidth=2+Mathf.FloorToInt(Hash(x/29+bandSeed+71)*3);
+                    int gapStart=5+Mathf.FloorToInt(Hash(x/29+bandSeed+97)*17);
+                    bool gap=x%29>=gapStart && x%29<gapStart+gapWidth;
+                    bool segment=Hash(x/67+bandSeed+29)>.22f;
+                    if(y>=edge && y<edge+height && segment && !gap)
+                        c*=1+(band%2==0?-.08f:.08f);
+                }
+                float coverage=snowMask[y*W+x];
+                // Broken leeward snowfields feed the thin gullies, rather than a white outline.
+                // Coherent oblique pockets leave exposed rock ribs; no per-pixel white noise.
+                float pocket=Noise((x+depth*.42f)/23f,seed+301)
+                    +.30f*Noise((x-depth*.6f)/9f,seed+331);
+                float snowReach=105+65*up+Noise(x/37f,seed+367)*36;
+                float field=Mathf.SmoothStep(0,1,Mathf.InverseLerp(-.12f,.10f,pocket))
+                    *(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(snowReach-20,snowReach,depth)));
+                coverage=Mathf.Max(coverage,field);
+                if(depth<cap) coverage=Mathf.Max(coverage,.72f+.28f*deposit);
+                // Slight cool shadow in the channels, all snow stays below white clipping.
+                c=Color.Lerp(c,Color.Lerp(snow,Hex("#B9C8D4"),.16f*(1-up)),coverage);
                 pixels[y*W+x]=Color.Lerp(c,air,mix);
             }
         }
+        if(layer<2)
+        {
+            Color forest=Hex("#26313A");
+            for(int x=2;x<W-2;)
+            {
+                int height=rng.Next(3,8), baseY=rng.Next(0,Mathf.FloorToInt(H*.12f)-7);
+                int halfWidth=rng.Next(1,3);
+                for(int dy=0;dy<height;dy++)
+                {
+                    int radius=Mathf.RoundToInt(halfWidth*(1-dy/(float)height));
+                    for(int dx=-radius;dx<=radius;dx++)
+                    {
+                        int px=x+dx, py=baseY+dy;
+                        if(px<0 || px>=W || py>ridge[px]) continue;
+                        int index=py*W+px;
+                        pixels[index]=Color.Lerp(pixels[index],Color.Lerp(forest,air,mix),layer==0?.9f:.35f);
+                    }
+                }
+                x+=rng.Next(4,10);
+            }
+        }
+        // Horizontal, continuous 0..45% foot haze; far layers also retain more aerial mix.
+        for(int y=0;y<Mathf.CeilToInt(H*.30f);y++)
+        {
+            float fog=.45f*(1-Mathf.SmoothStep(0,1,y/(H*.30f)));
+            for(int x=0;x<W;x++)
+                if(y<=ridge[x]) pixels[y*W+x]=Color.Lerp(pixels[y*W+x],haze,fog);
+        }
+        Debug.Log($"[MTN6_LAYER] L{layer+1} strata_bands={bands} snow_gullies={gullies} treeline={(layer<2?"yes":"no")} aerial_mix={mix:F2}");
+        if(layer==2)
+            Debug.Log("[MTN6] strata_bands=3..5 per_layer snow_gullies=20/16/12 treeline=yes/yes/no haze_bottom_pct=30");
         string path=$"Assets/Art/Textures/MtnLayer_{layer+1}.png";
         var tex=new Texture2D(W,H,TextureFormat.RGBA32,false); tex.SetPixels32(pixels); tex.Apply();
         File.WriteAllBytes(path,tex.EncodeToPNG()); UnityEngine.Object.DestroyImmediate(tex);
