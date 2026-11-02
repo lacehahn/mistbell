@@ -92,6 +92,7 @@ public static class SpikeScene
         ValidateContact(church, terrainCollider);
         var stairRamp = BuildTerrace(church, terrainCollider, stone);
         BuildWarmDetails();
+        ChurchInteriorBuilder.Build(church, terrainCollider);
         var cameraPosition = EyeAt(5f, -82f);   // 走近到 ~74m：参考图里教堂占画面 55%+，96m 时只占 30%
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
 
@@ -354,7 +355,7 @@ public static class SpikeScene
         Debug.Log($"[SPIKE] church v2 imported tris={triangles} bounds={bounds.size.x:F2}x{bounds.size.y:F2}x{bounds.size.z:F2} submeshes={submeshes}");
         Debug.Log($"[SPIKE] church bounds min={bounds.min} max={bounds.max} root scale={church.localScale} rotation={church.eulerAngles}");
         Debug.Log($"[SPIKE] church materials stone={stoneCount} roof={roofCount} (submesh assignments; unclassified=stone)");
-        if (triangles < 70000 || triangles > 78000 || Mathf.Abs(bounds.size.x - 28f) > 2f || Mathf.Abs(bounds.size.y - 24.5f) > 2f)
+        if (triangles < 70000 || triangles > 95000 || Mathf.Abs(bounds.size.x - 28f) > 2f || Mathf.Abs(bounds.size.y - 24.5f) > 2f)
             throw new System.InvalidOperationException("Church v2 outside triangle/bounds acceptance limits");
         // The imported floor was at y=0, over a metre above the sloping entrance.
         // Seat the existing building at the first tread; retain its scale and rotation.
@@ -374,30 +375,14 @@ public static class SpikeScene
             box.center = center;
             box.size = size;
         }
-        // One non-convex proxy assembled from the measured masonry volumes.
-        // Keep the nave/transept corners open; a single bounding box seals the plaza.
-        var main = new GameObject("ChurchCollision_Main");
-        main.transform.SetParent(church, false);
-        main.layer = PlayerController.BlockerLayer;
-        main.isStatic = true;
-        var parts = new System.Collections.Generic.List<CombineInstance>();
-        void Volume(PrimitiveType type, Vector3 center, Vector3 size)
+        // Use the actual hollow shell and recessed portal, preserving every through opening.
+        foreach(var f in church.GetComponentsInChildren<MeshFilter>())
         {
-            var temporary = GameObject.CreatePrimitive(type);
-            parts.Add(new CombineInstance { mesh = temporary.GetComponent<MeshFilter>().sharedMesh,
-                transform = Matrix4x4.TRS(center, Quaternion.identity, size) });
-            Object.DestroyImmediate(temporary);
+            if(f.name!="Main_Shell" && !f.name.StartsWith("Portal_Layer_")) continue;
+            var go=new GameObject("ChurchCollision_"+f.name);
+            go.transform.SetParent(f.transform,false); go.layer=PlayerController.BlockerLayer;
+            go.AddComponent<MeshCollider>().sharedMesh=f.sharedMesh;
         }
-        Volume(PrimitiveType.Cube, new Vector3(-2,5.5f,0), new Vector3(9,11,16));
-        Volume(PrimitiveType.Cube, new Vector3(-2,5.5f,0), new Vector3(14,11,7));
-        Volume(PrimitiveType.Cube, new Vector3(-2,3.35f,-8.75f), new Vector3(1.9f,4.7f,1.5f));
-        Volume(PrimitiveType.Cylinder, new Vector3(-2,4.9f,8.6f), new Vector3(6.4f,4.9f,6.4f));
-        var proxy = new Mesh { name = "ChurchCollision_Masonry" };
-        proxy.CombineMeshes(parts.ToArray());
-        const string collisionPath = "Assets/Art/Church/ChurchCollision_Masonry.asset";
-        AssetDatabase.DeleteAsset(collisionPath);
-        AssetDatabase.CreateAsset(proxy, collisionPath);
-        main.AddComponent<MeshCollider>().sharedMesh = proxy;
         Block("ChurchCollision_Annex", new Vector3(-12.25f, 3.1f, 2.5f), new Vector3(6.5f, 6.2f, 6));
         var tower = new GameObject("ChurchCollision_BellTower");
         tower.transform.SetParent(church, false);
@@ -417,8 +402,9 @@ public static class SpikeScene
         const int steps = 9;
         const float rise = .18f, run = .34f, width = 5f, wallHeight = 1.62f;
         const float thickness = .45f, capHeight = .12f, gap = .025f;
-        const float startZ = -13.25f, halfX = 17f;
-        float frontZ = startZ + steps * run, backZ = frontZ + 24f;
+        const float startZ = -13.25f, halfX = 18.5f;
+        const float baseFrontZ = startZ - 1.5f;
+        float frontZ = startZ + steps * run, backZ = baseFrontZ + 27f;
         float footY = ContactGround(terrain, new Vector3(0, 0, startZ)).y + .035f;
         float landingY = footY + steps * rise;
         // Leave a shallow coping above the graded courtyard; retain the original slope.
@@ -510,12 +496,12 @@ public static class SpikeScene
                 segments++;
             }
         }
-        // Outer dimensions 34 x 24m; the front has a true 5m opening.
-        Wall(-halfX,-width/2,frontZ,frontZ+thickness,true);
-        Wall(width/2,halfX,frontZ,frontZ+thickness,true);
+        // 37 x 27m envelope; preserve the stair and church, extend a real apron ahead.
+        Wall(-halfX,-width/2,baseFrontZ,baseFrontZ+thickness,true);
+        Wall(width/2,halfX,baseFrontZ,baseFrontZ+thickness,true);
         Wall(-halfX,halfX,backZ-thickness,backZ,true);
-        Wall(-halfX,-halfX+thickness,frontZ+thickness,backZ-thickness,false);
-        Wall(halfX-thickness,halfX,frontZ+thickness,backZ-thickness,false);
+        Wall(-halfX,-halfX+thickness,baseFrontZ+thickness,backZ-thickness,false);
+        Wall(halfX-thickness,halfX,baseFrontZ+thickness,backZ-thickness,false);
         // Tile the terrace fill so each persistent mesh remains below the 16-bit index limit.
         for(int x=0;x<8;x++) for(int z=0;z<6;z++)
         {
@@ -525,6 +511,12 @@ public static class SpikeScene
             float zb=Mathf.Lerp(frontZ+thickness,backZ-thickness,(z+1)/6f);
             Prism("TerraceFill_"+x+"_"+z,xa,xb,za,zb,Base,Deck,snow,true);
         }
+        // Side shoulders enclose all nine treads. Front apron follows the approach
+        // ground, so it cannot introduce a new riser before the player-only ramp.
+        Prism("TerraceFill_FrontLeft",-halfX+thickness,-width/2-.5f,baseFrontZ+thickness,frontZ+thickness,Base,Deck,snow,true);
+        Prism("TerraceFill_FrontRight",width/2+.5f,halfX-thickness,baseFrontZ+thickness,frontZ+thickness,Base,Deck,snow,true);
+        var apron = Prism("TerraceFill_Apron",-width/2,width/2,baseFrontZ,startZ,Base,
+            (x,z)=>Ground(x,z)+.005f,stone,true);
         Prism("TerraceLanding",-width/2,width/2,frontZ,frontZ+thickness,Base,Deck,snow,true);
         var treads=new System.Collections.Generic.List<MeshFilter>();
         for(int i=0;i<steps;i++)
@@ -605,6 +597,12 @@ public static class SpikeScene
         for(int i=0;i<=8;i++) {float a=-Mathf.PI/2-i*Mathf.PI/4;tower[i]=new Vector2(10.5f+2.6f*Mathf.Cos(a),-2+2.6f*Mathf.Sin(a));}
         BankLoop(tower);
 
+        // Measure actual generated mesh bounds rather than requested dimensions.
+        var apronBounds = apron.GetComponent<Renderer>().bounds;
+        float sideMargin = halfX - width / 2 - .5f;
+        float frontMargin = startZ - apronBounds.min.z;
+        Debug.Log(FormattableStringInvariant($"[BASE] plinth={halfX*2:F1}x{backZ-baseFrontZ:F1} stair_side_margin={sideMargin:F3} stair_front_margin={frontMargin:F3}"));
+        if(sideMargin<1.2f || frontMargin<1f) throw new System.InvalidOperationException("Base margin gate failed");
         Physics.SyncTransforms();
         int errors=0, checkedFeet=0; float maxError=0;
         // Independently inspect saved mesh bottom faces (second quad of each cell),

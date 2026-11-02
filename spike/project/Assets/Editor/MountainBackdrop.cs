@@ -29,7 +29,7 @@ public static class MountainBackdrop
     }
     static Color Hex(string s) { ColorUtility.TryParseHtmlString(s,out var c); return c; }
     static readonly int[] Seeds = { 15731, 80447, 213397 };
-    const float HeightScale = .85f;
+    const float HeightScale = 1.15f;
     // Preserve the previous cards' feet; scaling is anchored here, never at the crest.
     static readonly int[] OriginalCrests = { 444, 460, 448 };
     static float maxPeakStdPct, maxDarkPct;
@@ -145,7 +145,7 @@ public static class MountainBackdrop
             }
         }
         float darkPct=100f*dark/area;
-        if(darkPct>25 || minRgb<0x5A6876 || HeightScale!=.85f)
+        if(darkPct>25 || minRgb<0x5A6876 || HeightScale!=1.15f)
             throw new InvalidOperationException("MTN7 dark area/color/scale gate");
         maxDarkPct=Mathf.Max(maxDarkPct,darkPct);
         darkestRgb=Math.Min(darkestRgb,minRgb);
@@ -173,6 +173,19 @@ public static class MountainBackdrop
         float aspect=1920f/1080f;
         float[] distances={900,1300,1800},tops={.32f,.28f,.24f};
         var measured=new float[3];
+        var widths=new float[3]; var fills=new float[3];
+        var poses=new System.Collections.Generic.List<ShotPose>();
+        foreach(var pose in UnityEngine.Object.FindFirstObjectByType<ShotRig>().poses)
+            if(pose.name!="art_ground") poses.Add(pose); // ground inspection looks away from the church/backdrop.
+        var controller=UnityEngine.Object.FindFirstObjectByType<PlayerController>();
+        float runtimeFov=PlayerController.FollowFieldOfView(controller.GetComponent<MistReveal>().church,controller.ground);
+        foreach(float z in new[]{-88f,-89f,-59f,-29f,-15f,-9f})
+        {
+            // Use the same geometry-derived FOV as the actual runtime camera.
+            var player=new Vector3(0,Mathf.Tan(6*Mathf.Deg2Rad)*z,z);
+            poses.Add(ShotRig.Look("follow",player+PlayerController.FollowOffset,
+                player+Vector3.up*PlayerController.LookHeight,runtimeFov));
+        }
         maxPeakStdPct=0; maxDarkPct=0; darkestRgb=0xffffff;
         for(int layer=0;layer<3;layer++)
         {
@@ -194,7 +207,47 @@ public static class MountainBackdrop
             quad.name=$"MtnLayer_{layer+1}"; quad.transform.SetParent(root,false);
             UnityEngine.Object.DestroyImmediate(quad.GetComponent<Collider>());
             quad.transform.SetPositionAndRotation(center,cam.transform.rotation);
+            // Intersect the widest horizontal camera frustum with this card plane. Include
+            // asymmetric shot positions: a total width alone can hide a side gap.
+            float extent=width/2;
+            foreach(var pose in poses)
+            {
+                var rotation=Quaternion.Euler(pose.euler);
+                float tan=Mathf.Tan(pose.fov*.5f*Mathf.Deg2Rad);
+                for(int x=-1;x<=1;x+=2)
+                {
+                    var ray=rotation*new Vector3(x*1.30f*tan*aspect,0,1);
+                    float denominator=Vector3.Dot(ray,quad.transform.forward);
+                    if(denominator<=.01f) continue;
+                    float t=Vector3.Dot(center-pose.position,quad.transform.forward)/denominator;
+                    var local=Quaternion.Inverse(quad.transform.rotation)*(pose.position+ray*t-center);
+                    extent=Mathf.Max(extent,Mathf.Abs(local.x)*1.02f);
+                }
+            }
+            width=extent*2;
             quad.transform.localScale=new Vector3(width,height,1);
+            widths[layer]=width; fills[layer]=float.PositiveInfinity;
+            foreach(var pose in poses)
+            {
+                var rotation=Quaternion.Euler(pose.euler);
+                float tan=Mathf.Tan(pose.fov*.5f*Mathf.Deg2Rad);
+                float low=0,high=3;
+                for(int iteration=0;iteration<20;iteration++)
+                {
+                    float f=(low+high)/2; bool covered=true;
+                    for(int x=-1;x<=1;x+=2)
+                    {
+                        var ray=rotation*new Vector3(x*f*tan*aspect,0,1);
+                        float denominator=Vector3.Dot(ray,quad.transform.forward);
+                        float t=Vector3.Dot(center-pose.position,quad.transform.forward)/denominator;
+                        var local=Quaternion.Inverse(quad.transform.rotation)*(pose.position+ray*t-center);
+                        covered &= denominator>.001f && t>0 && Mathf.Abs(local.x)<=width/2;
+                    }
+                    if(covered) low=f; else high=f;
+                }
+                fills[layer]=Mathf.Min(fills[layer],low);
+            }
+
             // L3 physically remains at 1800m. Bounds overlap the frustum because its
             // background shader clamps far depth; no camera clipping setting is changed.
             var mesh=UnityEngine.Object.Instantiate(quad.GetComponent<MeshFilter>().sharedMesh);
@@ -211,12 +264,15 @@ public static class MountainBackdrop
             // Use explicit output aspect without modifying any camera property.
             measured[layer]=1-cam.WorldToViewportPoint(crest).y;
             Vector3 foot=quad.transform.TransformPoint(new Vector3(0,-.5f,0));
-            if(measured[layer]<tops[layer] || bottom>0 || foot.y>-20)
-                throw new InvalidOperationException("MTN4 silhouette/foot gate failed");
+            if(fills[layer]<1.25f || measured[layer]>.30f || bottom>0 || foot.y>-20)
+                throw new InvalidOperationException($"MTN8 silhouette/foot gate L{layer+1} fill={fills[layer]} top={measured[layer]} bottom={bottom} foot={foot.y}");
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "[MTN4_LAYER] L{0} peaks={1} ridge_std_px={2:F2} distance_m={3:F0} width_m={4:F2} top_viewport_y={5:F4} foot_viewport_y={6:F4} foot_world_y={7:F2}",
                 layer+1,peaks,std,d,width,measured[layer],1-bottom,foot.y));
         }
+        Debug.Log(string.Format(CultureInfo.InvariantCulture,
+            "[MTN8] layer_width_m={0:F2}/{1:F2}/{2:F2} screen_fill_pct={3:F4}/{4:F4}/{5:F4} top_y={6:F4}/{7:F4}/{8:F4}",
+            widths[0],widths[1],widths[2],fills[0],fills[1],fills[2],measured[0],measured[1],measured[2]));
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN7] peak_height_std_pct={0:F4} dark_area_pct={1:F4} darkest=#{2:X6} layer_mix=35/60 haze_band_pct=25 snow_cap_px=6..26 height_scale={3:F2}",
             maxPeakStdPct,maxDarkPct,darkestRgb,HeightScale));

@@ -176,7 +176,7 @@ def openings_check():
     # Test the whole recessed passage, not just the final wall cutter.
     portal = [o for o in bpy.context.scene.objects if o.name.startswith('Portal_Layer')]
     wall = bpy.data.objects['Main_Shell']
-    for x,z in [(-2,1.6),(-2,4.02),(-1.4,2),(-2.6,2)]:
+    for x,z in [(-2,1.6),(-2,3.5),(-1.4,2),(-2.6,2)]:
         for obj in portal+[wall]:
             assert not ray_hit(obj,(x,-9.65,z),(0,1,0),2.5), (obj.name,x,z)
     assert ray_hit(wall,(-.3,-8.5,4.4),(0,1,0),1.3), 'missing solid shoulder'
@@ -188,13 +188,17 @@ def openings_check():
     print('[VERIFY] recessed portal + twelve through belfry arches ray tests PASS')
 
 
+def independent(obj):
+    return obj.name.startswith(('Door_Leaf', 'Window_Glass_', 'Interior_', 'Main_Shell', 'Portal_Layer_', 'Steps_'))
+
+
 def prepare():
     objects = [o for o in bpy.context.scene.objects if o.type=='MESH']
     for obj in objects:
         activate(obj)
         # Actual edge geometry, not a face-count subdivision, gives stone silhouettes.
-        bevel(obj,.025 if 'Cross' in obj.name else .035)
-        bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
+        bevel(obj,.012 if independent(obj) else (.025 if 'Cross' in obj.name else .035))
+        bpy.ops.object.transform_apply(location=obj.name != 'Door_Leaf',rotation=True,scale=True)
         normals(obj)
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
@@ -231,8 +235,8 @@ def mesh_integrity(obj):
 
 def merged_openings_check(objects):
     # Repeat through-opening tests against the final material batches.
-    for x,z in [(-2,1.6),(-2,4.02),(-1.4,2),(-2.6,2)]:
-        assert not any(ray_hit(o,(x,-9.65,z),(0,1,0),2.5) for o in objects)
+    for x,z in [(-2,1.6),(-2,3.5),(-1.4,2),(-2.6,2)]:
+        assert not any(ray_hit(o,(x,-9.65,z),(0,1,0),2.5) for o in objects if not o.name.startswith(('Door_Leaf','Interior_','Window_Glass_')))
     for direction in ((1,0,0),(-1,0,0),(0,1,0),(0,-1,0)):
         n=Vector(direction)
         tangent=Vector((-n.y,n.x,0))
@@ -254,6 +258,8 @@ def optimize_church(objects):
     def retention(obj):
         if 'Cross' in obj.name and obj.name != 'Cross_Roof':
             return .9
+        if independent(obj):
+            return 1.0
         if any(key in obj.name for key in
                ('Voussoir', 'Jamb', 'Main_Shell', 'Drum_', 'BellTower_8', 'Course_')):
             return .48
@@ -264,7 +270,7 @@ def optimize_church(objects):
         activate(obj)
         mod = obj.modifiers.new('Unity_Collapse', 'DECIMATE')
         mod.decimate_type = 'COLLAPSE'
-        mod.ratio = retention(obj)*budget_scale
+        mod.ratio = 1.0 if independent(obj) else retention(obj)*budget_scale
         mod.use_collapse_triangulate = True
         bpy.ops.object.modifier_apply(modifier=mod.name)
         # Remove sub-micrometre slivers left by bevel/Collapse, without welding parts.
@@ -281,7 +287,7 @@ def optimize_church(objects):
     # Blender join retains UV loop layers and the original material assignment.
     batches = {}
     for obj in objects:
-        batches.setdefault(obj.data.materials[0].name, []).append(obj)
+        batches.setdefault(obj.name if independent(obj) else obj.data.materials[0].name, []).append(obj)
     merged = []
     for name, parts in sorted(batches.items()):
         activate(parts[0])
@@ -310,7 +316,8 @@ def optimize_church(objects):
     print('[CHURCH6] tris_before=%d tris_after=%d objects_before=%d objects_after=%d '
           'bbox=%.3fx%.3fx%.3f bbox_ok=%s' %
           (before,after,count_before,len(merged),*size,bbox_ok),flush=True)
-    assert after <= 80000 and len(merged) <= 6 and bbox_ok
+    assert after <= 95000 and bbox_ok
+    interior_check(merged)
     print('[VERIFY] material batches: ' + ', '.join(
         '%s=%d tris' % (o.name,triangle_count(o)) for o in merged),flush=True)
     print('[VERIFY] closed manifold / consistent normals / finite UVs / final opening rays PASS')
@@ -409,7 +416,7 @@ def report(objects):
         gl, gh = bounds([obj])
         assert all(abs(a-b) < .08 for a,b in zip(gh-gl, (.5, 7, 3)))
     for side in (-1, 1):
-        start = (-2 + side * 7.5, 0, 12)
+        start = (-2 + side * 7.5, 0, 13.6)
         assert ray_hit(bpy.data.objects['Transept_Gable_' + ('L' if side < 0 else 'R')],
                        start, (-side, 0, 0), 1)
         # CHURCH5 deliberately extends the roof over these unchanged gables.
@@ -526,6 +533,32 @@ def arch_stones(prefix,cx,y,bottom,width,height,stone):
                 (.27,.32,h/n-.018),stone)
 
 
+def interior_check(objects):
+    shell=[o for o in objects if o.name in ('Stone','Main_Shell')]
+    assert len([o for o in objects if o.name.startswith('Window_Glass_')])==6
+    leaf=next(o for o in objects if o.name=='Door_Leaf')
+    assert (leaf.location-Vector((-3.28,-8.08,0))).length<1e-5
+    floor=next(o for o in objects if o.name=='Interior_Floor')
+    assert abs(bounds([floor])[1].z)<1e-5
+    for origin,direction,distance in [((-2,-6,1),(0,1,0),12),((-7,0,1),(1,0,0),10),
+            ((-2,6,1),(0,1,0),4),((-2,0,.05),(0,0,1),11.94)]:
+        assert not any(ray_hit(o,origin,direction,distance) for o in shell), (origin,direction)
+    # Ceiling at 12.0 and both nave walls at 0.6m thickness.
+    assert any(ray_hit(o,(-2,-5,11.99),(0,0,1),.03) for o in shell)
+    for side in (-1,1):
+        assert any(ray_hit(o,(-2+side*3.89,-4,2),(side,0,0),.03) for o in shell)
+        assert not any(ray_hit(o,(-2+side*4.51,-4,2),(side,0,0),.1) for o in shell)
+        for y in (-5.5,0,5.6):
+            x=-2+side*(7 if y==0 else 4.5)
+            assert not any(ray_hit(o,(x-side,y,6),(side,0,0),2) for o in shell)
+    for prefix,n in [('Interior_Column_',4),('Interior_Pew_',6),('Interior_Altar',1),
+                     ('Interior_Candle_',4),('Interior_Chandelier',1),('Interior_Iconostasis',1),('Interior_Banner_',2)]:
+        assert len([o for o in objects if o.name.startswith(prefix)])==n,prefix
+    lo,hi=bounds(objects); size=hi-lo; tris=sum(triangle_count(o) for o in objects)
+    assert tris<=95000
+    print('[INTERIOR] shell_wall=0.6 nave_clear_h=12.0 door_leaf=true window_openings=6 columns=4 pews=6 altar=1 candles=4 chandelier=1 iconostasis=1 banners=2 tris=%d bbox=%.3fx%.3fx%.3f'%(tris,size.x,size.z,size.y),flush=True)
+
+
 def build():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
@@ -540,60 +573,104 @@ def build():
     roof=material('Roof_Slate','4A5560')
     wood=material('Wood','6B4A32')
     # A continuous hollow cross shell, with no solid intersecting internal walls.
-    shell=box('Main_Shell',(-2,0,5.5),(9,16,11),stone)
-    union(shell,box('Transept_Union',(-2,0,5.5),(14,7,11),stone))
+    shell=box('Main_Shell',(-2,0,6.3),(9,16,12.6),stone)
+    union(shell,box('Transept_Union',(-2,0,6.3),(14,7,12.6),stone))
     apse_y = 8.6  # nave south wall is Y=8; expose almost 3.8 m of round masonry.
-    apse=cone('Apse_Union',(-2,apse_y),0,9.8,3.2,64,stone,3.2)
+    apse=cone('Apse_Union',(-2,apse_y),0,12.6,3.2,64,stone,3.2)
     # Keep a substantial overlap with the nave while exposing the curved rear volume.
     union(shell,apse)
-    inside=box('Interior_Cross',(-2,0,6.1),(7.8,14.8,10.2),stone)
-    union(inside,box('Interior_Transept',(-2,0,6.1),(12.8,5.8,10.2),stone))
-    union(inside,cone('Interior_Apse',(-2,apse_y),1,8.2,2.6,64,stone,2.6))
+    inside=box('Interior_Cross',(-2,0,5.95),(7.8,14.8,12.1),stone)
+    union(inside,box('Interior_Transept',(-2,0,5.95),(12.8,5.8,12.1),stone))
+    union(inside,cone('Interior_Apse',(-2,apse_y),-.1,12.1,2.6,64,stone,2.6))
     subtract(shell,inside)
     shell['nave_size']='16x9'
     shell['transept_size']='14x7'
     shell['apse_radius']=3.2
-    subtract(shell,arch('Door_Through',(-2,-8,1),1.9,3.1,3.6))
+    subtract(shell,arch('Door_Through',(-2,-8,0),2.6,3.6,3.6))
     # Three separately cut, progressively smaller recesses, ending at the wall passage.
-    for i,(w,h) in enumerate([(2.8,4.2),(2.3,3.6),(1.9,3.1)]):
+    for i,(w,h) in enumerate([(3.4,4.4),(3.0,4.0),(2.6,3.6)]):
         y=-9.2+i*.6
         layer=box('Portal_Layer_%d'%i,(-2,y,3.35),(4.4,.6,4.7),stone)
-        subtract(layer,arch('Portal_Cutter',(-2,y,1),w,h,.9))
-        arch_stones('Portal_%d'%i,-2,y-.29,1,w,h,stone)
+        subtract(layer,arch('Portal_Cutter',(-2,y,0),w,h,.9))
+        arch_stones('Portal_%d'%i,-2,y-.29,0,w,h,stone)
     for side in (-1,1):
         box('Lamp_Base',(-2+side*2.48,-8.65,3),(.3,.3,.5),stone)
     for i in range(5):
         height=(i+1)*.2
         box('Steps_%02d'%i,(-2,-10.65+i*.3,height/2),(5,.3,height),stone)
-    # Fenestration: actual windows through the hollow shell.
+    # Six through arches: the crossing window sits on the transept outer wall.
+    glass=material('Glass','8FAFC5')
     for side in (-1,1):
-        for y in (-5.5,5.6):
-            x=-2+side*4.5
+        for i,y in enumerate((-5.5,0,5.6),1):
+            x=-2+side*(7 if y==0 else 4.5)
             subtract(shell,arch('Nave_Window',(x,y,5.4),.95,2.6,1.5,math.pi/2))
-            arch_stones('Front_Window',-2+side*3,-8.04,5.4,.85,2.4,stone)
-            subtract(shell,arch('Front_Window_Cut',(-2+side*3,-8,5.4),.85,2.4,1.5))
+            pane=arch('Window_Glass_%s_%d'%('L' if side<0 else 'R',i),
+                      (x-side*.3,y,5.4),.91,2.56,.025,math.pi/2)
+            pane.data.materials.append(glass)
+        arch_stones('Front_Window',-2+side*3,-8.04,5.4,.85,2.4,stone)
+        subtract(shell,arch('Front_Window_Cut',(-2+side*3,-8,5.4),.85,2.4,1.5))
+    # The left jamb is the origin, retained through FBX export as a Unity Y hinge.
+    leaf=arch('Door_Leaf',(-2,-8.08,0),2.56,3.56,.12)
+    leaf.data.materials.append(wood)
+    activate(leaf)
+    bpy.context.scene.cursor.location=(-3.28,-8.08,0)
+    bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+    leaf['hinge']='left'; leaf['open_degrees']=100.0
+    # Keep the entire floor at local Z=0, with a connected cross and rear apse.
+    floor=box('Interior_Floor',(-2,0,-.09),(7.8,14.8,.18),stone)
+    union(floor,box('Floor_Transept',(-2,0,-.09),(12.8,5.8,.18),stone))
+    union(floor,cone('Floor_Apse',(-2,apse_y),-.18,.18,2.6,64,stone,2.6))
+    union(floor,box('Floor_Threshold',(-2,-8.35,-.09),(2.6,2,.18),stone))
+    # Low-poly furnishings stay separate, including composite pews with six names.
+    for i,(x,y) in enumerate([(-5.5,-6.5),(1.5,-6.5),(-5.5,6.5),(1.5,6.5)],1):
+        cone('Interior_Column_%02d'%i,(x,y),0,12,.35,16,stone,.35)
+    for side in (-1,1):
+        for row,y in enumerate((-4.5,-2.5,-.5),1):
+            # 3.6m benches face the altar across a 0.6m central aisle.
+            x=-2+side*2.12
+            pew=box('Interior_Pew_%s_%d'%('L' if side<0 else 'R',row),(x,y,.43),(3.6,.45,.12),wood)
+            union(pew,box('Pew_Back',(x,y-.17,.65),(3.6,.11,.4),wood))
+            for dx in (-1.4,1.4):
+                union(pew,box('Pew_Leg',(x+dx,y,.22),(.15,.35,.44),wood))
+    box('Interior_Altar',(-2,8.4,.5),(2.2,.9,1),stone)
+    for i,(x,y) in enumerate([(-4.9,4),(0.9,4),(-4.9,6),(0.9,6)],1):
+        cone('Interior_Candle_%02d'%i,(x,y),0,1.4,.125,12,wood,.125)
+    gold=material('Gold','C6A052')
+    bpy.ops.mesh.primitive_torus_add(major_radius=1.2,minor_radius=.06,
+        major_segments=32,minor_segments=6,location=(-2,0,8.5))
+    bpy.context.object.name='Interior_Chandelier'
+    bpy.context.object.data.materials.append(gold)
+    box('Interior_Iconostasis',(-2,7.5,2.25),(3.2,.15,4.5),wood)
+    # Raised gold frames, low-poly symbolic panels; no claimed historical images.
+    for i in range(3):
+        box('Interior_IconFrame_%d'%i,(-3.05+i*1.05,7.39,2.9),(.83,.07,1.8),gold)
+    blue=material('BannerBlue','273C73'); red=material('BannerRed','853733')
+    for i,(x,mat) in enumerate([(-5.6,blue),(1.6,red)],1):
+        box('Interior_Banner_%d'%i,(x,4,6.4),(1.2,.035,3),mat)
+        box('Interior_BannerTrim_%d'%i,(x,3.97,4.94),(1.2,.03,.09),gold)
+    box('Interior_WallPainting',(1.88,5.2,2.4),(.03,1.6,1.6),red)
     # Crossed pitched roofs are united for a clean intersection.
     nave_width, nave_length = 9+2*EAVE_OVERHANG, 16+2*EAVE_OVERHANG
     transept_width, transept_length = 7+2*EAVE_OVERHANG, 14+2*EAVE_OVERHANG
-    nave_ridge = 11+nave_width/2*math.tan(math.radians(ROOF_PITCH))
-    transept_ridge = 11+transept_width/2*math.tan(math.radians(ROOF_PITCH))
-    roofs=gable('Cross_Roof',-2,0,nave_width,nave_length,11,nave_ridge,roof)
+    nave_ridge = 12.6+nave_width/2*math.tan(math.radians(ROOF_PITCH))
+    transept_ridge = 12.6+transept_width/2*math.tan(math.radians(ROOF_PITCH))
+    roofs=gable('Cross_Roof',-2,0,nave_width,nave_length,12.6,nave_ridge,roof)
     union(roofs,gable('Transept_Roof',-2,0,transept_width,transept_length,
-                     11,transept_ridge,roof,True))
+                     12.6,transept_ridge,roof,True))
     roofs['eave_overhang']=EAVE_OVERHANG
     roofs['ridge_len']=nave_length
-    roof_trim('Nave',-2,0,nave_width,nave_length,11,nave_ridge,roof)
-    roof_trim('Transept',-2,0,transept_width,transept_length,11,transept_ridge,roof,True)
+    roof_trim('Nave',-2,0,nave_width,nave_length,12.6,nave_ridge,roof)
+    roof_trim('Transept',-2,0,transept_width,transept_length,12.6,transept_ridge,roof,True)
     # Solid 0.5 m terminal gables, 7 m across Y, 3 m above the eave.
     # Their outward triangle faces are at the two ends of the X-axis transept.
     for label, x in (('L', -8.75), ('R', 4.75)):
-        gable('Transept_Gable_' + label, x, 0, 7, .5, 11, 14, stone, True)
+        gable('Transept_Gable_' + label, x, 0, 7, .5, 12.6, 15.6, stone, True)
         # Clear the roof's solid end prism out to the eave so the existing
         # stone gable stays visible beneath the projecting slate roof.
         side = -1 if label == 'L' else 1
         subtract(roofs, gable('Roof_Gable_Clearance', x+side*.275, 0,
-                              7, 1.1, 10.99, 14, roof, True))
-    apse_half_roof(-2,apse_y,9.8,3.2,roof)
+                              7, 1.1, 12.59, 15.6, roof, True))
+    apse_half_roof(-2,apse_y,12.6,3.2,roof)
     # Main tower exact requested stack: 12.5+4+6.5+1.5 = 24.5.
     drum=cone('Drum_12',(-2,0),12.5,4,4.2,12,stone,4.2)
     for i in range(12):
@@ -695,6 +772,7 @@ def build():
     export_turn=Matrix.Rotation(math.pi,4,'Z')
     for o in objects:
         o.data.transform(export_turn)
+        o.location=export_turn @ o.location
     try:
         bpy.ops.export_scene.fbx(filepath=str(FBX),use_selection=True,object_types={'MESH'},
             global_scale=1,apply_unit_scale=True,apply_scale_options='FBX_SCALE_UNITS',
@@ -704,6 +782,7 @@ def build():
     finally:
         for o in objects:
             o.data.transform(export_turn.inverted())
+            o.location=export_turn.inverted() @ o.location
     bpy.context.view_layer.update()
     render_views(objects, framing)
     bpy.context.preferences.filepaths.save_version=0
@@ -716,12 +795,13 @@ def verify():
     objects=[o for o in bpy.context.scene.objects if o.type=='MESH']
     expected=bpy.context.scene['triangle_count']
     size=list(bpy.context.scene['bbox_xyz'])
-    assert len(objects)<=6 and expected<=80000
+    assert expected<=95000
     assert sum(triangle_count(o) for o in objects)==expected
     for obj in objects:
         mesh_integrity(obj)
     merged_openings_check(objects)
-    assert all(o.matrix_world.is_identity and o.data.uv_layers.active for o in objects)
+    assert all((o.name == 'Door_Leaf' or o.matrix_world.is_identity) and o.data.uv_layers.active for o in objects)
+    interior_check(objects)
     for name in ('front','side','top','iso'):
         img=bpy.data.images.load(str(VIEWS/(name+'.png')),check_existing=False)
         assert tuple(img.size)==(1024,1024)
@@ -741,7 +821,7 @@ def verify():
         o.data.transform(Matrix.Rotation(-math.pi,4,'Z'))
     bpy.context.view_layer.update()
     merged_openings_check(objects)
-    assert len(objects)<=6
+    assert len([o for o in objects if o.name.startswith('Window_Glass_')])==6
     for obj in objects:
         mesh_integrity(obj)
     print('[VERIFY] saved BLEND + FBX metre/triangle/UV round-trip + four PNG sizes PASS')

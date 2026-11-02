@@ -60,7 +60,7 @@ public sealed class PilgrimAnimator : MonoBehaviour
         if(animatedMaterial!=null) Destroy(animatedMaterial);
     }
 
-    float ProjectedHeight(ShotPose pose, out bool contained)
+    public float ProjectedHeight(ShotPose pose, out bool contained)
     {
         int row=DirectionRow(pose.position-transform.position,transform);
         RectInt bounds=alphaBounds[row*6+Frame];
@@ -80,6 +80,12 @@ public sealed class PilgrimAnimator : MonoBehaviour
             minY=Math.Min(minY,vy*Screen.height);maxY=Math.Max(maxY,vy*Screen.height);
         }
         return maxY-minY;
+    }
+
+    public void RefreshDimensions()
+    {
+        worldWidth=animatedMaterial.GetFloat("_ScaleX");
+        worldHeight=animatedMaterial.GetFloat("_ScaleY");
     }
 
     public void ReportMeasurements(ShotRig rig)

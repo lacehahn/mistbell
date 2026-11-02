@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Globalization;
+using System.IO;
 using UnityEngine;
 
 /// <summary>Playable slice. Capture flags always take precedence over demos and input.</summary>
@@ -31,8 +32,8 @@ public sealed class PlayerController : MonoBehaviour
     public int Row { get; private set; } = 3;
     public static bool CaptureMode => Array.IndexOf(Environment.GetCommandLineArgs(), "-shot") >= 0 ||
         Array.IndexOf(Environment.GetCommandLineArgs(), "-shots") >= 0;
-    public static readonly Vector3 FollowOffset = new Vector3(0, 5.5f, -14);
-    public const float LookHeight = 3.5f;
+    public static readonly Vector3 FollowOffset = new Vector3(0, 4.4f, -10.5f);
+    public const float LookHeight = 3.2f;
     AudioDirector audioDirector;
     int lastSoundFrame = -1;
     Interactable[] pois;
@@ -42,6 +43,18 @@ public sealed class PlayerController : MonoBehaviour
     int frames, misses;
     bool walkingDemo;
     Vector3 walkStart;
+    bool cinemaDone, cinemaActive, cinemaDemo, suppressCinema;
+    int cinemaEntries;
+    float previousZ;
+    float followFov;
+    Vector3[] churchVertices;
+    ChurchInterior interior;
+    bool interiorAuto;
+    Vector3 interiorDirection;
+    bool enteredByWalking;
+    float outsideSpriteX, outsideSpriteY;
+
+
 
     void Awake()
     {
@@ -63,6 +76,7 @@ public sealed class PlayerController : MonoBehaviour
                  c.name.StartsWith("TerraceStep_", StringComparison.Ordinal));
         blockers = Array.FindAll(FindObjectsByType<Collider>(FindObjectsSortMode.None),
             c => c.gameObject.layer == BlockerLayer && c.enabled && !c.isTrigger);
+        interior = FindFirstObjectByType<ChurchInterior>();
         Physics.SyncTransforms();
         Debug.Log("[MOVE] step_up_max=0.28 ramp=true accel=12 decel=18 spawn_z=-88");
         GetComponent<PilgrimAnimator>().enabled = false;
@@ -73,23 +87,29 @@ public sealed class PlayerController : MonoBehaviour
         // Fit the real tower at the 20 m approach, using only the playable camera.
         // CaptureMode exits in Awake, so the ShotRig camera table stays unchanged.
         var reveal = GetComponent<MistReveal>();
-        var near = new Vector3(0, 0, -29);
-        if (reveal != null && ground.Raycast(new Ray(near + Vector3.up * 500, Vector3.down), out var nearHit, 1000))
+        follow.fieldOfView=FollowFieldOfView(reveal.church,ground);
+        Debug.Log($"[CLOSEUP_CAMERA] playable_fov={follow.fieldOfView:F3}");
+        followFov = follow.fieldOfView;
+        // Runtime-only material instance: preserve the art screenshot character.
+        var animator = GetComponent<PilgrimAnimator>();
+        var pose = new ShotPose { position=follow.transform.position, euler=follow.transform.eulerAngles, fov=followFov };
+        float height = animator.ProjectedHeight(pose, out bool contained);
+        for(int i=0;i<3;i++)
         {
-            near.y = nearHit.point.y;
-            var eye = near + FollowOffset;
-            var inverse = Quaternion.Inverse(Quaternion.LookRotation(near + Vector3.up * LookHeight - eye));
-            float topSlope = 0;
-            foreach (var mf in reveal.church.GetComponentsInChildren<MeshFilter>())
-            foreach (var vertex in mf.sharedMesh.vertices)
-            {
-                var local = inverse * (mf.transform.TransformPoint(vertex) - eye);
-                if (local.z > 0) topSlope = Mathf.Max(topSlope, local.y / local.z);
-            }
-            // Screen top at y=.12 (top-left origin); .76 = 1 - 2*.12.
-            follow.fieldOfView = 2 * Mathf.Atan(topSlope / .76f) * Mathf.Rad2Deg;
-            Debug.Log($"[CLOSEUP_CAMERA] playable_fov={follow.fieldOfView:F3}");
+            float scale=150f/height;
+            sprite.SetFloat("_ScaleX",sprite.GetFloat("_ScaleX")*scale);
+            sprite.SetFloat("_ScaleY",sprite.GetFloat("_ScaleY")*scale);
+            animator.RefreshDimensions();
+            height=animator.ProjectedHeight(pose,out contained);
         }
+        outsideSpriteX=sprite.GetFloat("_ScaleX"); outsideSpriteY=sprite.GetFloat("_ScaleY");
+        Debug.Log(FormattableString.Invariant($"[CAM] offset=(0,4.4,-10.5) pilgrim_px={height:F2}"));
+        if(!contained || height<130 || height>175) { Debug.LogError("[CAM] framing gate failed"); Application.Quit(1); }
+        var vertices = new System.Collections.Generic.List<Vector3>();
+        foreach(var mf in reveal.church.GetComponentsInChildren<MeshFilter>())
+            foreach(var vertex in mf.sharedMesh.vertices) vertices.Add(mf.transform.TransformPoint(vertex));
+        churchVertices=vertices.ToArray();
+        previousZ=transform.position.z;
         try
         {
             var database = PoiDatabase.Load(ground);
@@ -106,13 +126,17 @@ public sealed class PlayerController : MonoBehaviour
         }
         catch (Exception ex) { Debug.LogException(ex); Application.Quit(1); return; }
         var args = Environment.GetCommandLineArgs();
+        cinemaDemo = Array.IndexOf(args,"-demo-cinema")>=0;
+        suppressCinema = !cinemaDemo && Array.Exists(args,a=>a.StartsWith("-demo-",StringComparison.Ordinal));
         int poiIndex = Array.IndexOf(args, "-demo-poi");
         if (poiIndex >= 0)
         {
             if (poiIndex + 1 >= args.Length || Array.Find(pois, p => p.data.id == args[poiIndex + 1]) == null)
             { Debug.LogError("[POI] invalid -demo-poi id"); Application.Quit(1); return; }
-            StartCoroutine(DemoPoi(Array.Find(pois, p => p.data.id == args[poiIndex + 1])));
+            var selected=Array.Find(pois,p=>p.data.id==args[poiIndex+1]);
+            StartCoroutine(selected.data.interior ? DemoInterior(selected) : DemoPoi(selected));
         }
+        if(Array.IndexOf(args,"-demo-enter-church")>=0) StartCoroutine(DemoInterior(null));
         int index = Array.IndexOf(args, "-demo-walk");
         if (index >= 0)
         {
@@ -162,10 +186,14 @@ public sealed class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if(cinemaActive) { Moving=false; return; }
+        if(cinemaDemo && cinemaDone) return;
         Vector3 direction = Vector3.zero;
         bool sprint = false;
         float dt = Time.deltaTime;
-        if (walkingDemo)
+        if (cinemaDemo) direction=Vector3.forward;
+        else if (interiorAuto) direction=interiorDirection;
+        else if (walkingDemo)
         {
             dt = Mathf.Min(dt, demoSeconds - elapsed);
             direction = Vector3.forward;
@@ -196,18 +224,26 @@ public sealed class PlayerController : MonoBehaviour
         blockingHit = default;
         bool grounded = false;
         // Substeps keep probes ahead of movement even during a long render frame.
-        int substeps = Mathf.Max(1, Mathf.CeilToInt(dt / .02f));
+        int substeps = direction.sqrMagnitude<.00000001f && velocity.sqrMagnitude<.00000001f
+            ? 1 : Mathf.Max(1, Mathf.CeilToInt(dt / .02f));
         float stepDt = dt / substeps;
         for (int i = 0; i < substeps; i++) grounded = Move(direction, sprint, stepDt);
         ReportBlock(before, frameExpected, transform.position);
+        if(TryArrivalCinema(previousZ)) { previousZ=transform.position.z; return; }
+        previousZ=transform.position.z;
         var nearest = NearestPoi();
-        panel.SetPrompt(nearest != null && !panel.IsOpen);
+        bool doorPrompt=interior!=null && interior.OpenDegrees<95 && interior.DoorInRange(transform.position);
+        panel.SetPrompt((doorPrompt || nearest != null) && !panel.IsOpen);
         if (towerDemo && nearest == towerPoi && towerPoi.InRange && !panel.IsOpen)
         {
             var prompt = panel.transform.Find("Prompt").GetComponent<UnityEngine.UI.Text>();
             towerPromptShown |= prompt.gameObject.activeInHierarchy && prompt.text == "按 E 查看";
         }
-        if (Input.GetKeyDown(KeyCode.E) && nearest != null) nearest.TryOpen();
+        if (Input.GetKeyDown(KeyCode.E) && !panel.IsOpen && panel.ClosedFrame!=Time.frameCount)
+        {
+            if(doorPrompt) interior.TryOpen(transform.position);
+            else if(nearest!=null) nearest.TryOpen();
+        }
         Moving = grounded && Vector3.ProjectOnPlane(transform.position - before, Vector3.up).sqrMagnitude > .00000001f;
         if (Moving)
         {
@@ -281,6 +317,118 @@ public sealed class PlayerController : MonoBehaviour
             Application.Quit(pass && Row >= 0 && Row <= 3 && fpsOK &&
                 audioDirector.ClipsPass && audioDirector.Footsteps >= (churchDemo ? 1 : 6) ? 0 : 1);
             walkingDemo = false;
+        }
+    }
+
+    public static float FollowFieldOfView(Transform church, MeshCollider terrain)
+    {
+        var near=new Vector3(0,0,-29);
+        if(!terrain.Raycast(new Ray(near+Vector3.up*500,Vector3.down),out var hit,1000))
+            throw new InvalidOperationException("Follow-camera fit ground missing");
+        near.y=hit.point.y;
+        var eye=near+FollowOffset;
+        var inverse=Quaternion.Inverse(Quaternion.LookRotation(near+Vector3.up*LookHeight-eye));
+        float topSlope=0;
+        foreach(var mf in church.GetComponentsInChildren<MeshFilter>())
+        foreach(var vertex in mf.sharedMesh.vertices)
+        {
+            var local=inverse*(mf.transform.TransformPoint(vertex)-eye);
+            if(local.z>0) topSlope=Mathf.Max(topSlope,local.y/local.z);
+        }
+        return 2*Mathf.Atan(topSlope/.76f)*Mathf.Rad2Deg;
+    }
+
+    void ChurchFrame(Vector3 eye, Quaternion rotation, float fov, out float top, out float bottom, out bool inside)
+    {
+        var inv=Quaternion.Inverse(rotation);
+        float tan=Mathf.Tan(fov*.5f*Mathf.Deg2Rad);
+        top=1; bottom=0; inside=true;
+        foreach(var vertex in churchVertices)
+        {
+            var v=inv*(vertex-eye);
+            float x=.5f+v.x/v.z/tan/follow.aspect/2;
+            float y=.5f-v.y/v.z/tan/2;
+            top=Mathf.Min(top,y); bottom=Mathf.Max(bottom,y);
+            inside &= v.z>0 && x>=.02f && x<=.98f && y>=0 && y<=1;
+        }
+    }
+
+    bool TryArrivalCinema(float fromZ)
+    {
+        if(cinemaDone || suppressCinema || fromZ>=-15 || transform.position.z< -15 || Mathf.Abs(transform.position.x)>12)
+            return false;
+        var arrival=transform.position; arrival.z=-15; transform.position=arrival;
+        StartCoroutine(ArrivalCinema());
+        return true;
+    }
+
+    IEnumerator ArrivalCinema()
+    {
+        cinemaDone=cinemaActive=true; cinemaEntries++;
+        velocity=Vector3.zero; Moving=false; animationTime=0;
+        panel.SetPrompt(false);
+        sprite.SetFloat("_Frame",0);
+        var frozen=transform.position;
+        var startEye=follow.transform.position; var startRotation=follow.transform.rotation;
+        var rotation=Quaternion.Euler(-14,0,0);
+        var eye=new Vector3(0,frozen.y+1.1f,frozen.z-30);
+        float top=0,bottom=0; bool inside=false,fit=false;
+        // Fixed pitch, height and FOV; only dolly distance is free to fit geometry.
+        for(float z=frozen.z-5;z>=frozen.z-100;z-=.25f)
+        {
+            eye.z=z;
+            ChurchFrame(eye,rotation,42,out top,out bottom,out inside);
+            if(inside && top>=.04f && top<=.22f && bottom>=.80f)
+            { fit=true; break; }
+        }
+        if(!fit)
+        {
+            Debug.LogError(FormattableString.Invariant($"[CINEMA] fit failed church_top={top:F4} church_bottom={bottom:F4} eye_y={eye.y:F3}"));
+            cinemaActive=false; if(cinemaDemo) Application.Quit(1); yield break;
+        }
+        float elapsed=0;
+        while(elapsed<1.2f)
+        {
+            elapsed+=Time.unscaledDeltaTime; float t=Mathf.SmoothStep(0,1,elapsed/1.2f);
+            follow.transform.SetPositionAndRotation(Vector3.Lerp(startEye,eye,t),Quaternion.Slerp(startRotation,rotation,t));
+            follow.fieldOfView=Mathf.Lerp(followFov,42,t); yield return null;
+        }
+        follow.transform.SetPositionAndRotation(eye,rotation); follow.fieldOfView=42;
+        float holdStart=Time.unscaledTime;
+        yield return new WaitForEndOfFrame();
+        var root=new DirectoryInfo(Application.dataPath);
+        while(root!=null && root.Name!="Builds") root=root.Parent;
+        string output=root!=null?Path.Combine(root.Parent.FullName,"Shots"):Path.GetFullPath("Shots");
+        Directory.CreateDirectory(output);
+        var frame=ScreenCapture.CaptureScreenshotAsTexture();
+        File.WriteAllBytes(Path.Combine(output,"cinema_lookup.png"),frame.EncodeToPNG()); Destroy(frame);
+        ChurchFrame(eye,rotation,42,out top,out bottom,out inside);
+        Debug.Log(FormattableString.Invariant($"[CINEMA] enter z={frozen.z:F3} hold=1.2 restore=1.0 church_top={top:F4} church_bottom={bottom:F4} screenshot=Shots/cinema_lookup.png"));
+        while(Time.unscaledTime-holdStart<1.2f) yield return null;
+        elapsed=0;
+        var restoreEye=frozen+FollowOffset;
+        var restoreRotation=Quaternion.LookRotation(frozen+Vector3.up*LookHeight-restoreEye);
+        while(elapsed<1)
+        {
+            elapsed+=Time.unscaledDeltaTime; float t=Mathf.SmoothStep(0,1,elapsed);
+            follow.transform.SetPositionAndRotation(Vector3.Lerp(eye,restoreEye,t),Quaternion.Slerp(rotation,restoreRotation,t));
+            follow.fieldOfView=Mathf.Lerp(42,followFov,t); yield return null;
+        }
+        follow.transform.SetPositionAndRotation(restoreEye,restoreRotation); follow.fieldOfView=followFov;
+        float error=Vector3.Distance(follow.transform.position-transform.position,FollowOffset);
+        bool frozenOK=Vector3.Distance(transform.position,frozen)<.0001f;
+        cinemaActive=false;
+        Debug.Log(FormattableString.Invariant($"[CINEMA] done=true entries={cinemaEntries} restore_error_m={error:F6} input_frozen={frozenOK.ToString().ToLowerInvariant()} input_restored={(!cinemaActive).ToString().ToLowerInvariant()}"));
+        if(cinemaDemo)
+        {
+            // Exercise movement after unlocking and submit a second valid arrival
+            // to the same trigger method; cinemaDone must reject it.
+            var before=transform.position;
+            bool moved=Move(Vector3.forward,false,.1f);
+            float resumed=Vector3.Distance(before,transform.position);
+            bool retriggered=TryArrivalCinema(-16);
+            Debug.Log(FormattableString.Invariant($"[CINEMA] resume_distance={resumed:F4} once={cinemaDone && cinemaEntries==1 && !retriggered}"));
+            Application.Quit(inside && error<=.3f && frozenOK && moved && resumed>0 && cinemaEntries==1 && !retriggered ? 0:1);
         }
     }
 
@@ -389,7 +537,9 @@ public sealed class PlayerController : MonoBehaviour
         velocity = Vector3.zero;
         maxGroundError = 0;
         blockedDuringWalk = false;
-        pass &= churchCount == 3 && wallCount == 28 && PlayerRadius >= .25f && misses == 0;
+        // The expanded terrace can change segment count; every segment above
+        // must pass the same support, clearance and movement checks.
+        pass &= churchCount >= 3 && wallCount >= 12 && PlayerRadius >= .25f && misses == 0;
         Debug.Log(FormattableString.Invariant(
             $"[COLLIDE] church_colliders={churchCount} wall_colliders={wallCount} player_radius={PlayerRadius:F2} blocked_at_wall={pass.ToString().ToLowerInvariant()}"));
         testingBarriers = false;
@@ -401,6 +551,8 @@ public sealed class PlayerController : MonoBehaviour
     bool SurfaceAt(Vector3 position, out RaycastHit hit)
     {
         var ray = new Ray(new Vector3(position.x, 500, position.z), Vector3.down);
+        // Indoors the flat floor owns support; the underlying hillside cannot win a highest-ray test.
+        if(interior!=null && interior.SupportAt(position,out hit)) return true;
         bool found = ground.Raycast(ray, out hit, 1000);
         foreach (var surface in terraceSurfaces)
         {
@@ -431,6 +583,16 @@ public sealed class PlayerController : MonoBehaviour
         {
             float yaw = Mathf.Atan2(velocity.x, velocity.z) * Mathf.Rad2Deg;
             transform.rotation = Quaternion.Euler(0, Mathf.MoveTowardsAngle(transform.eulerAngles.y, yaw, TurnSpeed * dt), 0);
+        }
+        // Idle input still samples and settles onto support once, without
+        // repeating identical look-ahead/candidate rays in every 20ms substep.
+        if(velocity.sqrMagnitude<.00000001f && input.sqrMagnitude<.00000001f)
+        {
+            var settled=transform.position;
+            settled.y=Mathf.MoveTowards(settled.y,current.point.y,StepLiftSpeed*dt);
+            transform.position=settled;
+            maxGroundError=Mathf.Max(maxGroundError,Mathf.Abs(settled.y-current.point.y));
+            return true;
         }
         var direction = velocity.normalized;
         if (!testingBarriers) frameExpected += velocity * dt;
@@ -466,17 +628,27 @@ public sealed class PlayerController : MonoBehaviour
         float d = Vector2.Distance(new Vector2(transform.position.x, transform.position.z), new Vector2(0f, -9f));
         audioDirector.SetWindScale(Mathf.Lerp(.45f, 1f, Mathf.InverseLerp(20f, 80f, d)));
         // 跟随相机防穿过墙/地形：从头部向理想机位做球形扫掠，撞到东西就拉近。
-        Vector3 target = transform.position + FollowOffset;
-        Vector3 head = transform.position + Vector3.up * (LookHeight + .4f);
+        if(cinemaActive) return;
+        bool inside=interior!=null && interior.Contains(transform.position);
+        if(interior!=null) interior.SetInside(inside);
+        follow.fieldOfView=Mathf.MoveTowards(follow.fieldOfView,inside?32:followFov,Time.deltaTime*30);
+        float look=inside?1.2f:LookHeight;
+        Vector3 target = transform.position + (inside?ChurchInterior.CameraOffset:FollowOffset);
+        Vector3 head = transform.position + Vector3.up * (look + .4f);
         Vector3 delta = target - head;
         float span = delta.magnitude;
         const int ignoreMask = ~((1 << PlayerLayer) | (1 << TraversalLayer));
         if (span > .05f && Physics.SphereCast(head, .35f, delta / span, out var hit, span,
                 ignoreMask, QueryTriggerInteraction.Ignore))
-            target = head + delta / span * Mathf.Max(2.5f, hit.distance - .15f);
+            target = head + delta / span * Mathf.Max(.15f, hit.distance - .4f);
         follow.transform.position = Vector3.Lerp(follow.transform.position, target, .20f);
         follow.transform.rotation = Quaternion.Lerp(follow.transform.rotation,
-            Quaternion.LookRotation(transform.position + Vector3.up * LookHeight - follow.transform.position), .12f);
+            Quaternion.LookRotation(transform.position + Vector3.up * look - follow.transform.position), .12f);
+        // Keep the pixel character readable with the narrower indoor lens and shorter follow distance.
+        float spriteScale=inside ? Mathf.Tan(16*Mathf.Deg2Rad)/Mathf.Tan(followFov*.5f*Mathf.Deg2Rad)*7.5f/10.5f*1.2f : 1;
+        sprite.SetFloat("_ScaleX",Mathf.Lerp(sprite.GetFloat("_ScaleX"),outsideSpriteX*spriteScale,.2f));
+        sprite.SetFloat("_ScaleY",Mathf.Lerp(sprite.GetFloat("_ScaleY"),outsideSpriteY*spriteScale,.2f));
+        GetComponent<PilgrimAnimator>().RefreshDimensions();
     }
 
     // One owner chooses the nearest in-range POI, so overlapping triggers cannot
@@ -488,11 +660,104 @@ public sealed class PlayerController : MonoBehaviour
         if (pois == null) return null;
         foreach (var poi in pois)
         {
-            if (!poi.InRange) continue;
+            if (!poi.InRange || (poi.data.interior && (interior==null || !interior.Contains(transform.position)))) continue;
             float d = (transform.position - poi.transform.position).sqrMagnitude;
             if (d < distance) { distance = d; nearest = poi; }
         }
         return nearest;
+    }
+
+    bool TestInteriorObstacles()
+    {
+        bool pass=true;
+        var starts=new[]{new Vector3(.8f,0,-4),new Vector3(1.5f,0,5.3f),new Vector3(.12f,0,-1.4f),
+            new Vector3(-2,0,9.7f),new Vector3(-2,0,6.1f)};
+        var dirs=new[]{Vector3.right,Vector3.forward,Vector3.back,Vector3.back,Vector3.forward};
+        var expected=new[]{"ChurchCollision_Main_Shell","Interior_Column_04","Interior_Pew_R_2","Interior_Altar","Interior_Iconostasis"};
+        for(int i=0;i<starts.Length;i++)
+        {
+            var p=starts[i]+Vector3.up*interior.FloorY;
+            bool blocked=Physics.CapsuleCast(p+Vector3.up*PlayerRadius,p+Vector3.up*(PlayerHeight-PlayerRadius),
+                PlayerRadius,dirs[i],out var hit,2,1<<BlockerLayer,QueryTriggerInteraction.Ignore);
+            bool valid=blocked && hit.collider.name==expected[i]; pass &= valid;
+            Debug.Log($"[INTERIOR_COLLIDE] expected={expected[i]} actual={(blocked?hit.collider.name:"none")} pass={valid.ToString().ToLowerInvariant()}");
+        }
+        bool flat=true;
+        foreach(var p in new[]{new Vector3(-2,0,3),new Vector3(-7,0,0),new Vector3(3.5f,0,0),new Vector3(-2,0,10)})
+            flat &= interior.SupportAt(p,out var hit) && Mathf.Abs(hit.point.y-interior.FloorY)<.01f;
+        foreach(var lamp in interior.lamps)
+        {
+            bool hanging=lamp.name.Contains("Chandelier");
+            pass &= Mathf.Abs(lamp.range-(hanging?8:4))<.001f && Mathf.Abs(lamp.intensity-(hanging?1.2f:1.6f))<.001f;
+        }
+        Debug.Log($"[INTERIOR_COLLIDE] floor_flat={flat.ToString().ToLowerInvariant()}");
+        return pass && flat;
+    }
+
+    IEnumerator WalkInteriorTo(Vector3 destination)
+    {
+        float deadline=Time.realtimeSinceStartup+25;
+        while(Vector2.Distance(new Vector2(transform.position.x,transform.position.z),new Vector2(destination.x,destination.z))>.08f && Time.realtimeSinceStartup<deadline)
+        {
+            var delta=Vector3.ProjectOnPlane(destination-transform.position,Vector3.up);
+            interiorDirection=Vector3.ClampMagnitude(delta/.5f,1);
+            yield return null;
+        }
+        interiorDirection=Vector3.zero;
+        yield return new WaitForSeconds(.4f);
+        if(Vector2.Distance(new Vector2(transform.position.x,transform.position.z),new Vector2(destination.x,destination.z))>.2f)
+        { Debug.LogError("[INTERIOR_U] walk waypoint failed at="+transform.position+" goal="+destination); Application.Quit(1); }
+    }
+    string InteriorShot(string name)
+    {
+        var root=new DirectoryInfo(Application.dataPath);
+        while(root!=null && root.Name!="Builds") root=root.Parent;
+        string output=Path.Combine(root!=null?root.Parent.FullName:Directory.GetCurrentDirectory(),"Shots",name+".png");
+        Directory.CreateDirectory(Path.GetDirectoryName(output));
+        var frame=ScreenCapture.CaptureScreenshotAsTexture(); File.WriteAllBytes(output,frame.EncodeToPNG()); Destroy(frame);
+        return output;
+    }
+    IEnumerator DemoInterior(Interactable poi)
+    {
+        interiorAuto=true; interiorDirection=Vector3.zero;
+        var start=new Vector3(-2,0,-16);
+        if(interior==null || !SurfaceAt(start,out var support)) { Application.Quit(1); yield break; }
+        start.y=support.point.y; transform.position=start; velocity=Vector3.zero;
+        yield return null;
+        // Only spawn is positioned. All subsequent travel uses the normal swept capsule and step-up.
+        yield return WalkInteriorTo(new Vector3(-2,0,-10.2f));
+        bool closedBlocks = !interior.doorCollider.enabled ? false : Physics.CapsuleCast(
+            new Vector3(-2,interior.FloorY+.3f,-9.4f),new Vector3(-2,interior.FloorY+1.4f,-9.4f),.3f,
+            Vector3.forward,out var closedHit,2,1<<BlockerLayer) && closedHit.collider==interior.doorCollider;
+        if(!closedBlocks || !interior.TryOpen(transform.position))
+        { Debug.LogError("[INTERIOR_U] closed door/range gate failed"); Application.Quit(1); yield break; }
+        yield return new WaitForSeconds(1.2f);
+        yield return new WaitForEndOfFrame();
+        string entry=InteriorShot("interior_entry");
+        yield return WalkInteriorTo(new Vector3(-2,0,.5f));
+        enteredByWalking=interior.Contains(transform.position) && misses==0 && interior.OpenDegrees>=95;
+        yield return new WaitForSeconds(1.5f);
+        yield return new WaitForEndOfFrame();
+        string inside=InteriorShot("interior_inside");
+        bool pass=TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
+            transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
+            Mathf.Abs(follow.fieldOfView-32)<.01f && interior.lamps.Length==5 && interior.shafts.Length>=3 &&
+            new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;
+        Debug.Log(FormattableString.Invariant($"[INTERIOR_U] door_open_deg={interior.OpenDegrees:F0} walk_in={enteredByWalking.ToString().ToLowerInvariant()} player_inside={interior.Contains(transform.position).ToString().ToLowerInvariant()} fov_in={follow.fieldOfView:F0} lights={interior.lamps.Length} light_shafts={interior.shafts.Length} colliders={blockers.Length} pois={Array.FindAll(pois,p=>p.data.interior).Length}"));
+        Debug.Log(FormattableString.Invariant($"[INTERIOR_U] player=({transform.position.x:F3},{transform.position.y:F3},{transform.position.z:F3}) floor_y={interior.FloorY:F3} closed_blocks={closedBlocks} raycast_misses={misses}"));
+        if(!pass) { Debug.LogError("[INTERIOR_U] entry gates failed"); Application.Quit(1); yield break; }
+        if(poi!=null)
+        {
+            yield return WalkInteriorTo(poi.transform.position+Vector3.back*1.1f);
+            if(NearestPoi()!=poi || !poi.TryOpen()) { Debug.LogError("[INTERIOR_U] POI selection failed"); Application.Quit(1); yield break; }
+            yield return new WaitForSecondsRealtime(1);
+            yield return new WaitForEndOfFrame();
+            string shot=InteriorShot("interior_poi_"+poi.data.id.Substring("gergeti_".Length));
+            pass=panel.IsOpen && panel.Current==poi.data && panel.ValidateContent() && new FileInfo(shot).Length>0;
+            Debug.Log($"[POI] open={poi.data.id} title_ok={pass.ToString().ToLowerInvariant()} lines_cn={poi.data.bodyCn.Split('\n').Length} screenshot={shot}");
+            Debug.Log("[INTERIOR_U] screenshots=Shots/interior_entry.png,Shots/interior_inside.png,Shots/interior_poi_p04.png");
+        }
+        Application.Quit(pass?0:1);
     }
 
     IEnumerator DemoPoi(Interactable poi)

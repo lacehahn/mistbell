@@ -12,6 +12,7 @@ public class PoiData
     public string bodyEn;
     public Vector3 anchor;
     public float radius;
+    public bool interior;
 }
 
 [Serializable]
@@ -35,7 +36,8 @@ public class PoiDatabase
                 throw new InvalidOperationException("Invalid or duplicate POI");
             int lines = data.bodyCn.Split('\n').Length;
             if (lines < 4 || lines > 6) throw new InvalidOperationException("POI Chinese requires 4–6 explicit lines: " + data.id);
-            if (!ground.Raycast(new Ray(new Vector3(data.anchor.x, 500, data.anchor.z), Vector3.down), out var hit, 1000))
+            var support = data.interior ? UnityEngine.Object.FindFirstObjectByType<ChurchInterior>().floor : ground;
+            if (!support.Raycast(new Ray(new Vector3(data.anchor.x, 500, data.anchor.z), Vector3.down), out var hit, 1000))
                 throw new InvalidOperationException("POI terrain snap failed: " + data.id);
             data.anchor.y = hit.point.y;
         }

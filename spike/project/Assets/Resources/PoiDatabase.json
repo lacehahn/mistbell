@@ -38,6 +38,48 @@
         "z": -14.5
       },
       "radius": 2.5
+    },
+    {
+      "id": "gergeti_p04",
+      "titleCn": "圣像屏",
+      "titleEn": "Iconostasis",
+      "bodyCn": "屏体把中殿与圣坛分开，金色映着微光。\n十四世纪的山上教堂，是这段旅程的终点。\n这里以修士守望风雪封山的日子作叙事想象，\n朝圣者在屏前停步，把来路留在身后。\n室内陈设为艺术化重构，并非现存实物复原。",
+      "bodyEn": "The screen divides the nave from the altar. This artistic reconstruction imagines monks keeping watch through winter in a church rooted in the fourteenth century, while pilgrims pause before the boundary. Its furnishings are not a survey of surviving objects.",
+      "anchor": {
+        "x": -2,
+        "y": 0,
+        "z": 6.2
+      },
+      "radius": 2.6,
+      "interior": true
+    },
+    {
+      "id": "gergeti_p05",
+      "titleCn": "烛台",
+      "titleEn": "Votive Candles",
+      "bodyCn": "烛台微光在石柱脚下收拢成一圈暖色。\n风雪封山的日子，在本作中由暗室与火光讲述。\n修士与朝圣者的停留，只留下想象中的微光，\n不需要点烛，也不需要付出任何供物。\n这是艺术化叙事，不是某次仪式的历史记录。",
+      "bodyEn": "Candlelight gathers warmth at the foot of the stone columns. In this imagined winter refuge, monks and pilgrims leave a quiet trace of their presence. No candle-lighting task or offering is required; the scene is an artistic interpretation, not a record of a particular rite.",
+      "anchor": {
+        "x": -4.9,
+        "y": 0,
+        "z": 4
+      },
+      "radius": 2.2,
+      "interior": true
+    },
+    {
+      "id": "gergeti_p06",
+      "titleCn": "壁画残片",
+      "titleEn": "Wall Painting",
+      "bodyCn": "右墙残留的色块，像被岁月磨淡的札记。\n十四世纪的建筑仍在，人的足迹却难以辨认。\n本作借残片想象修士守山、朝圣者避雪的片刻，\n不为这些痕迹指定画师、题材或确切年代。\n画面为示意重构，不代表已核实的现存壁画。",
+      "bodyEn": "Faded colour on the right wall becomes an imagined trace of monks and pilgrims sheltering from mountain snow. The church dates to the fourteenth century, but this symbolic fragment is an artistic reconstruction; it makes no claim about the painter, subject or age of surviving wall paintings.",
+      "anchor": {
+        "x": 1.2,
+        "y": 0,
+        "z": 5.6
+      },
+      "radius": 2.2,
+      "interior": true
     }
   ]
 }
