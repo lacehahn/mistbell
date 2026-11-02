@@ -334,4 +334,6 @@
 | 14:54 | 程序化音频（Codex） | `[AUDIO] bell 4.00s rms=0.110 wind 8.00s rms=0.104 step 0.12s rms=0.074 bell_at=44.861m footsteps=21` | 钟声/风雪底噪/脚步全部代码合成，无外部素材 |
 | 14:54 | 新增 `docs/07-gameplay-slice.md` | — | 可玩切片说明：操作键位、三条验收证据、复现命令、明确边界 |
 | 15:03 | **用户真机试玩反馈**（第一次有人实际玩） | 用户口述 | ①手感是匀速滑行（确认我的判断）②45m 钟声＋Bloom"没有太突兀" → 保留 ③**BUG：无法登上 9 级台阶** → 派 step-up 0.28m + 隐形斜坡兜底 + 出生点 z −82→−88（开场钟声早响）＋加减速 12/18 m·s⁻² |
+| 15:20 | 碰撞修复通过 | `[COLLIDE] church_colliders=3 wall_colliders=28 clearance=0.310`；自测 `on_deck=true`（0.313 vs 0.286） | 上台阶 OK、穿模已挡、墙沿不可站 |
+| 15:20 | **用户第二轮试玩**：其余 OK，但**被挡住走不到钟楼** | 用户口述 | 派发：阻挡诊断 `[BLOCK] by=<collider>`、钟楼 MeshCollider→Capsule(r2.2 h13)、挡土墙外移、POI 锚点挪到塔前 2.4m；新增 `-demo-walk-to-tower`（10s 自动走向，要求 ≤2.6m 且提示出现） |
 
