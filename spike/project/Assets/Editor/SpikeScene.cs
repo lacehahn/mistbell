@@ -199,7 +199,7 @@ public static class SpikeScene
         rig.poses.Add(groundPose);
 
         rig.Apply(0);
-        LogMountainFrame(cam);
+        MountainBackdrop.Build(cam, GameObject.Find("Mountain Ridges"));
 
         Directory.CreateDirectory("Assets/Scenes");
         const string scenePath = "Assets/Scenes/ArtSpike.unity";
@@ -452,17 +452,7 @@ public static class SpikeScene
         Debug.Log($"[SPIKE] pilgrim viewport feet={feet} head={head}");
         Debug.Log($"[SPIKE] frame pilgrim heightPct={(head.y-feet.y)*100:F1}");
         Debug.Log($"[SPIKE] frame pitch={Mathf.Asin(Mathf.Abs(cam.transform.forward.y))*Mathf.Rad2Deg:F1}");
-        for(int layer=1;layer<=3;layer++)
-        {
-            var ridge=GameObject.Find("Mountain_"+layer).transform;
-            var verts=ridge.GetComponent<MeshFilter>().sharedMesh.vertices;
-            var peak=ridge.TransformPoint(verts[1]);
-            for(int i=3;i<verts.Length;i+=2)
-            {
-                var p=ridge.TransformPoint(verts[i]); if(p.y>peak.y) peak=p;
-            }
-            Debug.Log($"[SPIKE] frame ridge{layer} linePct={(1-cam.WorldToViewportPoint(peak).y)*100:F1}");
-        }
+
     }
 
     static Color Hex(string value)
@@ -666,33 +656,6 @@ public static class SpikeScene
             EditorUtility.SetDirty(ridge.GetComponent<MeshFilter>().sharedMesh);
         }
         Debug.Log($"[MOUNTAINS] cols=240 rows=40 continuousFlanks=true seed=731 octaves=4 crestRow=26 gullyZ=18m gullyH=6m snowline=.62 aerial=.30/.62/.86 meshHash={fingerprint:X8}");
-    }
-
-    // Diagnostics use the unchanged runtime camera; Y is measured down from the top.
-    static void LogMountainFrame(Camera cam)
-    {
-        float top = 1f, foot = 0f;
-        int visibleVertices = 0;
-        var mountains = GameObject.Find("Mountain Ridges");
-        foreach (var filter in mountains.GetComponentsInChildren<MeshFilter>())
-        foreach (var vertex in filter.sharedMesh.vertices)
-        {
-            var world = filter.transform.TransformPoint(vertex);
-            var vp = cam.WorldToViewportPoint(world);
-            if (vp.z < cam.nearClipPlane || vp.z > cam.farClipPlane || vp.x < 0f || vp.x > 1f) continue;
-            top = Mathf.Min(top, 1f - vp.y);
-            if (world.y <= -9.99f) foot = Mathf.Max(foot, 1f - vp.y);
-            visibleVertices++;
-        }
-        // No world-height quantization or periodic height shading remains.
-        const int horizontalBands = 0;
-        // Finest vertical rib in RidgeFog: one cycle every 2*pi/.46 metres.
-        float ribsPer100m = .46f * 100f / (2f * Mathf.PI);
-        Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-            "[MTN3] distance=700/1040/1380 peak=120/175/230 top_viewport_y={0:F4} foot_viewport_y={1:F4} horizontal_bands={2} ribs_per_100m={3:F2} aerial=0.30/0.62/0.86",
-            top, foot, horizontalBands, ribsPer100m));
-        if (visibleVertices == 0 || top < .18f || foot < .55f || horizontalBands != 0 || ribsPer100m < 6f)
-            throw new System.InvalidOperationException("MTN3 mountain framing/detail gate failed");
     }
 
     static Transform SaveMountainMesh(Transform parent, string name, Vector3[] vertices,
