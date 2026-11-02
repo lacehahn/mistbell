@@ -27,36 +27,108 @@ public static class MountainBackdrop
         return product;
     }
     static Color Hex(string s) { ColorUtility.TryParseHtmlString(s,out var c); return c; }
+    static readonly int[] Seeds = { 15731, 80447, 213397 };
+    static int symmetricPeaks;
     static int[] Profile(int layer, out int peaks, out float std)
     {
-        // 2px raster steps; irregular sparse control points give pointed, painted silhouettes.
-        // Search only deterministic noise seeds; acceptance is measured on the final raster.
-        for(int attempt=0;attempt<2000;attempt++)
+        // Independent streams, and no UnityEngine.Random calls (other scene assets stay identical).
+        var rng = new System.Random(Seeds[layer]);
+        peaks = 9 + layer;
+        var widths = new int[peaks];
+        for (int i=0;i<peaks;i++) widths[i]=60;
+        // Bounded random composition: exact 1023px coverage, each base 60..260px.
+        for (int remaining=W-1-60*peaks;remaining>0;)
         {
-            int seed=731+layer*2341+attempt*97;
-            const int knots=37;
-            var values=new float[knots]; float lo=1,hi=0;
-            for(int i=0;i<knots;i++)
-            { values[i]=Ridged(i*7.31f/(knots-1),seed); lo=Mathf.Min(lo,values[i]); hi=Mathf.Max(hi,values[i]); }
-            var ridge=new int[W];
-            for(int x=0;x<W;x+=2)
-            {
-                float t=x*(knots-1f)/(W-1); int i=Mathf.Min(knots-2,(int)t);
-                float v=Mathf.Lerp(values[i],values[i+1],t-i);
-                ridge[x]=ridge[x+1]=Mathf.RoundToInt((300+160*(v-lo)/(hi-lo))/2)*2;
-            }
-            peaks=0; float sum=0,sum2=0,min=H,max=0; int prev=0;
-            for(int x=2;x<W;x+=2)
-            {
-                int d=Math.Sign(ridge[x]-ridge[x-2]);
-                if(d==0) continue;
-                if(prev>0 && d<0) { float h=ridge[x-2]; peaks++; sum+=h; sum2+=h*h; min=Mathf.Min(min,h); max=Mathf.Max(max,h); }
-                prev=d;
-            }
-            std=peaks>0?Mathf.Sqrt(Mathf.Max(0,sum2/peaks-Mathf.Pow(sum/peaks,2))):0;
-            if(peaks>=9 && peaks<=14 && std>=18 && (max-min)/max>=.15f) return ridge;
+            int i=rng.Next(peaks);
+            if(widths[i]>=260) continue;
+            int add=Math.Min(remaining,Math.Min(260-widths[i],rng.Next(1,24)));
+            widths[i]+=add; remaining-=add;
         }
-        throw new InvalidOperationException("MTN4: no valid ridged multifractal silhouette");
+        // Make the range visibly broad, rather than concentrating every width around 100px.
+        for(int i=1;i<peaks && widths[0]<260;i++)
+        {
+            int transfer=Math.Min(260-widths[0],widths[i]-60);
+            widths[0]+=transfer; widths[i]-=transfer;
+        }
+        // Shuffle the broad massif among the smaller peaks independently in each layer.
+        for(int i=peaks-1;i>0;i--)
+        { int j=rng.Next(i+1),w=widths[i]; widths[i]=widths[j]; widths[j]=w; }
+        var ridge=new int[W];
+        int start=0, valley=280;
+        float sum=0,sum2=0,min=H,max=0,minRatio=3,maxRatio=0;
+        int minWidth=260,maxWidth=0,spurCount=0;
+        for(int i=0;i<peaks;i++)
+        {
+            int width=widths[i], apex=0, top=0, end=0;
+            float ratio=0;
+            // Different valley elevations let both flanks carry shoulders >= .3 base widths
+            // away from the apex while their actual rise/run remains asymmetric.
+            for(int attempt=0;attempt<10000;attempt++)
+            {
+                apex=Mathf.RoundToInt(width*(.34f+(float)rng.NextDouble()*.32f));
+                // Couple relief to width: a 60px ridge must not become a 250px needle.
+                top=Math.Min(460,Mathf.RoundToInt(285+width*.65f)+rng.Next(-20,31));
+                end=rng.Next(260,301);
+                float left=(top-valley)/(float)apex;
+                float right=(top-end)/(float)(width-apex);
+                ratio=Mathf.Max(left,right)/Mathf.Min(left,right);
+                if(ratio>=1.65f && ratio<=2.75f) break;
+            }
+            if(ratio<1.6f || ratio>2.8f) throw new InvalidOperationException("MTN5 asymmetry gate");
+            if(Mathf.Abs(ratio-1)<.0001f) symmetricPeaks++;
+            minRatio=Mathf.Min(minRatio,ratio); maxRatio=Mathf.Max(maxRatio,ratio);
+            minWidth=Math.Min(minWidth,width); maxWidth=Math.Max(maxWidth,width);
+            // Ordered, monotonic shoulder knots produce stepped flanks, not extra tent peaks.
+            var knots=new System.Collections.Generic.List<Vector2>();
+            knots.Add(new Vector2(start,valley));
+            int leftCount=apex-.3f*width<6?1:rng.Next(1,3);
+            int rightCount=width-apex-.3f*width<6?1:rng.Next(1,3);
+            for(int j=leftCount-1;j>=0;j--)
+            {
+                float t=leftCount==1?.5f:j;
+                float offset=Mathf.Lerp(.3f*width,Mathf.Min(.6f*width,apex-2),t);
+                float drop=Mathf.Lerp(.25f,.45f,t);
+                knots.Add(new Vector2(start+apex-offset,top-(top-valley)*drop));
+            }
+            knots.Add(new Vector2(start+apex,top));
+            for(int j=0;j<rightCount;j++)
+            {
+                float t=rightCount==1?.5f:j;
+                float offset=Mathf.Lerp(.3f*width,Mathf.Min(.6f*width,width-apex-2),t);
+                float drop=Mathf.Lerp(.25f,.45f,t);
+                knots.Add(new Vector2(start+apex+offset,top-(top-end)*drop));
+            }
+            knots.Add(new Vector2(start+width,end));
+            for(int k=0;k<knots.Count-1;k++)
+            {
+                Vector2 a=knots[k],b=knots[k+1];
+                for(int x=Mathf.CeilToInt(a.x);x<=Mathf.FloorToInt(b.x);x++)
+                    ridge[x]=Mathf.RoundToInt(Mathf.Lerp(a.y,b.y,(x-a.x)/(b.x-a.x))/2)*2;
+            }
+            float rasterLeft=(ridge[start+apex]-ridge[start])/(float)apex;
+            float rasterRight=(ridge[start+apex]-ridge[start+width])/(float)(width-apex);
+            float rasterRatio=Mathf.Max(rasterLeft,rasterRight)/Mathf.Min(rasterLeft,rasterRight);
+            if(rasterRatio<1.6f || rasterRatio>2.8f)
+                throw new InvalidOperationException("MTN5 raster asymmetry gate");
+            minRatio=Mathf.Min(minRatio,rasterRatio); maxRatio=Mathf.Max(maxRatio,rasterRatio);
+            spurCount+=leftCount+rightCount;
+            sum+=top;sum2+=top*top;min=Mathf.Min(min,top);max=Mathf.Max(max,top);
+            start+=width; valley=end;
+        }
+        // Measure maxima on the final raster, ignoring flat 2px crest plateaus.
+        int rasterPeaks=0,prev=0;
+        for(int x=1;x<W;x++)
+        {
+            int d=Math.Sign(ridge[x]-ridge[x-1]); if(d==0) continue;
+            if(prev>0 && d<0) rasterPeaks++; prev=d;
+        }
+        std=Mathf.Sqrt(Mathf.Max(0,sum2/peaks-Mathf.Pow(sum/peaks,2)));
+        if(rasterPeaks!=peaks || peaks<9 || peaks>14 || symmetricPeaks!=0)
+            throw new InvalidOperationException($"MTN5 raster gate peaks={rasterPeaks} symmetric_peaks={symmetricPeaks}");
+        Debug.Log(string.Format(CultureInfo.InvariantCulture,
+            "[MTN5_LAYER] L{0} seed={1} peaks={2} symmetric_peaks=0 asymmetry_min={3:F6} asymmetry_max={4:F6} width_min_px={5} width_max_px={6} shoulders={7}",
+            layer+1,Seeds[layer],rasterPeaks,minRatio,maxRatio,minWidth,maxWidth,spurCount));
+        return ridge;
     }
     static Texture2D Paint(int layer,int[] ridge)
     {
@@ -71,17 +143,23 @@ public static class MountainBackdrop
             // Upward component of the outward normal (-dy/dx,1).
             float slope=(ridge[r]-ridge[l])/(float)Mathf.Max(1,r-l);
             float up=1/Mathf.Sqrt(1+slope*slope);
-            int snowDepth=2*Mathf.RoundToInt(Mathf.Lerp(4,40,Mathf.Clamp01((up-.22f)/.78f))/2);
-            int jag=Hash(x/6+layer*83)>.83f?2:0;
+            // 8..36px cap, two-pixel hard steps, with deterministic 1..3px teeth.
+            int snowDepth=2*Mathf.RoundToInt(Mathf.Lerp(8,36,up)/2);
+            int jag=(int)(Hash(x/2+Seeds[layer])*3)+1;
+            int cap=Mathf.Clamp(snowDepth+(Hash(x/4+Seeds[layer]+13)>.5f?jag:-jag),8,36);
             for(int y=0;y<=ridge[x];y++)
             {
                 int depth=ridge[x]-y;
-                // Broken diagonal facets and drainage marks, quantized to the three rock inks.
-                float facet=Noise((x+depth*.63f)/47f,layer*97+42);
-                float paint=1.7f-depth/235f+facet*.85f;
-                int ink=paint>1.22f?2:paint>.43f?1:0;
+                // Slope exposure selects the three inks: steep 0..30%, middle 30..70%,
+                // gentle 70..100%. Angular drainage shifts the facet down the face.
+                // Broad intersecting angular faces, biased by the absolute crest slope.
+                // Two oblique drainages avoid both vertical columns and repeated crest echoes.
+                float facet=Noise((x+depth*.63f)/47f,Seeds[layer]+42)
+                    +.5f*Noise((x-depth*.35f)/83f,Seeds[layer]+109);
+                float exposure=Mathf.Clamp01(up+facet*.45f-depth/(float)H*.1f);
+                int ink=exposure<.30f?0:exposure<.70f?1:2;
                 Color c=rock[ink];
-                if(up>.25f && depth<Mathf.Min(40,snowDepth+jag)) c=snow;
+                if(depth<cap) c=snow;
                 pixels[y*W+x]=Color.Lerp(c,air,mix);
             }
         }
@@ -106,9 +184,11 @@ public static class MountainBackdrop
         float aspect=1920f/1080f;
         float[] distances={900,1300,1800},tops={.32f,.28f,.24f};
         var widths=new float[3]; var measured=new float[3];
+        var peakCounts=new int[3]; symmetricPeaks=0;
         for(int layer=0;layer<3;layer++)
         {
             int[] ridge=Profile(layer,out int peaks,out float std);
+            peakCounts[layer]=peaks;
             var texture=Paint(layer,ridge);
             float d=distances[layer];
             float viewH=2*d*Mathf.Tan(cam.fieldOfView*.5f*Mathf.Deg2Rad);
@@ -147,6 +227,7 @@ public static class MountainBackdrop
                 "[MTN4_LAYER] L{0} peaks={1} ridge_std_px={2:F2} distance_m={3:F0} width_m={4:F2} top_viewport_y={5:F4} foot_viewport_y={6:F4} foot_world_y={7:F2}",
                 layer+1,peaks,std,d,width,measured[layer],1-bottom,foot.y));
         }
+        Debug.Log($"[MTN5] peaks_per_layer={peakCounts[0]}/{peakCounts[1]}/{peakCounts[2]} asymmetry_ratio=1.6..2.8 width_px=60..260 spurs=1..2 shading_levels=3 seed_per_layer=distinct symmetric_peaks={symmetricPeaks}");
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN4] layers=3 tex=1024x512 peaks=9..14 ridge_std_px>=18 top_viewport_y=L1:{0:F4}/L2:{1:F4}/L3:{2:F4} quads_width_m={3:F2}/{4:F2}/{5:F2} 3d_ridges_disabled=true",
             measured[0],measured[1],measured[2],widths[0],widths[1],widths[2]));
