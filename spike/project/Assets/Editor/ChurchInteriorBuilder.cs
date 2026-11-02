@@ -158,7 +158,7 @@ public static class ChurchInteriorBuilder
         var detail=new GameObject("Interior_Detail").transform; detail.SetParent(church,true);
         interior.detailRoot=detail.gameObject;
         var iron=Lit("M_InteriorIron",new Color32(43,39,34,255));
-        Vector3 lampCenter=new Vector3(0,4.6f,-4.5f);
+        Vector3 lampCenter=new Vector3(0,3.4f,3.5f);   // 人眼相机在 z≈-4.8 朝 +z，吊灯必须在玩家前方而非头顶
         var ring=Ring(detail,lampCenter,iron);
         chandelier.transform.position=lampCenter+Vector3.down*.2f;
         interior.chandelierLamp=chandelier; interior.indoorChandelierPosition=chandelier.transform.position;
@@ -178,8 +178,8 @@ public static class ChurchInteriorBuilder
         {
             float angle=i*Mathf.PI*2/3;
             Vector3 bottom=lampCenter+new Vector3(Mathf.Cos(angle)*.9f,0,Mathf.Sin(angle)*.9f);
-            // Nave ridge runs along x=-2; the anchor follows its sloped underside.
-            var top=new Vector3(bottom.x,12f-Mathf.Abs(bottom.x+2)/3.9f*.4f,bottom.z);
+            // Vertical suspension: 8.6 - 4.0 = 4.6 metres.
+            var top=new Vector3(bottom.x,8.6f,bottom.z);
             var cable=Primitive(detail,"Interior_Suspension_"+i,PrimitiveType.Cylinder,(top+bottom)/2,
                 new Vector3(.025f,(top-bottom).magnitude/2,.025f),iron);
             cable.transform.rotation=Quaternion.FromToRotation(Vector3.up,top-bottom);
@@ -269,24 +269,38 @@ public static class ChurchInteriorBuilder
     }
     static void BuildCeiling(Transform parent)
     {
-        var wood=Lit("M_InteriorCeiling",new Color32(74,59,48,255),new Color(.045f,.035f,.025f));
-        // Downward-facing gables; side wings meet the nave at its eaves without overlapping faces.
+        var wood=Lit("M_InteriorCeiling",new Color32(106,85,64,255),new Color(.11f,.082f,.058f));   // 原 4A3B30+弱自发光 在室内等于纯黑，读成"没顶"
+        // Split the nave around the 1.6 m square opening below the drum (x=-2,z=0).
         for(int side=0;side<2;side++)
         {
             float edge=side==0?-5.9f:1.9f;
-            var v=new[]{new Vector3(edge,11.6f,-7.4f),new Vector3(-2,12,-7.4f),new Vector3(edge,11.6f,7.4f),new Vector3(-2,12,7.4f)};
-            Surface(parent,"Interior_Ceiling_Nave_"+side,v,side==0?new[]{0,1,2,1,3,2}:new[]{0,2,1,1,2,3},wood);
-            float x0=side==0?-8.4f:1.9f,x1=side==0?-5.9f:4.4f;
+            var vertices=new List<Vector3>(); var indices=new List<int>();
+            float[] xs=side==0?new[]{edge,-2.8f,-2}:new[]{-2,-1.2f,edge};
+            float[] zs={-7.4f,-.8f,.8f,7.4f};
+            for(int x=0;x<2;x++) for(int z=0;z<3;z++)
+            {
+                if(z==1 && (side==0?x==1:x==0)) continue;
+                float x0=xs[x],x1=xs[x+1],z0=zs[z],z1=zs[z+1];
+                float y0=9-Mathf.Abs(x0+2)/3.9f*.4f,y1=9-Mathf.Abs(x1+2)/3.9f*.4f;
+                int n=vertices.Count;
+                vertices.AddRange(new[]{new Vector3(x0,y0,z0),new Vector3(x1,y1,z0),new Vector3(x0,y0,z1),new Vector3(x1,y1,z1)});
+                indices.AddRange(new[]{n,n+1,n+2,n+1,n+3,n+2});
+            }
+            Surface(parent,"Interior_Ceiling_Nave_"+side,vertices.ToArray(),indices.ToArray(),wood);
+            float left=side==0?-8.4f:1.9f,right=side==0?-5.9f:4.4f;
             for(int half=0;half<2;half++)
             {
                 float z=half==0?-2.9f:2.9f;
-                var wing=new[]{new Vector3(x0,11.6f,z),new Vector3(x1,11.6f,z),new Vector3(x0,side==0?12:11.6f,0),new Vector3(x1,side==0?11.6f:12,0)};
+                var wing=new[]{new Vector3(left,8.6f,z),new Vector3(right,8.6f,z),new Vector3(left,side==0?9:8.6f,0),new Vector3(right,side==0?8.6f:9,0)};
                 Surface(parent,"Interior_Ceiling_Transept_"+side+"_"+half,wing,half==0?new[]{0,1,2,1,3,2}:new[]{0,2,1,1,2,3},wood);
             }
         }
+        // Keep all five beams clear of the central drum opening.
+        float[] beamZ={-4,-2,1,3,5};
         for(int i=0;i<5;i++) Primitive(parent,"Interior_CeilingBeam_"+i,PrimitiveType.Cube,
-            new Vector3(-2,11.75f,-4+i*2),new Vector3(7.8f,.3f,.25f),wood);
+            new Vector3(-2,8.75f,beamZ[i]),new Vector3(7.8f,.3f,.25f),wood);
     }
+
     static void BuildFloor(Transform parent,ChurchInterior interior)
     {
         var mats=new Material[15];

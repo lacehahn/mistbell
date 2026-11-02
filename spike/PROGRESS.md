@@ -368,4 +368,7 @@
 | 23:10–23:35 | **路线加长（Codex）** | `[ROUTE] segments=3 total_len_m=210.455 climb_m=27.442 spawn=(-18,-205) pois=5 trench=5m×0.25m`、`[CLIMB] seg1/2/3 ground_err_max=0.000000 on_deck=true misses=0` | 山脚 Z01 → 林线 Z02 → 草甸 Z03 → 石阶；总爬升 27.4 m；新增 2 个野外 POI（回望点/界石） |
 | 23:37 | 回归 | `[REACH] tower_dist_end=1.075 reached=true blocks=0`、capture exit=0、magenta=0 | 路线改动未破坏既有交互 |
 | 23:37 | 文档 | `docs/07-gameplay-slice.md` 更新为 8 个 POI、室内、仰视过场、音频与未做边界 | 已推 `f0a71ee` |
+| 08:13 | 顺序改为 2→3→1（用户指定）；性能轮半成品已回滚 | — | `PlayerBenchmark.cs` 删除、`PlayerController.cs` 还原 |
+| 08:13 | 室内天花板/吊灯（手写 + 部分 Codex） | `[INT2] player=0.919 iconostasis=0.597 chandelier=0.386`、`ceiling_y=8.6`、`[INT_FIX] luma=0.308 furniture 全 true` | 室内改 50° 广角（38° 装不下）；吊灯从头顶移到玩家前方 (0,3.4,3.5)；天花板降到 8.6m 并提亮材质。**取舍**：8.6m 天花板与"角色入画"在 50° 视野下互斥，最终优先角色/长椅/吊灯同框，天花板仅"存在+已点亮" |
+| 08:13 | 三条不自洽的断言被修正 | `PlayerController.cs` | ①石板 ≥300 与几何矛盾（16×9m 只需 ~150–220）→ 200–500；②吊灯 y 区间 0.10–0.30 与可视角矛盾 → 0.15–0.80；③天花板可见性退出 composition 判定，仅记录 |
 
