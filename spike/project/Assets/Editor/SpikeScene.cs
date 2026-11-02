@@ -194,6 +194,12 @@ public static class SpikeScene
         vol.priority = 1f;
         vol.sharedProfile = profile;
 
+        var reveal = pilgrim.AddComponent<MistReveal>();
+        reveal.player = player;
+        reveal.church = church;
+        reveal.volume = vol;
+        reveal.cloudShader = Shader.Find("UI/Default");
+
         // ---------- 相机 ----------
         var camGo = new GameObject("Main Camera");
         var cam = camGo.AddComponent<Camera>();
