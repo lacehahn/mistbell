@@ -374,9 +374,39 @@ public static class SpikeScene
             box.center = center;
             box.size = size;
         }
-        Block("ChurchCollision_Main", new Vector3(-2, 5.5f, 1.3f), new Vector3(14.6f, 11, 21.4f));
+        // One non-convex proxy assembled from the measured masonry volumes.
+        // Keep the nave/transept corners open; a single bounding box seals the plaza.
+        var main = new GameObject("ChurchCollision_Main");
+        main.transform.SetParent(church, false);
+        main.layer = PlayerController.BlockerLayer;
+        main.isStatic = true;
+        var parts = new System.Collections.Generic.List<CombineInstance>();
+        void Volume(PrimitiveType type, Vector3 center, Vector3 size)
+        {
+            var temporary = GameObject.CreatePrimitive(type);
+            parts.Add(new CombineInstance { mesh = temporary.GetComponent<MeshFilter>().sharedMesh,
+                transform = Matrix4x4.TRS(center, Quaternion.identity, size) });
+            Object.DestroyImmediate(temporary);
+        }
+        Volume(PrimitiveType.Cube, new Vector3(-2,5.5f,0), new Vector3(9,11,16));
+        Volume(PrimitiveType.Cube, new Vector3(-2,5.5f,0), new Vector3(14,11,7));
+        Volume(PrimitiveType.Cube, new Vector3(-2,3.35f,-8.75f), new Vector3(1.9f,4.7f,1.5f));
+        Volume(PrimitiveType.Cylinder, new Vector3(-2,4.9f,8.6f), new Vector3(6.4f,4.9f,6.4f));
+        var proxy = new Mesh { name = "ChurchCollision_Masonry" };
+        proxy.CombineMeshes(parts.ToArray());
+        const string collisionPath = "Assets/Art/Church/ChurchCollision_Masonry.asset";
+        AssetDatabase.DeleteAsset(collisionPath);
+        AssetDatabase.CreateAsset(proxy, collisionPath);
+        main.AddComponent<MeshCollider>().sharedMesh = proxy;
         Block("ChurchCollision_Annex", new Vector3(-12.25f, 3.1f, 2.5f), new Vector3(6.5f, 6.2f, 6));
-        Block("ChurchCollision_BellTower", new Vector3(10.5f, 8.5f, -2), new Vector3(6, 17, 6));
+        var tower = new GameObject("ChurchCollision_BellTower");
+        tower.transform.SetParent(church, false);
+        tower.layer = PlayerController.BlockerLayer;
+        tower.isStatic = true;
+        var capsule = tower.AddComponent<CapsuleCollider>();
+        capsule.center = new Vector3(10.5f, 6.5f, -2);
+        capsule.radius = 2.2f;
+        capsule.height = 13;
         return church;
     }
 
@@ -471,6 +501,10 @@ public static class SpikeScene
                 var box = wall.gameObject.AddComponent<BoxCollider>();
                 box.center = wall.sharedMesh.bounds.center;
                 box.size = wall.sharedMesh.bounds.size;
+                // Collision only: centreline .25m outside the terrace outer edge.
+                var outward = alongX ? (z0 < (frontZ+backZ)/2 ? Vector3.back : Vector3.forward)
+                    : (x0 < 0 ? Vector3.left : Vector3.right);
+                box.center += outward * (thickness / 2 + .25f);
                 caps.Add(Prism("TerraceCap_"+segments,xa,xb,za,zb,WallTop,
                     (x,z)=>WallTop(x,z)+capHeight,snow,false));
                 segments++;
