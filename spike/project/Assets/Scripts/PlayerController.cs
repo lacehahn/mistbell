@@ -63,7 +63,7 @@ public sealed class PlayerController : MonoBehaviour
         if (CaptureMode) { enabled = false; return; }
         gameObject.layer = PlayerLayer;
         // Runtime spawn only: screenshot pilgrim and the ShotRig table are untouched.
-        var spawn = new Vector3(0, 0, -88);
+        var spawn = ClimbRoute.Spawn;
         if (ground.Raycast(new Ray(spawn + Vector3.up * 500, Vector3.down), out var spawnHit, 1000))
             spawn.y = spawnHit.point.y;
         transform.position = spawn;
@@ -80,7 +80,7 @@ public sealed class PlayerController : MonoBehaviour
             c => c.gameObject.layer == BlockerLayer && c.enabled && !c.isTrigger);
         interior = FindFirstObjectByType<ChurchInterior>();
         Physics.SyncTransforms();
-        Debug.Log("[MOVE] step_up_max=0.28 ramp=true accel=12 decel=18 spawn_z=-88");
+        Debug.Log("[MOVE] step_up_max=0.28 ramp=true accel=12 decel=18 spawn=(-18,-205)");
         GetComponent<PilgrimAnimator>().enabled = false;
         sprite = GetComponent<MeshRenderer>().material;
         follow = Camera.main;
@@ -127,8 +127,19 @@ public sealed class PlayerController : MonoBehaviour
                 " snapped=true");
         }
         catch (Exception ex) { Debug.LogException(ex); Application.Quit(1); return; }
+        int outdoorCount=Array.FindAll(pois,p=>!p.data.interior).Length;
+        int outdoorSlots=Array.FindAll(pois,p=>!p.data.interior && p.isActiveAndEnabled).Length;
+        float climb=ClimbRoute.Height(-13.25f)-ClimbRoute.Height(ClimbRoute.Spawn.z);
+        Debug.Log(FormattableString.Invariant($"[ROUTE] segments=3 total_len_m={ClimbRoute.Length:F3} climb_m={climb:F3} spawn=({ClimbRoute.Spawn.x:F0},{ClimbRoute.Spawn.z:F0}) pois={outdoorCount} slots={outdoorSlots} trench_w={ClimbRoute.Width} trench_depth={ClimbRoute.Depth}"));
+        if(ClimbRoute.Length<200 || climb<24 || outdoorCount!=5 || outdoorSlots!=5)
+        { Debug.LogError("[ROUTE] gate failed"); Application.Quit(1); return; }
         var args = Environment.GetCommandLineArgs();
         cinemaDemo = Array.IndexOf(args,"-demo-cinema")>=0;
+        if(cinemaDemo) {
+            var cinemaStart=new Vector3(0,0,-40);
+            if(SurfaceAt(cinemaStart,out var cinemaSupport)) cinemaStart.y=cinemaSupport.point.y;
+            transform.position=cinemaStart; previousZ=cinemaStart.z;
+        }
         suppressCinema = !cinemaDemo && Array.Exists(args,a=>a.StartsWith("-demo-",StringComparison.Ordinal));
         int poiIndex = Array.IndexOf(args, "-demo-poi");
         if (poiIndex >= 0)
@@ -138,6 +149,7 @@ public sealed class PlayerController : MonoBehaviour
             var selected=Array.Find(pois,p=>p.data.id==args[poiIndex+1]);
             StartCoroutine(selected.data.interior ? DemoInterior(selected) : DemoPoi(selected));
         }
+        if(Array.IndexOf(args,"-demo-climb")>=0) StartCoroutine(DemoClimb());
         if(Array.IndexOf(args,"-demo-enter-church")>=0) StartCoroutine(DemoInterior(null));
         int index = Array.IndexOf(args, "-demo-walk");
         if (index >= 0)
@@ -193,7 +205,8 @@ public sealed class PlayerController : MonoBehaviour
         Vector3 direction = Vector3.zero;
         bool sprint = false;
         float dt = Time.deltaTime;
-        if (cinemaDemo) direction=Vector3.forward;
+        if (cinemaDemo) direction=transform.position.z < -40
+            ? new Vector3(ClimbRoute.CenterX(transform.position.z+2)-transform.position.x,0,2).normalized : Vector3.forward;
         else if (interiorAuto) direction=interiorDirection;
         else if (walkingDemo)
         {
@@ -845,6 +858,42 @@ public sealed class PlayerController : MonoBehaviour
         bool composition=py>=.80f && py<=.95f && iy>=.28f && iy<=.50f && cy>=.12f && cy<=.30f;
         return detailPass && composition && candles==8 && frames==3 && additive && Mathf.Abs(alpha-.08f)<.001f && luma>=.18f && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
     }
+    IEnumerator DemoClimb()
+    {
+        // Full continuous traversal: same Update -> Move, support probes and collision as WASD.
+        interiorAuto=true; interiorDirection=Vector3.zero;
+        yield return null;
+        float deadline=Time.realtimeSinceStartup+150;
+        for(int segment=0;segment<3;segment++)
+        {
+            Vector3 start=transform.position; float error=0;
+            float endZ=ClimbRoute.Points[segment+1].y;
+            while(transform.position.z<endZ-.08f && Time.realtimeSinceStartup<deadline)
+            {
+                float ahead=Mathf.Min(endZ,transform.position.z+1.5f);
+                var target=new Vector3(ClimbRoute.CenterX(ahead),transform.position.y,ahead);
+                interiorDirection=Vector3.ClampMagnitude(target-transform.position,1);
+                yield return null;
+                if(!SurfaceAt(transform.position,out var hit)) { Application.Quit(1); yield break; }
+                error=Mathf.Max(error,Mathf.Abs(transform.position.y-hit.point.y));
+            }
+            Debug.Log(FormattableString.Invariant($"[CLIMB] seg={segment+1} start=({start.x:F3},{start.y:F3},{start.z:F3}) end=({transform.position.x:F3},{transform.position.y:F3},{transform.position.z:F3}) ground_err_max={error:F6}"));
+            if(error>.03f || transform.position.z<endZ-.08f) { Application.Quit(1); yield break; }
+        }
+        while(transform.position.z < -8 && Time.realtimeSinceStartup<deadline)
+        {
+            interiorDirection=new Vector3(-transform.position.x,0,1.5f).normalized;
+            yield return null;
+        }
+        interiorDirection=Vector3.zero;
+        yield return new WaitForSeconds(.3f);
+        bool onDeck=SurfaceAt(transform.position,out var deck) &&
+            (deck.collider==stairDeck || deck.collider.name.StartsWith("TerraceFill_",StringComparison.Ordinal)) &&
+            Mathf.Abs(transform.position.y-deck.point.y)<=.03f;
+        Debug.Log($"[CLIMB] on_deck={onDeck.ToString().ToLowerInvariant()} raycast_misses={misses}");
+        Application.Quit(onDeck && misses==0?0:1);
+    }
+
     IEnumerator DemoInterior(Interactable poi)
     {
         interiorAuto=true; interiorDirection=Vector3.zero;

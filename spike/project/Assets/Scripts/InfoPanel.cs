@@ -43,6 +43,17 @@ public sealed class InfoPanel : MonoBehaviour
         var corner = prompt.GetComponent<RectTransform>(); corner.anchorMin = corner.anchorMax = Vector2.zero; corner.anchoredPosition = new Vector2(150, 65);
         overlay.SetActive(false); prompt.SetActive(false);
     }
+    void Start()
+    {
+        const string key="Mistbell.MovementHintSeen";
+        if(PlayerPrefs.GetInt(key,0)!=0) return;
+        string message="W A S D 移动 · Shift 加速 · E 交互";
+        font.RequestCharactersInTexture(message,24,FontStyle.Normal);
+        var hint=Label("MovementHint",transform,message,24,new Vector2(1100,48),Vector2.zero);
+        hint.alignment=TextAnchor.MiddleCenter;
+        Destroy(hint.gameObject,3f);
+        PlayerPrefs.SetInt(key,1); PlayerPrefs.Save();
+    }
     void Update()
     {
         if (IsOpen && Time.frameCount > openedFrame && (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Escape)))

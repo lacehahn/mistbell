@@ -80,6 +80,32 @@
       },
       "radius": 2.2,
       "interior": true
+    },
+    {
+      "id": "gergeti_p00",
+      "titleCn": "回望点",
+      "titleEn": "The Lookback",
+      "bodyCn": "走到这里第一次能看见整条山谷。\n村子在脚下缩成几粒白点，\n云从对面山腰慢慢压过来——\n古人把这叫\"进山\"，从这里开始，路只剩向上。",
+      "bodyEn": "This is the first place the whole valley opens up. The village shrinks to a few white dots below, and cloud slides down the far slope. The old word for this was *entering the mountain*: from here, the only way is up.",
+      "anchor": {
+        "x": -10.046,
+        "y": 0,
+        "z": -95.426
+      },
+      "radius": 3
+    },
+    {
+      "id": "gergeti_p0a",
+      "titleCn": "界石",
+      "titleEn": "Boundary Stone",
+      "bodyCn": "路边的界石上刻着一道浅槽，\n是几百年来朝圣者用手摸出来的。\n摸过的人会在石缝里塞一枚小石子，\n意思是\"我来过，也请让我回去\"。",
+      "bodyEn": "A shallow groove is worn into this boundary stone, rubbed smooth by centuries of pilgrims. Those who pass leave a pebble in the crack—*I was here, and let me come back down.*",
+      "anchor": {
+        "x": 11.359,
+        "y": 0,
+        "z": -150.634
+      },
+      "radius": 3
     }
   ]
 }

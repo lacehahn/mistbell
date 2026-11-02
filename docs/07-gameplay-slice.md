@@ -1,12 +1,10 @@
 # 07 · 可玩切片（M1 验证）
 
-> 状态：**可玩**。走路 → 走近云雾中的教堂 → 到门口按 E 读介绍。
-> 记录时间：2026-11-02 15:10
+> 状态：**可玩、可走进教堂内部**。记录时间：2026-11-02 23:20
 
 ## 1. 怎么玩
 
 ```bash
-# 构建产物已存在：
 open spike/project/Builds/Mac/Mistbell.app
 ```
 
@@ -14,28 +12,37 @@ open spike/project/Builds/Mac/Mistbell.app
 | --- | --- |
 | 移动 | `W A S D` / 方向键 |
 | 加速 | 按住 `Shift`（3.0 → 5.0 m/s） |
-| 交互 | `E`（进入 POI 半径时左下角出现「按 E 查看」） |
+| 交互 / 开门 | `E`（进入 POI 半径时左下角出现「按 E 查看」） |
 | 关闭面板 | `E` 或 `Esc` |
 
 带 `-shot` / `-shots` 参数启动时**完全走截图模式**，不会启用玩家控制（保证美术验收链路可复现）。
 
-## 2. 现在能证的三件事
+## 2. 已验证的体验（都有日志数字）
 
-| 体验目标 | 实现 | 验收证据 |
+| 体验 | 证据 |
+| --- | --- |
+| 攀爬 | `[PLAY] distance=18.106 ground_error=0.000000 row=3`；上台阶 `on_deck=true`（0.313 vs deck 0.286） |
+| 碰撞 | `[COLLIDE] church_colliders=3 wall_colliders=28 clearance=0.310`（被门挡在 0.31 m 外） |
+| 云雾显现 | 两段式曲线；`[REVEAL] gate=pass ratio20_80=1.949`；钟声 `bell_at=44.861 m` 只响一次 |
+| 到达仰视 | `[CINEMA] church_top=0.0433 bottom=0.8084 once=true restore_error=0.000` |
+| 进门 | `[INTERIOR_U] door_open=100° walk_in=true player_inside=true fov=32` |
+| 室内 | `interior_luma=0.3415`；长椅/祭坛/圣像屏/吊灯全可见；`floor_slabs=218`、`beams=5` |
+| 音频 | 钟 `rms=0.110` / 风 `0.104` / 脚步 `0.074`，全部代码合成、无外部素材 |
+
+## 3. POI（数据驱动，`PoiData` + `PoiDatabase`）
+
+| id | 名称 | 位置 |
 | --- | --- | --- |
-| **攀爬** | 贴地行走、四向 6 帧动画、跟随相机 | `[PLAY] distance=18.106 m ground_error=0.000000 row=3`（6 秒） |
-| **云雾显现** | 距离驱动的雾（120..420 → 20..120 m）、45 m 处钟声脉冲 | `[REVEAL] gate=pass ratio20_80=1.743754 bell_once=True`；三档截图 `Shots/reveal_{80,50,20}.png` |
-| **景点交互** | 数据驱动 POI（`PoiData` + `PoiDatabase`），面板中英双语 | `[POI] count=3 ids=gergeti_p01..p03`；截图 `Shots/poi_p0{1,2,3}.png` |
+| `gergeti_p01` | 正门 · Main Portal | 台阶顶 (0, −13) |
+| `gergeti_p02` | 钟楼 · Bell Tower | 塔前 (10.5, −4.4) |
+| `gergeti_p03` | 门廊浮雕 · Portal Relief | 门前 (0, −14.5) |
+| `gergeti_p04` | 圣像屏 · Iconostasis | 室内后墙前 |
+| `gergeti_p05` | 烛台 · Votive Candles | 室内左侧 |
+| `gergeti_p06` | 壁画残片 · Wall Painting | 室内右墙 |
+| `gergeti_p00` | 回望点 · The Lookback | Z03 折返处（路线加长后新增） |
+| `gergeti_p0a` | 界石 · Boundary Stone | Z01→Z02 转折（路线加长后新增） |
 
-## 3. 三个 POI
-
-| id | 名称 | 锚点 | 半径 |
-| --- | --- | --- | --- |
-| `gergeti_p01` | 正门 · Main Portal | (0, y, −13) | 3.5 m |
-| `gergeti_p02` | 钟楼 · Bell Tower | (10.5, y, −2) | 3.0 m |
-| `gergeti_p03` | 门廊浮雕 · Portal Relief | (0, y, −14.5) | 2.5 m |
-
-文案遵循 docs/02 的「标题 + 2–4 段 + 出处」口径；中文用显式 `\n` 手工排版（Unity legacy Text 会在空格与中日韩/数字边界断行，自动换行不可控）。
+文案遵循 docs/02 的「标题 + 2–4 段 + 出处」口径；中文用显式 `\n` 手工排版（Unity legacy Text 会在空格与中日韩/数字边界断行）。
 
 ## 4. 复现命令
 
@@ -43,18 +50,23 @@ open spike/project/Builds/Mac/Mistbell.app
 UNITY=/Applications/Unity/Hub/Editor/6000.3.27f2/Unity.app/Contents/MacOS/Unity
 $UNITY -batchmode -quit -projectPath spike/project -executeMethod SpikeScene.Run  -logFile spike/logs/scene.log
 $UNITY -batchmode -quit -projectPath spike/project -executeMethod SpikeBuild.Run  -logFile spike/logs/build.log
+
 APP=spike/project/Builds/Mac/Mistbell.app/Contents/MacOS/Mistbell
-caffeinate -dimu $APP -demo-walk 6      # 走路回归
-caffeinate -dimu $APP -demo-reveal      # 三档云雾截图
-caffeinate -dimu $APP -demo-poi gergeti_p02   # 指定 POI 面板截图
+caffeinate -dimu $APP -demo-walk 6              # 走路回归
+caffeinate -dimu $APP -demo-walk-stairs         # 台阶 + 落台
+caffeinate -dimu $APP -demo-walk-to-tower       # 钟楼可达
+caffeinate -dimu $APP -demo-cinema              # 到达仰视过场
+caffeinate -dimu $APP -demo-reveal              # 三档云雾
+caffeinate -dimu $APP -demo-enter-church        # 进门 + 室内
+caffeinate -dimu $APP -demo-poi gergeti_p04     # 指定 POI 面板
 caffeinate -dimu bash spike/tools/capture_runtime.sh   # 美术机位截图
 python3 spike/tools/measure_shot.py spike/project/Shots/art_runtime.png
 ```
 
-## 5. 还没做的（明确边界）
+## 5. 还没做（明确边界）
 
-- **多 Zone 路线**：文档里是 6 个 Zone / 25 分钟，切片只有 1 段坡 + 广场。
-- **呼吸与体力**：文档 02 有取舍，切片未实现。
-- **音频**：钟声/风/脚步为程序化合成，尚未做混音与空间感。
-- **室内**：未做（D02 待核实室内结构）。
-- **存档 / 设置 / 本地化切换**：未做。
+- **多 Zone 完整路线**：文档是 6 Zone / 25 分钟；当前为 3 段折返（加长进行中）
+- **呼吸与体力**：docs/02 有取舍，未实现
+- **存档 / 设置 / 本地化切换**：未做
+- **性能基线**：尚未在 1920×1080 下做 drawcall / fps 实测（任务书 `performance_bench.md` 已写）
+- **室内天花板与吊灯可见性**：天花板建在 11.6 m（人眼平视看不到）；吊灯投影指标算出 −8.7，实际仍在画面外

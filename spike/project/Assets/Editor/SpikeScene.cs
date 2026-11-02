@@ -1313,19 +1313,28 @@ public static class SpikeScene
                     + 1.1f * Mathf.Sin(x / 8.5f - 0.4f)
                     + 3.2f * (Mathf.PerlinNoise(x / 55f + 3.7f, z / 70f + 1.9f) - .5f)
                     + 1.4f * (Mathf.PerlinNoise(x / 17f + 8.1f, z / 21f + 5.3f) - .5f);
-        return height + mask * snowDrift + hills * hillMask;
+        float original = height + mask * snowDrift + hills * hillMask;
+        if(z >= -40f) return original; // Existing church, approach and far field stay fixed.
+        float dx = Mathf.Abs(x-ClimbRoute.CenterX(z));
+        float bank = ClimbRoute.Depth * Mathf.SmoothStep(0,1,Mathf.InverseLerp(2.5f,4.5f,dx));
+        float shoulder = 1.1f * Mathf.SmoothStep(0,1,Mathf.InverseLerp(4.5f,15f,dx));
+        float route = ClimbRoute.Height(z) + bank + shoulder + snowDrift * Mathf.Clamp01((dx-4.5f)/10);
+        // Blend back to the original snow field outside the playable ridge and at the old approach.
+        float blend = (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(25,65,dx)))
+            * (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(-46,-40,z)));
+        return Mathf.Lerp(original,route,blend);
     }
 
     static MeshCollider BuildTerrain(Material ground)
     {
         const int xCells = 150; // x=-150..150，每 2 m 一列。
         var rows = new System.Collections.Generic.List<float>();
-        for (int z = -160; z < -100; z += 10) rows.Add(z);
+        for (int z = -230; z < -100; z++) rows.Add(z);
         for (int z = -100; z <= 100; z += 2) rows.Add(z);
         for (int z = 110; z <= 1200; z += 10) rows.Add(z);   // 原 560 处地面直接截断，形成一条硬地平线压在群山脚下
         int columns = xCells + 1;
         int triangleCount = xCells * (rows.Count - 1) * 2; // 地面延伸到 1200m 后约 6.5 万面。
-        if (triangleCount >= 90000)
+        if (triangleCount >= 140000)
             throw new System.InvalidOperationException("Terrain triangle budget exceeded");
         var vertices = new Vector3[columns * rows.Count];
         var uv = new Vector2[vertices.Length];
@@ -1349,7 +1358,7 @@ public static class SpikeScene
                 triangles[t + 5] = v + columns + 1;
             }
         }
-        var mesh = new Mesh { name = "Terrain", vertices = vertices, uv = uv, triangles = triangles };
+        var mesh = new Mesh { name = "Terrain", indexFormat=IndexFormat.UInt32, vertices = vertices, uv = uv, triangles = triangles };
         ClearEntrySnow(mesh);
         mesh.RecalculateNormals();
         mesh.RecalculateTangents();
@@ -1365,7 +1374,7 @@ public static class SpikeScene
         collider.convex = false;
         collider.sharedMesh = mesh;
         Debug.Log("[SNOW] albedo=0.86 color=#EDF3F8 shadow=#B7C9DC drift_amplitude_m=0.1..0.3 protected_z_min=-18 far_terrain_unchanged=true");
-        Debug.Log($"[SPIKE] terrain mesh verts={vertices.Length} tris={triangleCount} extent=x150 z-160..560");
+        Debug.Log($"[SPIKE] terrain mesh verts={vertices.Length} tris={triangleCount} extent=x150 z-230..1200");
         // 直接读取 x=0 的网格顶点（含横向起伏），而非简报中的近似参考值。
         float z100 = vertices[rows.IndexOf(100f) * columns + xCells / 2].y;
         float z200 = vertices[rows.IndexOf(200f) * columns + xCells / 2].y;
@@ -1384,10 +1393,10 @@ public static class SpikeScene
             if (filter.name.StartsWith("ClusterRock_"))
                 rockCenters.Add(new Vector2(filter.transform.position.x, filter.transform.position.z));
         var eye = EyeAt(5f,-82f);
-        float RoadX(float z) => 3f*Mathf.Sin(Mathf.Clamp01((z+70f)/56.75f)*2f*Mathf.PI);
+        float RoadX(float z) => ClimbRoute.CenterX(z);
         float Protect(float x,float z)
         {
-            float path = z >= -94 && z <= -18 ? Mathf.Abs(x-RoadX(z)) : 100f;
+            float path = z >= -220 && z <= -18 ? Mathf.Abs(x-RoadX(z)) : 100f;
             float mask = Mathf.SmoothStep(0,1,Mathf.InverseLerp(4.2f,6.5f,path));
             foreach(var r in rockCenters)
                 mask *= Mathf.SmoothStep(0,1,Mathf.InverseLerp(1.7f,3.1f,Vector2.Distance(r,new Vector2(x,z))));
@@ -1419,7 +1428,7 @@ public static class SpikeScene
         var xs=new System.Collections.Generic.List<float>();
         var zs=new System.Collections.Generic.List<float>();
         for(float x=-150;x<=150; x+= x>=-76 && x<86 ? .5f : 2f) xs.Add(x);
-        for(float z=-160;z<=1200; z+=z>=-130 && z< -18 ? .5f : (z>=-100&&z<100?2:10)) zs.Add(z);
+        for(float z=-230;z<=1200; z+=z>=-230 && z< -18 ? .5f : (z>=-100&&z<100?2:10)) zs.Add(z);
         // Keep original rows at the entrance and far field.
         for(int z=-100;z<=100;z+=2) if(!zs.Contains(z)) zs.Add(z);
         for(int z=110;z<=1200;z+=10) if(!zs.Contains(z)) zs.Add(z);
@@ -1782,13 +1791,14 @@ public static class SpikeScene
 
     static void BuildStonePath(MeshCollider terrainCollider, Material stone)
     {
-        // 12 段 S 形石板路，自下坡连接正面台阶。
-        var points = new Vector3[13];
-        for (int i = 0; i < points.Length; i++)
+        var samples = new System.Collections.Generic.List<Vector3>();
+        for(int segment=0;segment<4;segment++)
         {
-            float t = i / 12f;
-            points[i] = new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI), 0f, Mathf.Lerp(-70f, -13.25f, t));
+            int count=Mathf.CeilToInt(Vector2.Distance(ClimbRoute.Points[segment],ClimbRoute.Points[segment+1])/4.8f);
+            for(int i=0;i<count;i++) samples.Add(ClimbRoute.Point(segment,i/(float)count));
         }
+        samples.Add(ClimbRoute.Point(3,1));
+        var points=samples.ToArray();
         for (int i = 0; i < points.Length; i++)
             if (terrainCollider.Raycast(new Ray(points[i] + Vector3.up * 100f, Vector3.down),
                                 out RaycastHit hit, 200f))
@@ -1803,7 +1813,6 @@ public static class SpikeScene
         AssetDatabase.DeleteAsset("Assets/Settings/M_Paving.mat");
         AssetDatabase.CreateAsset(paving, "Assets/Settings/M_Paving.mat");
 
-        var rnd = new System.Random(4242);
         int tiles = 0;
         for (int i = 0; i < points.Length - 1; i++)
         {
@@ -1820,12 +1829,11 @@ public static class SpikeScene
                 if (terrainCollider.Raycast(new Ray(center + Vector3.up * 100f, Vector3.down),
                         out RaycastHit hit, 200f))
                     center.y = hit.point.y + 0.035f;
-                float w = 1.44f + (float)rnd.NextDouble() * .14f;
-                float d = (len / 3f) - .07f;               // 4–8 cm 缝
+                float w = 1.52f;
+                float d = (len / 3f) - .06f;               // 4–8 cm 缝
                 var tile = SpikeArt.Box(root, "Paving_" + (tiles++),
                     new Vector3(w, .09f, d), center, paving);
-                tile.transform.rotation = Quaternion.LookRotation(fwd)
-                    * Quaternion.Euler(0f, (float)rnd.NextDouble() * 6f - 3f, 0f);
+                tile.transform.rotation = Quaternion.LookRotation(fwd);
             }
         }
         Debug.Log($"[PATH2] tiles={tiles} gap_cm=4..8 rotated=true lift_cm=3.5 material=M_Paving #8C8378");
@@ -1925,25 +1933,28 @@ public static class SpikeScene
         if (rocks < 40 || rocks > 80 || halfBuriedRatio < .95f)
             throw new System.InvalidOperationException("Winter rock specification violated");
         Debug.Log($"[ROCK2] count={rocks} faces_per_rock=80 radial_jitter=0.18 burial=0.30..0.45 size=0.45..1.5 flat_top=false");
-        Vector3 RoadPoint(float t, float offset) => new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI) + offset, 0f,
-            Mathf.Lerp(-70f, -13.25f, t));
         int posts = 0, rails = 0;
         // 两侧栏栅 + 高度抖动 + 柱顶积雪：单侧细栏在远景里会退化成一条悬浮的线。
         for (int side = 0; side < 2; side++)
         {
             float offset = side == 0 ? -2.6f : 2.6f;
             Vector3 previous = Vector3.zero;
-            for (int i = 0; i <= 32; i++)
+            int i=0;
+            for(int segment=0;segment<4;segment++)
+            for(int step=0;step<=Mathf.CeilToInt(Vector2.Distance(ClimbRoute.Points[segment],ClimbRoute.Points[segment+1])/1.6f);step++)
             {
-                float z = Mathf.Lerp(-66f, -16f, i / 32f);
-                Vector3 p = Snap(RoadPoint((z + 70f) / 56.75f, offset));
+                int count=Mathf.CeilToInt(Vector2.Distance(ClimbRoute.Points[segment],ClimbRoute.Points[segment+1])/1.6f);
+                if(segment>0 && step==0) continue;
+                Vector3 p = Snap(ClimbRoute.Point(segment,step/(float)count,offset));
+                if(p.z>-19.25f) continue; // Six metres clear before the stairs.
+                i++;
                 float jitter = 1f - ((i * 37) % 13) / 60f;
                 float h = 1.05f * jitter;
                 SpikeArt.Box(roadside, "FencePost_" + posts++, new Vector3(0.16f, h, 0.16f),
                     p + Vector3.up * (h * 0.5f - 0.11f), fenceWood);
                 SpikeArt.Box(roadside, "FenceSnow_" + (posts - 1), new Vector3(0.19f, 0.05f, 0.19f),
                     p + Vector3.up * (h - 0.10f), snowMat);
-                if (i > 0)
+                if (i > 1)
                     foreach (float height in new[] { 0.44f, 0.80f })
                     {
                         Vector3 a = previous + Vector3.up * height, b = p + Vector3.up * height;
@@ -1959,6 +1970,29 @@ public static class SpikeScene
                 previous = p;
             }
         }
+        // Sparse dry verge in Z01, low paired shrubs at the treeline, open meadow in Z03.
+        for(int segment=0;segment<3;segment++)
+        for(int k=0;k<24;k++)
+        {
+            float t=(k+.5f)/24;
+            float side=k%2==0?-1:1;
+            var p=Snap(ClimbRoute.Point(segment,t,side*Range(3.6f,5.4f)));
+            if(segment==0)
+            {
+                SpikeArt.Box(roadside,"TrailGravel_"+k,new Vector3(.25f,.12f,.3f),p+Vector3.up*.04f,rockMat);
+                for(int blade=0;blade<3;blade++)
+                    SpikeArt.Box(roadside,"DryGrass_"+k+"_"+blade,new Vector3(.025f,.24f,.035f),p+new Vector3(blade*.06f,.12f,.24f),fenceWood);
+            }
+            else if(segment==1)
+                for(int stem=0;stem<4;stem++) {
+                    var bush=SpikeArt.Box(roadside,"TrailShrub_"+k+"_"+stem,new Vector3(.06f,.48f,.06f),p+new Vector3(stem*.12f,.22f,0),fenceWood);
+                    bush.transform.rotation=Quaternion.Euler(15,stem*43,stem*12-18);
+                }
+            else if(k%4==0)
+                SpikeArt.Box(roadside,"MeadowStone_"+k,new Vector3(.5f,.24f,.4f),p+Vector3.up*.08f,rockMat);
+        }
+        var boundary=Snap(ClimbRoute.Point(0,1,1.5f));
+        SpikeArt.Box(roadside,"BoundaryStone",new Vector3(.5f,.8f,.35f),boundary+Vector3.up*.4f,rockMat);
         Debug.Log($"[SPIKE] fence posts={posts} rails={rails}");
     }
 
