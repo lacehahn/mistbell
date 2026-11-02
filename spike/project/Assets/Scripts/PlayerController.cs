@@ -826,7 +826,7 @@ public sealed class PlayerController : MonoBehaviour
         Debug.Log(FormattableString.Invariant($"[INT_FIX] cam_in=(0,1.75,-5.2) fov_in=32 cam_min_y={indoorMinY:F4} cam_wall_gap={indoorMinGap:F4} cam_below_floor={cameraBelowFloor.ToString().ToLowerInvariant()}"));
         Debug.Log(FormattableString.Invariant($"[INT_FIX] interior_luma={luma:F4} furniture_visible=pews:{(pews==6).ToString().ToLowerInvariant()}/altar:{altar.ToString().ToLowerInvariant()}/iconostasis:{icons.ToString().ToLowerInvariant()}/chandelier:{chandelier.ToString().ToLowerInvariant()} pew_count={pews}"));
         var iconRenderer=Array.Find(interior.GetComponentsInChildren<MeshRenderer>(),r=>r.name=="Interior_Iconostasis");
-        var ringRenderer=Array.Find(interior.GetComponentsInChildren<MeshRenderer>(),r=>r.name=="Interior_Chandelier");
+        var ringRenderer=Array.Find(interior.GetComponentsInChildren<MeshRenderer>(),r=>r.name=="Interior_Chandelier" && r!=interior.legacyChandelier);
         float py=1-follow.WorldToViewportPoint(transform.position).y;
         float iy=1-follow.WorldToViewportPoint(iconRenderer.bounds.center).y;
         float cy=1-follow.WorldToViewportPoint(ringRenderer.bounds.center).y;
@@ -836,8 +836,14 @@ public sealed class PlayerController : MonoBehaviour
         float alpha=shaftMaterial.GetColor("_BaseColor").a;
         bool additive=shaftMaterial.GetFloat("_DstBlend")==1;
         Debug.Log(FormattableString.Invariant($"[INT2] cam_in=(0,1.75,-5.2) player_screen_y={py:F4} iconostasis_screen_y={iy:F4} chandelier_screen_y={cy:F4} shafts={interior.shafts.Length} shaft_alpha={alpha:F2} additive={additive.ToString().ToLowerInvariant()} chandelier_candles={candles} frames={frames}"));
-        bool composition=py>=.80f && py<=.95f && iy>=.28f && iy<=.50f && cy>=.12f && cy<=.26f;
-        return composition && candles==8 && frames==3 && additive && Mathf.Abs(alpha-.08f)<.001f && luma>=.18f && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
+        var details=interior.detailRoot.GetComponentsInChildren<MeshRenderer>();
+        int beams=Array.FindAll(details,r=>r.name.StartsWith("Interior_CeilingBeam_")).Length;
+        bool ceiling=Array.FindAll(details,r=>r.name.StartsWith("Interior_Ceiling_")).Length==6;
+        bool aisle=Array.Exists(details,r=>r.name=="Interior_CenterAisle");
+        Debug.Log(FormattableString.Invariant($"[INT3] ceiling={ceiling.ToString().ToLowerInvariant()} beams={beams} chandelier=({ringRenderer.bounds.center.x:G},{ringRenderer.bounds.center.y:G},{ringRenderer.bounds.center.z:G}) chandelier_screen_y={cy:F4} floor_slabs={interior.floorSlabs} aisle={aisle.ToString().ToLowerInvariant()} pew_material={interior.pewWood.name}"));
+        bool detailPass=ceiling && beams==5 && interior.floorSlabs>=300 && interior.floorSlabs<=450 && aisle;
+        bool composition=py>=.80f && py<=.95f && iy>=.28f && iy<=.50f && cy>=.12f && cy<=.30f;
+        return detailPass && composition && candles==8 && frames==3 && additive && Mathf.Abs(alpha-.08f)<.001f && luma>=.18f && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
     }
     IEnumerator DemoInterior(Interactable poi)
     {

@@ -11,6 +11,19 @@ public sealed class ChurchInterior : MonoBehaviour
     public Light[] lamps;
     public Renderer[] shafts;
     public Light chandelierLamp;
+    public GameObject detailRoot;
+    public Renderer legacyChandelier;
+    public Renderer[] pews;
+    public Material[] pewOutdoorMaterials;
+    public Material pewWood, pewLegs;
+    public int floorSlabs;
+    void SetDetail(bool value)
+    {
+        if(detailRoot!=null) detailRoot.SetActive(value);
+        if(floor!=null) floor.GetComponent<Renderer>().enabled=!value;
+        if(legacyChandelier!=null) legacyChandelier.enabled=!value;
+        if(pews!=null) for(int i=0;i<pews.Length;i++) pews[i].sharedMaterials=value?new[]{pewWood,pewLegs}:new[]{pewOutdoorMaterials[i],pewOutdoorMaterials[i]};
+    }
     public Vector3 indoorChandelierPosition, outdoorChandelierPosition;
     public Renderer shell;
     public Material indoorStone;
@@ -27,6 +40,7 @@ public sealed class ChurchInterior : MonoBehaviour
 
     void Awake()
     {
+        SetDetail(false);
         if(shell!=null) outdoorStone=shell.sharedMaterials;
         foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill" || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=false;
         if(chandelierLamp!=null) chandelierLamp.transform.position=outdoorChandelierPosition;
@@ -84,6 +98,7 @@ public sealed class ChurchInterior : MonoBehaviour
     {
         if (value == inside || PlayerController.CaptureMode) return;
         inside = value;
+        SetDetail(value);
         foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill" || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=value;
         if(chandelierLamp!=null) chandelierLamp.transform.position=value?indoorChandelierPosition:outdoorChandelierPosition;
         RenderSettings.ambientSkyColor = value ? new Color32(0x5A,0x4A,0x3C,255) : sky;
