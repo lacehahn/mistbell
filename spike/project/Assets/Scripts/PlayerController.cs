@@ -44,6 +44,7 @@ public sealed partial class PlayerController : MonoBehaviour
     bool walkingDemo;
     Vector3 walkStart;
     bool cinemaDone, cinemaActive, cinemaDemo, suppressCinema;
+    bool lookUp;   // 室内按 F 抬头看穹顶/天花板
     int cinemaEntries;
     float previousZ;
     float followFov;
@@ -235,6 +236,8 @@ public sealed partial class PlayerController : MonoBehaviour
             var right = Vector3.Cross(Vector3.up, forward);
             direction = Vector3.ClampMagnitude(forward * z + right * x, 1);
             sprint = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            if (Input.GetKeyDown(KeyCode.F) && interior != null && interior.Contains(transform.position))
+                lookUp = !lookUp;
         }
         Vector3 before = transform.position;
         frameExpected = Vector3.zero;
@@ -651,6 +654,7 @@ public sealed partial class PlayerController : MonoBehaviour
         follow.fieldOfView=Mathf.MoveTowards(follow.fieldOfView,inside?50:followFov,Time.deltaTime*30);   // 38 装不下"地板+吊灯+天花板"，室内用 50 广角
         // 室内人眼机位只比脚高 1.75 m：看向 +3.2 会把角色和长椅全部推出画面，改看 +2.0（微仰但保人可见）。
         float look=inside?2.0f:LookHeight;
+        if (inside && lookUp) look = 6.4f;   // 抬头：看向 8.2m 的穹顶/天花中心
         Vector3 target = transform.position + (inside?ChurchInterior.CameraOffset:FollowOffset);
         Vector3 head = transform.position + Vector3.up * (inside?3.2f:look+.4f);
         Vector3 delta = target - head;
@@ -956,6 +960,16 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(1.5f);
         yield return new WaitForEndOfFrame();
         string inside=InteriorShot("interior_inside");
+        // 抬头验证：按 F 的逻辑等价物，把看向点抬到穹顶中心，出一张 interior_lookup.png
+        lookUp=true;
+        yield return new WaitForSeconds(1.2f);
+        yield return new WaitForEndOfFrame();
+        string lookupShot=InteriorShot("interior_lookup");
+        float ceilingFx=0f; bool ceilingSeen=false;
+        MeasureCeiling(out ceilingSeen,out ceilingFx);
+        Debug.Log(FormattableString.Invariant($"[LOOKUP] png={lookupShot} ceiling_visible={ceilingSeen.ToString().ToLowerInvariant()} ceiling_pct={ceilingFx:F4} bytes={(new FileInfo(lookupShot)).Length}"));
+        lookUp=false;
+        yield return new WaitForSeconds(.4f);
         bool pass=InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
             Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==14 && interior.shafts.Length==3 &&

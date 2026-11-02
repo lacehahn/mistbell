@@ -269,7 +269,7 @@ public static class ChurchInteriorBuilder
     }
     static void BuildCeiling(Transform parent)
     {
-        var wood=Lit("M_InteriorCeiling",new Color32(106,85,64,255),new Color(.11f,.082f,.058f));   // 原 4A3B30+弱自发光 在室内等于纯黑，读成"没顶"
+        var wood=Lit("M_InteriorCeiling",new Color32(120,96,72,255),new Color(.24f,.185f,.13f));   // 抬头时天花板几乎没有直射光，靠自发光维持可读   // 原 4A3B30+弱自发光 在室内等于纯黑，读成"没顶"
         // Split the nave around the 1.6 m square opening below the drum (x=-2,z=0).
         for(int side=0;side<2;side++)
         {

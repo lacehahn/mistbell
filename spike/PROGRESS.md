@@ -374,4 +374,5 @@
 | 08:45 | 远山抬亮 + 消竖缝 | `[MTN11] rock #5A6878/#6B7888/#7C8896 luma=0.500540 seam_max_grad=0.012663` | 从"黑墙"（luma 0.22）回到明亮雪山；overscan 12% + 8% 羽化消除层间接缝；林线收敛到 7%/alpha 0.45 |
 | 08:45 | **性能实测与合批** | before `drawcalls=6517 tris=3.01M fps=13.29(p1 6.62)` → after `z01 174/3.09M/260fps`、`terrace 220/3.41M/243fps`、`interior 206/3.44M/264fps` | drawcall **−97%**（6517→174），三处 fps ≥ 240（p1 40–56）；回归 capture/walk/tower/church 全 0 |
 | 08:45 | 备注 | — | 三角面仍 3.0–3.4M（远山四层 + 地形 + 教堂 + 室内），后续若上弱机需再减；drawcall 已达标（≤250） |
+| 08:53 | 新增「按 F 抬头看穹顶」 | `PlayerController` 加 lookUp 开关（仅室内）：look 2.0→6.4 指向 8.2m 顶 | `[LOOKUP] ceiling_visible=true ceiling_pct=0.5547`；天花板自发光 0.11→0.24 后才可读（原色在无直射光时等于黑） |
 
