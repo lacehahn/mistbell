@@ -90,6 +90,7 @@ public static class SpikeScene
         var church = ImportChurch(churchStone, roofMat, terrainCollider);
         BuildChurchContact(church, terrainCollider);
         ValidateContact(church, terrainCollider);
+        BuildTerrace(church, terrainCollider, stone);
         BuildWarmDetails();
         var cameraPosition = EyeAt(5f, -82f);   // 走近到 ~74m：参考图里教堂占画面 55%+，96m 时只占 30%
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
@@ -361,6 +362,200 @@ public static class SpikeScene
         Debug.Log($"[CONTACT_SEAT] church_y={churchSeatY:F4} first_tread_ground={entry.y:F4}");
         return church;
     }
+
+    // Terrace follows the existing 6-degree site grade: never deform the snow terrain.
+    // Its front is the ninth tread's back edge, not the centre of the old path tile.
+    static void BuildTerrace(Transform church, MeshCollider terrain, Material sourceStone)
+    {
+        const int steps = 9;
+        const float rise = .18f, run = .34f, width = 5f, wallHeight = 1.62f;
+        const float thickness = .45f, capHeight = .12f, gap = .025f;
+        const float startZ = -13.25f, halfX = 17f;
+        float frontZ = startZ + steps * run, backZ = frontZ + 24f;
+        float footY = ContactGround(terrain, new Vector3(0, 0, startZ)).y + .035f;
+        float landingY = footY + steps * rise;
+        // Leave a shallow coping above the graded courtyard; retain the original slope.
+        float deckLift = landingY - GroundY(frontZ);
+        float Deck(float x, float z) => GroundY(z) + deckLift;
+        float Ground(float x, float z) => ContactGround(terrain, new Vector3(x, 0, z)).y;
+        float WallTop(float x, float z) => GroundY(z) + wallHeight;
+        var root = new GameObject("Church Terrace").transform;
+        var stone = new Material(sourceStone) { name = "M_TerraceAshlar" };
+        stone.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/stone_ashlar.png"));
+        stone.SetTextureScale("_BaseMap", Vector2.one / 2f);
+        stone.SetTexture("_BumpMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/stone_ashlar_n.png"));
+        stone.SetTextureScale("_BumpMap", Vector2.one / 2f);
+        stone.SetFloat("_StoneSurface", 1);
+        stone.SetFloat("_HazeStrength", 0);
+        stone.SetColor("_BaseColor", new Color(.75f,.75f,.75f,1));
+        const string materialPath = "Assets/Settings/M_TerraceAshlar.mat";
+        AssetDatabase.DeleteAsset(materialPath); AssetDatabase.CreateAsset(stone, materialPath);
+        var snow = AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat");
+        var grounded = new System.Collections.Generic.Dictionary<MeshFilter,int[]>();
+        var caps = new System.Collections.Generic.List<MeshFilter>();
+
+        // Closed, hard-normal prisms with a sampled foundation, never flat boxes
+        // balanced on a centre ray. UVs are metres on each face.
+        MeshFilter Prism(string name, float x0, float x1, float z0, float z1,
+            System.Func<float,float,float> bottom, System.Func<float,float,float> top,
+            Material material, bool checkFoot)
+        {
+            int nx = Mathf.Max(1, Mathf.CeilToInt((x1-x0)/.25f));
+            int nz = Mathf.Max(1, Mathf.CeilToInt((z1-z0)/.25f));
+            var vs = new System.Collections.Generic.List<Vector3>();
+            var uv = new System.Collections.Generic.List<Vector2>();
+            var ts = new System.Collections.Generic.List<int>();
+            var feet = new System.Collections.Generic.List<int>();
+            Vector3 P(float x,float z,bool up) => new Vector3(x,up?top(x,z):bottom(x,z),z);
+            void Face(Vector3 a,Vector3 b,Vector3 c,Vector3 d, bool horizontal, bool xFace=false)
+            {
+                int k=vs.Count; vs.AddRange(new[]{a,b,c,d});
+                foreach(var p in new[]{a,b,c,d}) uv.Add(horizontal?new Vector2(p.x,p.z):new Vector2(xFace?p.z:p.x,p.y));
+                ts.AddRange(new[]{k,k+1,k+2,k,k+2,k+3});
+            }
+            for(int i=0;i<nx;i++) for(int j=0;j<nz;j++)
+            {
+                float a=Mathf.Lerp(x0,x1,i/(float)nx), b=Mathf.Lerp(x0,x1,(i+1f)/nx);
+                float c=Mathf.Lerp(z0,z1,j/(float)nz), d=Mathf.Lerp(z0,z1,(j+1f)/nz);
+                Face(P(a,c,true),P(a,d,true),P(b,d,true),P(b,c,true),true);
+                int footIndex=vs.Count;
+                Face(P(a,c,false),P(b,c,false),P(b,d,false),P(a,d,false),true);
+                for(int k=0;k<4;k++) feet.Add(footIndex+k);
+                if(j==0) Face(P(a,c,false),P(a,c,true),P(b,c,true),P(b,c,false),false);
+                if(j==nz-1) Face(P(a,d,false),P(b,d,false),P(b,d,true),P(a,d,true),false);
+                if(i==0) Face(P(a,c,false),P(a,d,false),P(a,d,true),P(a,c,true),false,true);
+                if(i==nx-1) Face(P(b,c,false),P(b,c,true),P(b,d,true),P(b,d,false),false,true);
+            }
+            var tr=ContactMesh(root,name,vs.ToArray(),ts.ToArray(),uv.ToArray(),material);
+            var mr=tr.GetComponent<MeshRenderer>(); mr.shadowCastingMode=ShadowCastingMode.On;
+            var collider=tr.gameObject.AddComponent<MeshCollider>(); collider.sharedMesh=tr.GetComponent<MeshFilter>().sharedMesh;
+            var filter=tr.GetComponent<MeshFilter>();
+            if(checkFoot) grounded.Add(filter,feet.ToArray());
+            return filter;
+        }
+        float Base(float x,float z) => Ground(x,z)-.01f;
+        int segments=0;
+        void Wall(float x0,float x1,float z0,float z1,bool alongX)
+        {
+            float length=alongX?x1-x0:z1-z0;
+            int count=Mathf.CeilToInt(length/4.5f);
+            for(int i=0;i<count;i++)
+            {
+                float a=i/(float)count,b=(i+1f)/count;
+                float xa=alongX?Mathf.Lerp(x0,x1,a)+gap/2:x0;
+                float xb=alongX?Mathf.Lerp(x0,x1,b)-gap/2:x1;
+                float za=alongX?z0:Mathf.Lerp(z0,z1,a)+gap/2;
+                float zb=alongX?z1:Mathf.Lerp(z0,z1,b)-gap/2;
+                Prism("TerraceWall_"+segments,xa,xb,za,zb,Base,WallTop,stone,true);
+                caps.Add(Prism("TerraceCap_"+segments,xa,xb,za,zb,WallTop,
+                    (x,z)=>WallTop(x,z)+capHeight,snow,false));
+                segments++;
+            }
+        }
+        // Outer dimensions 34 x 24m; the front has a true 5m opening.
+        Wall(-halfX,-width/2,frontZ,frontZ+thickness,true);
+        Wall(width/2,halfX,frontZ,frontZ+thickness,true);
+        Wall(-halfX,halfX,backZ-thickness,backZ,true);
+        Wall(-halfX,-halfX+thickness,frontZ+thickness,backZ-thickness,false);
+        Wall(halfX-thickness,halfX,frontZ+thickness,backZ-thickness,false);
+        // Tile the terrace fill so each persistent mesh remains below the 16-bit index limit.
+        for(int x=0;x<8;x++) for(int z=0;z<6;z++)
+        {
+            float xa=Mathf.Lerp(-halfX+thickness,halfX-thickness,x/8f);
+            float xb=Mathf.Lerp(-halfX+thickness,halfX-thickness,(x+1)/8f);
+            float za=Mathf.Lerp(frontZ+thickness,backZ-thickness,z/6f);
+            float zb=Mathf.Lerp(frontZ+thickness,backZ-thickness,(z+1)/6f);
+            Prism("TerraceFill_"+x+"_"+z,xa,xb,za,zb,Base,Deck,snow,true);
+        }
+        Prism("TerraceLanding",-width/2,width/2,frontZ,frontZ+thickness,Base,Deck,snow,true);
+        var treads=new System.Collections.Generic.List<MeshFilter>();
+        for(int i=0;i<steps;i++)
+        {
+            float top=footY+(i+1)*rise;
+            treads.Add(Prism("TerraceStep_"+i,-width/2,width/2,startZ+i*run,startZ+(i+1)*run,
+                Base,(x,z)=>top,stone,true));
+        }
+        // Stepped cheek walls are 0.9m above each tread and 0.5m wide.
+        for(int side=-1;side<=1;side+=2) for(int i=0;i<steps;i++)
+        {
+            float xa=side<0?-width/2-.5f:width/2;
+            float top=footY+(i+1)*rise+.9f;
+            Prism("TerraceCheek_"+side+"_"+i,xa,xa+.5f,startZ+i*run,startZ+(i+1)*run,
+                Base,(x,z)=>top,stone,true);
+        }
+        // Raise only the imported church with the new site fill. Its Blender scale,
+        // original entry steps and window offsets remain intact.
+        church.position+=Vector3.up*deckLift; churchSeatY+=deckLift;
+
+        // A 25cm bank follows actual wall footprints, leaving the portal clear.
+        void Bank(Vector2 a,Vector2 b)
+        {
+            var normal=new Vector2(-(b-a).y,(b-a).x).normalized;
+            int n=Mathf.CeilToInt(Vector2.Distance(a,b)/.25f);
+            var vs=new System.Collections.Generic.List<Vector3>(); var uv=new System.Collections.Generic.List<Vector2>();
+            var ts=new System.Collections.Generic.List<int>();
+            for(int i=0;i<=n;i++) for(int j=0;j<=8;j++)
+            {
+                float t=i/(float)n, w=j/8f;
+                var q=Vector2.Lerp(a,b,t)+normal*(w*.65f-.02f);
+                vs.Add(new Vector3(q.x,Deck(q.x,q.y)+.25f*Mathf.Pow(1-w,2),q.y)); uv.Add(q);
+                if(i==n||j==8) continue;
+                int k=i*9+j; ts.AddRange(new[]{k,k+1,k+10,k,k+10,k+9});
+            }
+            ContactMesh(root,"TerraceBank_"+root.childCount,vs.ToArray(),ts.ToArray(),uv.ToArray(),snow);
+        }
+        void BankLoop(Vector2[] points)
+        { for(int i=0;i<points.Length-1;i++) Bank(points[i],points[i+1]); }
+        BankLoop(new[]{new Vector2(-4.5f,-8),new Vector2(-6.5f,-8),new Vector2(-6.5f,-3.5f),
+            new Vector2(-9,-3.5f),new Vector2(-9,3.5f),new Vector2(-6.5f,3.5f),new Vector2(-6.5f,8),
+            new Vector2(-5.2f,8.6f)});
+        var apse=new System.Collections.Generic.List<Vector2>();
+        for(int i=0;i<=16;i++) {float a=Mathf.PI-i*Mathf.PI/16;apse.Add(new Vector2(-2+Mathf.Cos(a)*3.2f,8.6f+Mathf.Sin(a)*3.2f));}
+        BankLoop(apse.ToArray());
+        BankLoop(new[]{new Vector2(1.2f,8.6f),new Vector2(2.5f,8),new Vector2(2.5f,3.5f),
+            new Vector2(5,3.5f),new Vector2(5,-3.5f),new Vector2(2.5f,-3.5f),new Vector2(2.5f,-8),new Vector2(.5f,-8)});
+        BankLoop(new[]{new Vector2(-15.5f,-.5f),new Vector2(-15.5f,5.5f),new Vector2(-9,5.5f),new Vector2(-9,-.5f),new Vector2(-15.5f,-.5f)});
+        var tower=new Vector2[9];
+        for(int i=0;i<=8;i++) {float a=-Mathf.PI/2-i*Mathf.PI/4;tower[i]=new Vector2(10.5f+2.6f*Mathf.Cos(a),-2+2.6f*Mathf.Sin(a));}
+        BankLoop(tower);
+
+        Physics.SyncTransforms();
+        int errors=0, checkedFeet=0; float maxError=0;
+        // Independently inspect saved mesh bottom faces (second quad of each cell),
+        // then raycast every final tread at five positions across its width.
+        foreach(var pair in grounded)
+        {
+            var f=pair.Key; var v=f.sharedMesh.vertices;
+            foreach(int index in pair.Value)
+            {
+                var p=f.transform.TransformPoint(v[index]);
+                float error=Mathf.Abs(p.y-(Ground(p.x,p.z)-.01f));
+                maxError=Mathf.Max(maxError,error);
+                if(error>.03f) errors++;
+                checkedFeet++;
+            }
+        }
+        for(int i=0;i<steps;i++) for(int j=0;j<=4;j++)
+        {
+            float x=Mathf.Lerp(-width/2+.02f,width/2-.02f,j/4f);
+            var ray=new Ray(new Vector3(x,500,startZ+(i+.5f)*run),Vector3.down);
+            if(!treads[i].GetComponent<MeshCollider>().Raycast(ray,out var hit,1000)) {errors++;continue;}
+            float error=Mathf.Abs(hit.point.y-(footY+(i+1)*rise));
+            if(error>.03f) errors++;
+            maxError=Mathf.Max(maxError,error);
+        }
+        float landingError=Mathf.Abs(Deck(0,frontZ)-(footY+steps*rise));
+        if(landingError>.03f) errors++;
+        foreach(var f in caps)
+            if(Mathf.Abs(f.sharedMesh.bounds.size.y-(capHeight+Mathf.Tan(SlopeDeg*Mathf.Deg2Rad)*f.sharedMesh.bounds.size.z))>.003f) errors++;
+        Debug.Log(FormattableStringInvariant($"[TERRACE] wall_segments={segments} wall_h={wallHeight:F2} steps={steps} step_rise={rise:F2} step_run={run:F2} stair_w={width:F2} snow_cap=true float_errors={errors}"));
+        Debug.Log(FormattableStringInvariant($"[TERRACE_CHECK] grounded_vertices={checkedFeet} max_error_m={maxError:F6} landing_error_m={landingError:F6} deck_lift_m={deckLift:F4} front_z={frontZ:F2} back_z={backZ:F2} grade_deg={SlopeDeg:F1}"));
+        if(segments<12||wallHeight<1.4f||wallHeight>1.8f||steps<8||steps>10||Mathf.Abs(width-5)>.1f||checkedFeet==0||errors!=0)
+            throw new System.InvalidOperationException("Terrace hard gate failed");
+    }
+
+    static string FormattableStringInvariant(System.FormattableString text) =>
+        text.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     // All contact geometry queries the terrain collider explicitly; church/prop colliders
     // must never become accidental grounding surfaces. Validate saved perimeter vertices too.
