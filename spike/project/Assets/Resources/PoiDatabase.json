@@ -1,0 +1,43 @@
+{
+  "pois": [
+    {
+      "id": "gergeti_p01",
+      "titleCn": "Gergeti 圣三一教堂",
+      "titleEn": "Gergeti Trinity Church",
+      "bodyCn": "海拔2,170米，孤悬于卡兹别克山南麓。\n十四世纪，修士为避战乱把圣物带上山，\n此处从此成为高加索最孤独的教堂之一。\n风雪封山时，钟声先穿过云雾抵达谷地，\n人们才知道路还在。",
+      "bodyEn": "At 2,170 m on the southern slope of Mount Kazbek. In the 14th century monks carried relics uphill to escape the wars, and it has been one of the Caucasus' loneliest churches ever since. When snow closes the pass, the bell crosses the mist before the church itself is seen.",
+      "anchor": {
+        "x": 0,
+        "y": 0,
+        "z": -13
+      },
+      "radius": 3.5
+    },
+    {
+      "id": "gergeti_p02",
+      "titleCn": "钟楼",
+      "titleEn": "Bell Tower",
+      "bodyCn": "钟楼独立于主堂之外，这是高加索教堂的旧习：\n钟声要能先穿过山谷，而不是被墙挡住。\n格鲁吉亚的钟多为铁铸，音色偏低，\n风雪天传得更远——牧人靠它辨时辰，\n旅人靠它辨方向。",
+      "bodyEn": "The bell tower stands apart from the nave, as Caucasian churches often do: the bell must carry across the valley rather than be muffled by walls. Georgian bells are usually cast iron, low in pitch, and travel further in snow—herders used them to keep time, travellers to keep their bearings.",
+      "anchor": {
+        "x": 10.5,
+        "y": 0,
+        "z": -2
+      },
+      "radius": 3.0
+    },
+    {
+      "id": "gergeti_p03",
+      "titleCn": "门廊浮雕",
+      "titleEn": "Porch Relief",
+      "bodyCn": "门楣上的十字与藤蔓是十四世纪的手艺：\n十字表信仰，藤蔓表生长，两者缠在一起，\n意思是「在此地活下去」。\n刻痕深浅不一，是几代石匠接力留下的。",
+      "bodyEn": "The cross and vine carved into the lintel are 14th-century work: the cross for faith, the vine for growth, wound together to mean 'to live here'. The cuts vary in depth—several generations of masons worked this stone.",
+      "anchor": {
+        "x": 0,
+        "y": 0,
+        "z": -14.5
+      },
+      "radius": 2.5
+    }
+  ]
+}

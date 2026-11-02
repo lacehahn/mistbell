@@ -15,6 +15,7 @@ public sealed class PlayerController : MonoBehaviour
         Array.IndexOf(Environment.GetCommandLineArgs(), "-shots") >= 0;
     public static readonly Vector3 FollowOffset = new Vector3(0, 5.5f, -14);
     public const float LookHeight = 3.5f;
+    Interactable[] pois;
     Camera follow;
     Material sprite;
     float animationTime, demoSeconds, elapsed, maxGroundError;
@@ -51,7 +52,29 @@ public sealed class PlayerController : MonoBehaviour
             follow.fieldOfView = 2 * Mathf.Atan(topSlope / .76f) * Mathf.Rad2Deg;
             Debug.Log($"[CLOSEUP_CAMERA] playable_fov={follow.fieldOfView:F3}");
         }
+        try
+        {
+            var database = PoiDatabase.Load(ground);
+            pois = new Interactable[database.pois.Length];
+            for (int i = 0; i < pois.Length; i++)
+            {
+                pois[i] = i == 0 ? entrance : new GameObject().AddComponent<Interactable>();
+                pois[i].Configure(database.pois[i], this, panel);
+            }
+            Debug.Log("[POI] count=" + pois.Length + " ids=" +
+                string.Join(",", Array.ConvertAll(database.pois, p => p.id)) + " radius=" +
+                string.Join("/", Array.ConvertAll(database.pois, p => p.radius.ToString("F1", CultureInfo.InvariantCulture))) +
+                " snapped=true");
+        }
+        catch (Exception ex) { Debug.LogException(ex); Application.Quit(1); return; }
         var args = Environment.GetCommandLineArgs();
+        int poiIndex = Array.IndexOf(args, "-demo-poi");
+        if (poiIndex >= 0)
+        {
+            if (poiIndex + 1 >= args.Length || Array.Find(pois, p => p.data.id == args[poiIndex + 1]) == null)
+            { Debug.LogError("[POI] invalid -demo-poi id"); Application.Quit(1); return; }
+            StartCoroutine(DemoPoi(Array.Find(pois, p => p.data.id == args[poiIndex + 1])));
+        }
         int index = Array.IndexOf(args, "-demo-walk");
         if (index >= 0)
         {
@@ -98,6 +121,9 @@ public sealed class PlayerController : MonoBehaviour
             maxGroundError = Mathf.Max(maxGroundError, Mathf.Abs(transform.position.y - hit.point.y));
         }
         else misses++;
+        var nearest = NearestPoi();
+        panel.SetPrompt(nearest != null && !panel.IsOpen);
+        if (Input.GetKeyDown(KeyCode.E) && nearest != null) nearest.TryOpen();
         Moving = grounded && direction.sqrMagnitude > .001f;
         if (Moving)
         {
@@ -134,6 +160,59 @@ public sealed class PlayerController : MonoBehaviour
             transform.position + FollowOffset, .12f);
         follow.transform.rotation = Quaternion.Lerp(follow.transform.rotation,
             Quaternion.LookRotation(transform.position + Vector3.up * LookHeight - follow.transform.position), .12f);
+    }
+
+    // One owner chooses the nearest in-range POI, so overlapping triggers cannot
+    // overwrite each other's prompt or open several panels on the same key press.
+    Interactable NearestPoi()
+    {
+        Interactable nearest = null;
+        float distance = float.PositiveInfinity;
+        if (pois == null) return null;
+        foreach (var poi in pois)
+        {
+            if (!poi.InRange) continue;
+            float d = (transform.position - poi.transform.position).sqrMagnitude;
+            if (d < distance) { distance = d; nearest = poi; }
+        }
+        return nearest;
+    }
+
+    IEnumerator DemoPoi(Interactable poi)
+    {
+        // Prefer two metres in front. If another POI is closer there (P01/P03),
+        // use a side approach at the same distance, preserving normal selection.
+        bool positioned = false;
+        foreach (var offset in new[] { Vector3.back, Vector3.right, Vector3.left, Vector3.forward })
+        {
+            Vector3 position = poi.transform.position + offset * 2;
+            if (!ground.Raycast(new Ray(new Vector3(position.x, 500, position.z), Vector3.down), out var hit, 1000)) continue;
+            position.y = hit.point.y;
+            transform.position = position;
+            if (NearestPoi() == poi) { positioned = true; break; }
+        }
+        if (!positioned)
+        { Debug.LogError("[POI] no reachable demo approach: " + poi.data.id); Application.Quit(1); yield break; }
+        yield return null;
+        // Exercise the same nearest-POI selection and TryOpen used by E input.
+        var selected = NearestPoi();
+        if (selected != poi || !selected.TryOpen())
+        { Debug.LogError("[POI] demo interaction failed: " + poi.data.id); Application.Quit(1); yield break; }
+        yield return new WaitForSecondsRealtime(1);
+        yield return new WaitForEndOfFrame();
+        string path = "Shots/poi_" + poi.data.id.Substring("gergeti_".Length) + ".png";
+        var root = new System.IO.DirectoryInfo(Application.dataPath);
+        while (root != null && root.Name != "Builds") root = root.Parent;
+        string output = root != null ? System.IO.Path.Combine(root.Parent.FullName, path) : System.IO.Path.GetFullPath(path);
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(output));
+        var frame = ScreenCapture.CaptureScreenshotAsTexture();
+        System.IO.File.WriteAllBytes(output, frame.EncodeToPNG());
+        Destroy(frame);
+        int lines = poi.data.bodyCn.Split('\n').Length;
+        bool valid = panel.IsOpen && panel.Current == poi.data && panel.ValidateContent() &&
+            lines >= 4 && lines <= 6 && new System.IO.FileInfo(output).Length > 0;
+        Debug.Log($"[POI] open={poi.data.id} title_ok={valid.ToString().ToLowerInvariant()} lines_cn={lines} screenshot={path}");
+        Application.Quit(valid ? 0 : 1);
     }
 
     IEnumerator DemoInteract()

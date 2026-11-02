@@ -6,6 +6,11 @@ spike/project/*
 spike/project/Assets/*
 !spike/project/Assets/Editor
 !spike/project/Assets/Scripts
+!spike/project/Assets/Resources
+spike/project/Assets/Resources/*
+!spike/project/Assets/Resources/PoiDatabase.json
+!spike/project/Assets/Resources/PoiDatabase.json.meta
+!spike/project/Assets/Resources.meta
 !spike/project/Assets/Art
 spike/project/Assets/Art/*
 !spike/project/Assets/Art/Shaders
