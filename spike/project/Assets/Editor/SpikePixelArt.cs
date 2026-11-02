@@ -70,16 +70,16 @@ public static class SpikePixelArt
         int weatherCount=0;
         for (int y=0;y<128;y++) for (int x=0;x<128;x++)
         {
-            int row=y/10, sx=x+(row%2)*8, block=sx/16;
-            float shade = .94f + (Hash(block,row,3157)%1001)/1000f*.12f;
-            if(sx%16==0 || y%10==0) shade=.92f;
+            int row=y/16, sx=x+(row%2)*16, block=sx/32;
+            float shade = .84f + (Hash(block,row,3157)%1001)/1000f*.32f;
+            if(sx%32==0 || y%16==0) shade=.65f;
             Color c=baseStone*shade; c.a=1;
             // Exactly ~15% of texels, in irregular small patches.
-            if(Hash(x/3,y/3,555)%1000<150) { c=weather; weatherCount++; }
+            if(Hash(x/3,y/3,555)%1000<150) { c=Color.Lerp(c,weather,.4f); weatherCount++; }
             pixels[y*128+x]=c;
         }
         Save("Stone_Pixel",128,pixels);
-        Debug.Log($"[SURFACE] stone=#B9A78E blocks=+-6% mortar=-8% weather={weatherCount/16384f:F3} snowBase=0.8m");
+        Debug.Log($"[SURFACE] stone=#B9A78E blocks=+-16% mortar=-35% block_width_px=32 weather={weatherCount/16384f:F3} snowBase=0.8m");
         Color32[] rock = { Hex("#514A42"), Hex("#6B6157"), Hex("#8D8172") };
         pixels = new Color32[64*64];
         for (int y=0;y<64;y++) for (int x=0;x<64;x++)

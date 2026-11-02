@@ -20,11 +20,13 @@ public static class SpikeScene
     static float contactMaxError;
     static bool entryCleared;
     static float churchSeatY;
+    static Material generatedRockContact;
 
     public static void Run()
     {
         contactDrifts = contactStrips = contactShadows = contactPosts = contactFloatErrors = 0;
         contactMaxError = 0;
+        generatedRockContact = null;
         entryCleared = false;
         if (GraphicsSettings.currentRenderPipeline == null)
         {
@@ -41,8 +43,8 @@ public static class SpikeScene
         stone.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(TEX + "Stone_Pixel.png"));
         stone.SetTexture("_BumpMap", null);
         stone.DisableKeyword("_NORMALMAP");
-        stone.SetTextureScale("_BaseMap", new Vector2(1f / 4.8f, 1f / 4.8f));
-        stone.SetTextureScale("_BumpMap", new Vector2(1f / 4.8f, 1f / 4.8f));
+        stone.SetTextureScale("_BaseMap", new Vector2(1f / 1.8f, 1f / 1.8f));
+        stone.SetTextureScale("_BumpMap", new Vector2(1f / 1.8f, 1f / 1.8f));
         stone.SetFloat("_BumpScale", 1.8f);
         Debug.Log("[SPIKE] stone bump=" + stone.GetFloat("_BumpScale").ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
         var stoneTiling = stone.GetTextureScale("_BaseMap");
@@ -195,6 +197,7 @@ public static class SpikeScene
         vol.sharedProfile = profile;
 
         var reveal = pilgrim.AddComponent<MistReveal>();
+        reveal.contactMaterial = RockContactMaterial();
         reveal.player = player;
         reveal.church = church;
         reveal.volume = vol;
@@ -312,6 +315,9 @@ public static class SpikeScene
     {
         const string path = "Assets/Art/Church/gergeti_church.fbx";
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+        // Runtime closeup framing projects actual roof/cross vertices, not an AABB.
+        var importer = (ModelImporter)AssetImporter.GetAtPath(path);
+        if (!importer.isReadable) { importer.isReadable = true; importer.SaveAndReimport(); }
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
         if (prefab == null) throw new System.InvalidOperationException("Cannot import " + path);
         var church = ((GameObject)PrefabUtility.InstantiatePrefab(prefab)).transform;
@@ -389,28 +395,30 @@ public static class SpikeScene
 
     static Material RockContactMaterial()
     {
+        if (generatedRockContact != null) return generatedRockContact;
         const string path = "Assets/Settings/M_RockContact.mat";
         var saved = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (saved != null) return saved;
+        if (saved != null) AssetDatabase.DeleteAsset(path);
         var texture = new Texture2D(64, 64, TextureFormat.RGBA32, false) { name = "RockContactSoft" };
         texture.wrapMode = TextureWrapMode.Clamp;
         for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++)
         {
             float r = new Vector2((x + .5f) / 32f - 1, (y + .5f) / 32f - 1).magnitude;
-            float alpha = .10f * (1 - Mathf.SmoothStep(.28f, 1f, r));
+            float alpha = 1 - Mathf.SmoothStep(.28f, 1f, r);
             texture.SetPixel(x, y, new Color(.30f, .36f, .44f, alpha));
         }
         texture.Apply();
         AssetDatabase.DeleteAsset("Assets/Settings/RockContactSoft.asset");
         AssetDatabase.CreateAsset(texture, "Assets/Settings/RockContactSoft.asset");
         var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "M_RockContact" };
-        mat.SetTexture("_BaseMap", texture); mat.SetColor("_BaseColor", Color.white);
+        mat.SetTexture("_BaseMap", texture); mat.SetColor("_BaseColor", new Color(1,1,1,.05f));
         mat.SetFloat("_Surface", 1); mat.SetFloat("_Blend", 0);
         mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
         mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
         mat.SetFloat("_ZWrite", 0); mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
         mat.SetOverrideTag("RenderType", "Transparent"); mat.renderQueue = 3000;
         AssetDatabase.CreateAsset(mat, path);
+        generatedRockContact = mat;
         return mat;
     }
 
@@ -701,7 +709,7 @@ public static class SpikeScene
         { if(tr.name.StartsWith("ClusterRock_")) rocks++; if(tr.name.StartsWith("FencePost_")) posts++; }
         Debug.Log($"[CONTACT] church_drift_segments={contactDrifts} wall_snow_strips={contactStrips} entry_cleared={entryCleared.ToString().ToLowerInvariant()} rock_shadows={contactShadows} post_drifts={contactPosts} float_errors={contactFloatErrors}");
         Debug.Log($"[CONTACT_CHECK] rocks={rocks} posts={posts} max_ground_error_m={contactMaxError:F6} entry_m=3x4 entry_depth_m=0.06 wall_thickness_m=0.02");
-        if(contactDrifts<24||contactStrips<4||!entryCleared||contactShadows!=rocks||contactPosts!=posts||contactFloatErrors!=0)
+        if(contactDrifts<24||contactStrips<4||!entryCleared||contactShadows!=0||contactPosts!=posts||contactFloatErrors!=0)
             throw new System.InvalidOperationException("Contact hard gate failed");
     }
 
@@ -757,16 +765,20 @@ public static class SpikeScene
             Window("WarmWindow_Drum"+i,pos,.58f,2.38f,90f-(210+i*30));
         }
         var pedestal=MakeLit("Assets/Settings/M_BrazierStone.mat",Hex("#4C5360"),0,0);
+        var fireGlow = new Material(glow) { name = "M_BrazierGlow" };
+        fireGlow.SetColor("_EmissionColor", glow.GetColor("_EmissionColor") * .5f);
+        AssetDatabase.DeleteAsset("Assets/Settings/M_BrazierGlow.mat");
+        AssetDatabase.CreateAsset(fireGlow, "Assets/Settings/M_BrazierGlow.mat");
         for(int i=0;i<2;i++)
         {
             var p=new Vector3(i==0?-6f:3f,0,-14f); p.y=TerrainHeight(p.x,p.z);
             SpikeArt.Box(root,"BrazierStone_"+i,new Vector3(.85f,1.1f,.85f),p+Vector3.up*.55f,pedestal);
             var fire=GameObject.CreatePrimitive(PrimitiveType.Sphere); fire.name="BrazierEmber_"+i;
             fire.transform.SetParent(root); fire.transform.position=p+Vector3.up*1.25f;
-            fire.transform.localScale=new Vector3(.65f,.8f,.65f); fire.GetComponent<Renderer>().sharedMaterial=glow;
+            fire.transform.localScale=new Vector3(.65f,.8f,.65f); fire.GetComponent<Renderer>().sharedMaterial=fireGlow;
             var light=new GameObject("BrazierPoint_"+i).AddComponent<Light>();
             light.transform.position=p+Vector3.up*1.8f; light.transform.SetParent(root);
-            light.type=LightType.Spot; light.color=Hex("#FFB45B"); light.range=24; light.intensity=40;
+            light.type=LightType.Point; light.color=Hex("#FFB45B"); light.range=7; light.intensity=2.2f;
             light.transform.rotation=Quaternion.Euler(90,0,0);
             light.spotAngle=155; light.innerSpotAngle=110;
             light.renderMode=LightRenderMode.ForcePixel;
@@ -776,7 +788,7 @@ public static class SpikeScene
             main.startColor=Hex("#FFB44D"); main.simulationSpace=ParticleSystemSimulationSpace.World;
             var emission=ps.emission; emission.rateOverTime=16;
             var shape=ps.shape; shape.shapeType=ParticleSystemShapeType.Cone; shape.radius=.2f; shape.angle=12;
-            ps.GetComponent<ParticleSystemRenderer>().sharedMaterial=glow;
+            ps.GetComponent<ParticleSystemRenderer>().sharedMaterial=fireGlow;
         }
         Debug.Log("[SCENE] arched emissive inserts=7 braziers=2 particles=2");
     }
@@ -1061,49 +1073,11 @@ public static class SpikeScene
                 var go=new GameObject("Sastrugi_"+sastrugi++);go.transform.SetParent(root,false);go.AddComponent<MeshFilter>().sharedMesh=rm;go.AddComponent<MeshRenderer>().sharedMaterial=ridgeMat;
             }
         }
-        // Non-overlapping irregular gravel islands, constrained to 1–3 m from
-        // the path edge or an existing rock. Coverage is measured in world m².
-        var gravel=MakeLit("Assets/Settings/M_Snow2Gravel.mat",Hex("#59636D"),0,.02f);
-        var patches=new System.Collections.Generic.List<Vector3>();float area=0;
-        const float snowArea=88f*72f; // Detail work rectangle x=-40..48, z=-90..-18.
-        for(int attempt=0;attempt<40000 && area<snowArea*.035f;attempt++)
-        {
-            Vector2 p;
-            if(attempt%3==0)
-            {float z=Range(-88,-20);p=new Vector2(RoadX(z)+(rnd.Next(2)==0?-1:1)*Range(3.7f,6.3f),z);}
-            else {var r=rockCenters[rnd.Next(rockCenters.Count)];float a=Range(0,Mathf.PI*2);p=r+new Vector2(Mathf.Cos(a),Mathf.Sin(a))*Range(1.5f,3.5f);}
-            float radius=Range(.55f,1f);
-            if(p.x< -40+radius||p.x>48-radius||p.y< -90+radius||p.y> -18-radius)continue;
-            float roadDist=Mathf.Abs(p.x-RoadX(p.y))-1.6f;
-            float rockDist=100;
-            foreach(var r in rockCenters)rockDist=Mathf.Min(rockDist,Vector2.Distance(r,p)-.5f);
-            float dist=Mathf.Min(roadDist,rockDist);
-            if(dist<1+radius*.25f||dist>3-radius*.25f)continue;
-            bool overlap=false;
-            foreach(var prev in patches)if(Vector2.Distance(new Vector2(prev.x,prev.y),p)<prev.z+radius+.08f){overlap=true;break;}
-            if(overlap)continue;
-            var pv=new Vector3[1+24*3];var pu=new Vector2[pv.Length];var pt=new int[24*3+24*2*6];
-            pv[0]=new Vector3(p.x,Height(p.x,p.y)+.008f,p.y);pu[0]=p;
-            var edge=new float[24];for(int k=0;k<24;k++)edge[k]=Range(.58f,1);
-            for(int ring=0;ring<3;ring++) for(int k=0;k<24;k++)
-            {
-                float a=k*Mathf.PI*2/24,rad=radius*edge[k]*(ring+1)/3f;
-                var q=p+new Vector2(Mathf.Cos(a),Mathf.Sin(a))*rad;int v=1+ring*24+k;
-                pv[v]=new Vector3(q.x,Height(q.x,q.y)+.008f,q.y);pu[v]=q;
-                if(ring==0){int t=k*3;pt[t]=0;pt[t+1]=1+(k+1)%24;pt[t+2]=1+k;}
-                else {int t=72+((ring-1)*24+k)*6;int a0=1+(ring-1)*24+k,a1=1+(ring-1)*24+(k+1)%24,b0=1+ring*24+k,b1=1+ring*24+(k+1)%24;
-                    pt[t]=a0;pt[t+1]=a1;pt[t+2]=b0;pt[t+3]=a1;pt[t+4]=b1;pt[t+5]=b0;}
-            }
-            float patchArea=0;
-            for(int k=0;k<24;k++)patchArea+=.5f*radius*radius*edge[k]*edge[(k+1)%24]*Mathf.Sin(Mathf.PI*2/24);
-            var pm=new Mesh{name="SnowExposure_"+patches.Count,vertices=pv,uv=pu,triangles=pt};pm.RecalculateNormals();pm.RecalculateBounds();
-            string pp="Assets/Settings/Snow2Patch_"+patches.Count+".asset";AssetDatabase.DeleteAsset(pp);AssetDatabase.CreateAsset(pm,pp);
-            var go=new GameObject("SnowExposure_"+patches.Count);go.transform.SetParent(root,false);go.AddComponent<MeshFilter>().sharedMesh=pm;go.AddComponent<MeshRenderer>().sharedMaterial=gravel;
-            patches.Add(new Vector3(p.x,p.y,radius));area+=patchArea;
-        }
-        if(area/snowArea<.03f||area/snowArea>.06f)throw new System.InvalidOperationException("Snow2 exposure coverage failed: "+area/snowArea);
-        Debug.Log($"[SNOW2] drifts={drifts} sastrugi={sastrugi} exposure_patches={patches.Count} tiling_near=0.6 mid=1.6 far=3.0 shadow_tint=#B9CBDE");
-        Debug.Log($"[SNOW2] exposure_area_m2={area:F2} snow_work_area_m2={snowArea:F2} exposure_ratio={area/snowArea:F4} seed=20261103 wind=+x ridge_max_distance=45m");
+        // The legacy SnowExposure polygons are the visible black stars in the
+        // approach. Omit these decorative overlays together with contact decals;
+        // terrain, drift/sastrugi meshes, road route and realtime shadows stay intact.
+        Debug.Log($"[SNOW2] drifts={drifts} sastrugi={sastrugi} exposure_patches=0 tiling_near=0.6 mid=1.6 far=3.0 shadow_tint=#B9CBDE");
+        Debug.Log("[CLOSEUP_PATCHES] rock_contact=0 snow_exposure=0 shadows=realtime");
     }
 
     // 沿揭示机位视轴横向展开；指定色板与远距薄雾共同形成层次。
@@ -1387,6 +1361,7 @@ public static class SpikeScene
 
         // 独立路面材质：不叠雪覆盖，压暗到潮湿石板
         var paving = new Material(stone) { name = "M_Paving" };
+        paving.SetTextureScale("_BaseMap", Vector2.one / 4.8f);
         if (paving.HasProperty("_BaseColor")) paving.SetColor("_BaseColor", Hex("#8C8378"));
         if (paving.HasProperty("_StoneSurface")) paving.SetFloat("_StoneSurface", 0f);
         AssetDatabase.DeleteAsset("Assets/Settings/M_Paving.mat");
@@ -1505,10 +1480,8 @@ public static class SpikeScene
                 Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                     "[ROCK] id={0} actual_size_m={1:F4},{2:F4},{3:F4} faces={4} burial_height_ratio={5:F4} flat_normals=true",
                     rocks, size.x, size.y, size.z, faces, burial));
-                ContactMound(root, "RockContact_" + rocks, terrain, p,
-                    new Vector2(size.x * .55f * .5f, size.z * .8f * .5f), 0f,
-                    RockContactMaterial(), .01f);
-                contactShadows++;
+                // Closeup fallback: the contact patches still form stars on the slope.
+                // Keep only the rock's realtime shadow, as requested.
                 rocks++;
             }
         }
@@ -1531,9 +1504,9 @@ public static class SpikeScene
                 float jitter = 1f - ((i * 37) % 13) / 60f;
                 float h = 1.05f * jitter;
                 SpikeArt.Box(roadside, "FencePost_" + posts++, new Vector3(0.16f, h, 0.16f),
-                    p + Vector3.up * (h * 0.5f - 0.06f), fenceWood);
+                    p + Vector3.up * (h * 0.5f - 0.11f), fenceWood);
                 SpikeArt.Box(roadside, "FenceSnow_" + (posts - 1), new Vector3(0.19f, 0.05f, 0.19f),
-                    p + Vector3.up * (h - 0.05f), snowMat);
+                    p + Vector3.up * (h - 0.10f), snowMat);
                 if (i > 0)
                     foreach (float height in new[] { 0.44f, 0.80f })
                     {

@@ -23,6 +23,7 @@ public sealed class MistReveal : MonoBehaviour
     public Transform church;
     public Volume volume;
     public Shader cloudShader;
+    public Material contactMaterial;
     GameObject cloudRoot;
     Material cloudMaterial;
     Mesh cloudMesh;
@@ -174,6 +175,7 @@ public sealed class MistReveal : MonoBehaviour
         Directory.CreateDirectory(output);
         float[] distances = { 80, 50, 20 };
         double[] edges = new double[distances.Length];
+        bool closeupPass = false;
         for (int i = 0; i < distances.Length; i++)
         {
             float d = distances[i];
@@ -183,8 +185,8 @@ public sealed class MistReveal : MonoBehaviour
             p.y = hit.point.y;
             player.transform.position = p;
             // Teleport the existing follow rig with the player, avoiding frame-rate dependent camera lag.
-            cam.transform.position = p + new Vector3(0, 8, -22);
-            cam.transform.LookAt(p + Vector3.up * 3);
+            cam.transform.position = p + PlayerController.FollowOffset;
+            cam.transform.LookAt(p + Vector3.up * PlayerController.LookHeight);
             yield return new WaitForSecondsRealtime(SettleSeconds);
             yield return new WaitForEndOfFrame();
             var frame = ScreenCapture.CaptureScreenshotAsTexture();
@@ -196,9 +198,10 @@ public sealed class MistReveal : MonoBehaviour
                 "[REVEAL] d={0:F0} fogStart={1:F3} fogEnd={2:F3} churchEdge={3:F9}",
                 Distance(), RenderSettings.fogStartDistance, RenderSettings.fogEndDistance, edges[i]));
             Debug.Log($"[REVEAL] screenshot={path} roi_bottom_left={roi.x},{roi.y},{roi.width},{roi.height} metric=mean_abs_RGB_xy/255");
+            if (d == 20) closeupPass = ValidateCloseup(cam);
             Destroy(frame);
         }
-        bool pass = edges[0] < edges[1] && edges[1] < edges[2] && edges[2] >= edges[0] * 1.6;
+        bool pass = closeupPass && edges[0] < edges[1] && edges[1] < edges[2] && edges[2] >= edges[0] * 1.6;
         // Let the single pulse finish so the same run verifies restoration as well.
         while (pulsing) yield return null;
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
@@ -209,18 +212,71 @@ public sealed class MistReveal : MonoBehaviour
         Application.Quit(pass ? 0 : 1);
     }
 
+    bool ValidateCloseup(Camera cam)
+    {
+        float topY = 1;
+        Material stone = null;
+        foreach (var mf in church.GetComponentsInChildren<MeshFilter>())
+        {
+            foreach (var v in mf.sharedMesh.vertices)
+            {
+                var projected = cam.WorldToViewportPoint(mf.transform.TransformPoint(v));
+                if (projected.z > 0) topY = Mathf.Min(topY, 1 - projected.y);
+            }
+            foreach (var mat in mf.GetComponent<Renderer>().sharedMaterials)
+                if (mat.name.StartsWith("M_ChurchStone")) stone = mat;
+        }
+        float tileM = stone == null ? 0 : 1 / stone.GetTextureScale("_BaseMap").x;
+        // Stone_Pixel uses 32 px wide staggered blocks, UVs are in world metres.
+        int masonry = stone == null ? 0 : Mathf.FloorToInt(5 / tileM * stone.GetTexture("_BaseMap").width / 32);
+        float gap = 0;
+        int feet = 0;
+        var all = FindObjectsByType<MeshFilter>(FindObjectsSortMode.None);
+        foreach (var foot in all)
+        {
+            if (!foot.name.StartsWith("FencePost_")) continue;
+            feet++;
+            var center = foot.GetComponent<Renderer>().bounds.center;
+            MeshFilter closest = null;
+            float best = float.PositiveInfinity;
+            foreach (var slab in all)
+            {
+                if (!slab.name.StartsWith("Paving_")) continue;
+                var c = slab.GetComponent<Renderer>().bounds.center;
+                float d = new Vector2(c.x - center.x, c.z - center.z).sqrMagnitude;
+                if (d < best) { best = d; closest = slab; }
+            }
+            if (closest == null) return false;
+            float bottom = foot.GetComponent<Renderer>().bounds.min.y;
+            // Continue the adjacent slab's top plane to the roadside support.
+            var local = closest.transform.InverseTransformPoint(center);
+            local.y = closest.sharedMesh.bounds.max.y;
+            float slabTop = closest.transform.TransformPoint(local).y;
+            gap = Mathf.Max(gap, bottom - slabTop);
+        }
+        var fire = GameObject.Find("BrazierPoint_0").GetComponent<Light>();
+        float alpha = contactMaterial.GetColor("_BaseColor").a;
+        var offset = cam.transform.position - player.transform.position;
+        Debug.Log(string.Format(CultureInfo.InvariantCulture,
+            "[CLOSEUP] cam_offset=({0:0.###},{1:0.###},{2:0.###}) church_top_y={3:F6} stone_tile_m={4:0.0} masonry_per_5m={5} brazier_r={6:0.###} brazier_i={7:0.###} contact_alpha={8:F2} rail_gap_m={9:F6}",
+            offset.x, offset.y, offset.z, topY, tileM, masonry, fire.range, fire.intensity, alpha, gap));
+        Debug.Log($"[CLOSEUP_DETAIL] fence_feet={feet} rail_gap_reference=adjacent_paving_top_plane contact_mode=realtime_only contact_patches=0");
+        return topY >= .06f && topY <= .20f && masonry >= 8 && gap <= .02f && feet > 0 &&
+            Vector3.Distance(offset, PlayerController.FollowOffset) < .001f &&
+            Mathf.Abs(tileM - 1.8f) < .001f && fire.type == LightType.Point &&
+            Mathf.Approximately(fire.range, 7) && Mathf.Approximately(fire.intensity, 2.2f) && alpha <= .051f;
+    }
+
     RectInt ChurchRect(Camera cam, int width, int height)
     {
-        var renderers = church.GetComponentsInChildren<MeshRenderer>();
-        Bounds bounds = renderers[0].bounds;
-        foreach (var r in renderers) bounds.Encapsulate(r.bounds);
+        // Project real geometry: at close range the empty AABB corners grossly
+        // overestimate the ROI and dilute the church's edge metric with sky.
         Vector2 min = new Vector2(width, height), max = Vector2.zero;
-        for (int i = 0; i < 8; i++)
+        foreach (var mf in church.GetComponentsInChildren<MeshFilter>())
+        foreach (var vertex in mf.sharedMesh.vertices)
         {
-            Vector3 corner = bounds.center + Vector3.Scale(bounds.extents,
-                new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
-            Vector3 v = cam.WorldToViewportPoint(corner);
-            if (v.z <= 0) throw new InvalidOperationException("Church bounds behind demo camera");
+            var v = cam.WorldToViewportPoint(mf.transform.TransformPoint(vertex));
+            if (v.z <= 0) throw new InvalidOperationException("Church vertex behind demo camera");
             var pixel = new Vector2(v.x * width, v.y * height);
             min = Vector2.Min(min, pixel); max = Vector2.Max(max, pixel);
         }

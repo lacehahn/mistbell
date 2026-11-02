@@ -13,6 +13,8 @@ public sealed class PlayerController : MonoBehaviour
     public int Row { get; private set; } = 3;
     public static bool CaptureMode => Array.IndexOf(Environment.GetCommandLineArgs(), "-shot") >= 0 ||
         Array.IndexOf(Environment.GetCommandLineArgs(), "-shots") >= 0;
+    public static readonly Vector3 FollowOffset = new Vector3(0, 5.5f, -14);
+    public const float LookHeight = 3.5f;
     Camera follow;
     Material sprite;
     float animationTime, demoSeconds, elapsed, maxGroundError;
@@ -27,8 +29,28 @@ public sealed class PlayerController : MonoBehaviour
         GetComponent<PilgrimAnimator>().enabled = false;
         sprite = GetComponent<MeshRenderer>().material;
         follow = Camera.main;
-        follow.transform.position = transform.position + new Vector3(0, 8, -22);
-        follow.transform.LookAt(transform.position + Vector3.up * 3);
+        follow.transform.position = transform.position + FollowOffset;
+        follow.transform.LookAt(transform.position + Vector3.up * LookHeight);
+        // Fit the real tower at the 20 m approach, using only the playable camera.
+        // CaptureMode exits in Awake, so the ShotRig camera table stays unchanged.
+        var reveal = GetComponent<MistReveal>();
+        var near = new Vector3(0, 0, -29);
+        if (reveal != null && ground.Raycast(new Ray(near + Vector3.up * 500, Vector3.down), out var nearHit, 1000))
+        {
+            near.y = nearHit.point.y;
+            var eye = near + FollowOffset;
+            var inverse = Quaternion.Inverse(Quaternion.LookRotation(near + Vector3.up * LookHeight - eye));
+            float topSlope = 0;
+            foreach (var mf in reveal.church.GetComponentsInChildren<MeshFilter>())
+            foreach (var vertex in mf.sharedMesh.vertices)
+            {
+                var local = inverse * (mf.transform.TransformPoint(vertex) - eye);
+                if (local.z > 0) topSlope = Mathf.Max(topSlope, local.y / local.z);
+            }
+            // Screen top at y=.12 (top-left origin); .76 = 1 - 2*.12.
+            follow.fieldOfView = 2 * Mathf.Atan(topSlope / .76f) * Mathf.Rad2Deg;
+            Debug.Log($"[CLOSEUP_CAMERA] playable_fov={follow.fieldOfView:F3}");
+        }
         var args = Environment.GetCommandLineArgs();
         int index = Array.IndexOf(args, "-demo-walk");
         if (index >= 0)
@@ -109,9 +131,9 @@ public sealed class PlayerController : MonoBehaviour
     void LateUpdate()
     {
         follow.transform.position = Vector3.Lerp(follow.transform.position,
-            transform.position + new Vector3(0, 8, -22), .12f);
+            transform.position + FollowOffset, .12f);
         follow.transform.rotation = Quaternion.Lerp(follow.transform.rotation,
-            Quaternion.LookRotation(transform.position + Vector3.up * 3 - follow.transform.position), .12f);
+            Quaternion.LookRotation(transform.position + Vector3.up * LookHeight - follow.transform.position), .12f);
     }
 
     IEnumerator DemoInteract()
