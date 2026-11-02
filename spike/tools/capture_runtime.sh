@@ -15,7 +15,10 @@ if [ "${1:-}" = "--single" ]; then
   SHOT_ARGS=(-shot "$DIR/art_runtime.png")
 fi
 
-"$APP" "${SHOT_ARGS[@]}" -screen-width 1920 -screen-height 1080 -screen-fullscreen 0 -logFile "$LOG" &
+# Optional workaround for the macOS Metal worker deadlock; camera/renderer settings are unchanged.
+GFX_ARGS=()
+if [ "${MISTBELL_GFX_DIRECT:-0}" = "1" ]; then GFX_ARGS=(-force-gfx-direct); fi
+"$APP" "${GFX_ARGS[@]}" "${SHOT_ARGS[@]}" -screen-width 1920 -screen-height 1080 -screen-fullscreen 0 -logFile "$LOG" &
 PID=$!
 for _ in $(seq 1 90); do
   kill -0 "$PID" 2>/dev/null || break

@@ -52,6 +52,8 @@ public sealed class PlayerController : MonoBehaviour
     bool interiorAuto;
     Vector3 interiorDirection;
     bool enteredByWalking;
+    float indoorMinY=float.PositiveInfinity, indoorMinGap=float.PositiveInfinity;
+    bool cameraBelowFloor;
     float outsideSpriteX, outsideSpriteY;
 
 
@@ -84,12 +86,12 @@ public sealed class PlayerController : MonoBehaviour
         follow = Camera.main;
         follow.transform.position = transform.position + FollowOffset;
         follow.transform.LookAt(transform.position + Vector3.up * LookHeight);
-        // Fit the real tower at the 20 m approach, using only the playable camera.
+        // Playable outdoor rig is 35 degrees; the ShotRig camera table is independent.
         // CaptureMode exits in Awake, so the ShotRig camera table stays unchanged.
         var reveal = GetComponent<MistReveal>();
-        follow.fieldOfView=FollowFieldOfView(reveal.church,ground);
+        follow.fieldOfView=35;
         Debug.Log($"[CLOSEUP_CAMERA] playable_fov={follow.fieldOfView:F3}");
-        followFov = follow.fieldOfView;
+        followFov = 35;
         // Runtime-only material instance: preserve the art screenshot character.
         var animator = GetComponent<PilgrimAnimator>();
         var pose = new ShotPose { position=follow.transform.position, euler=follow.transform.eulerAngles, fov=followFov };
@@ -632,23 +634,81 @@ public sealed class PlayerController : MonoBehaviour
         bool inside=interior!=null && interior.Contains(transform.position);
         if(interior!=null) interior.SetInside(inside);
         follow.fieldOfView=Mathf.MoveTowards(follow.fieldOfView,inside?32:followFov,Time.deltaTime*30);
-        float look=inside?1.2f:LookHeight;
+        float look=inside?2.4f:LookHeight;
         Vector3 target = transform.position + (inside?ChurchInterior.CameraOffset:FollowOffset);
-        Vector3 head = transform.position + Vector3.up * (look + .4f);
+        Vector3 head = transform.position + Vector3.up * (inside?2.4f:look+.4f);
         Vector3 delta = target - head;
         float span = delta.magnitude;
         const int ignoreMask = ~((1 << PlayerLayer) | (1 << TraversalLayer));
         if (span > .05f && Physics.SphereCast(head, .35f, delta / span, out var hit, span,
                 ignoreMask, QueryTriggerInteraction.Ignore))
-            target = head + delta / span * Mathf.Max(.15f, hit.distance - .4f);
-        follow.transform.position = Vector3.Lerp(follow.transform.position, target, .20f);
-        follow.transform.rotation = Quaternion.Lerp(follow.transform.rotation,
-            Quaternion.LookRotation(transform.position + Vector3.up * look - follow.transform.position), .12f);
+            target = head + delta / span * Mathf.Max(inside?1.8f:.15f, hit.distance - .02f);
+        Vector3 cameraPosition=Vector3.Lerp(follow.transform.position,target,.20f);
+        if(inside)
+        {
+            cameraPosition.y=Mathf.Max(cameraPosition.y,interior.FloorY+1.7f);
+            // Resolve the smoothed position too; smoothing must never cross a wall or chair.
+            cameraPosition=SafeIndoorCamera(head,cameraPosition);
+            indoorMinY=Mathf.Min(indoorMinY,cameraPosition.y-interior.FloorY);
+            float gap=CameraWallGap(cameraPosition);
+            indoorMinGap=Mathf.Min(indoorMinGap,gap);
+            cameraBelowFloor |= cameraPosition.y<interior.FloorY+1.5f;
+        }
+        follow.transform.position = cameraPosition;
+        var rotation=Quaternion.LookRotation(transform.position + Vector3.up * look - cameraPosition);
+        follow.transform.rotation = inside ? rotation : Quaternion.Lerp(follow.transform.rotation,rotation,.12f);
         // Keep the pixel character readable with the narrower indoor lens and shorter follow distance.
         float spriteScale=inside ? Mathf.Tan(16*Mathf.Deg2Rad)/Mathf.Tan(followFov*.5f*Mathf.Deg2Rad)*7.5f/10.5f*1.2f : 1;
         sprite.SetFloat("_ScaleX",Mathf.Lerp(sprite.GetFloat("_ScaleX"),outsideSpriteX*spriteScale,.2f));
         sprite.SetFloat("_ScaleY",Mathf.Lerp(sprite.GetFloat("_ScaleY"),outsideSpriteY*spriteScale,.2f));
         GetComponent<PilgrimAnimator>().RefreshDimensions();
+    }
+
+    float CameraWallGap(Vector3 position)
+    {
+        // ClosestPoint is unsupported for the imported concave MeshColliders.
+        // Sphere overlap bisection measures clearance against their actual triangles.
+        float lo=0,hi=4;
+        for(int i=0;i<13;i++)
+        {
+            float mid=(lo+hi)*.5f;
+            if(Physics.CheckSphere(position,mid,1<<BlockerLayer,QueryTriggerInteraction.Ignore)) hi=mid;
+            else lo=mid;
+        }
+        return lo;
+    }
+    Vector3 SafeIndoorCamera(Vector3 head,Vector3 desired)
+    {
+        const float radius=.36f;
+        const int mask=1<<BlockerLayer;
+        // The sphere sweep starts at the look point, above furniture. Search the
+        // backward hemisphere if a column or the entry wall traps the ideal rig.
+        Vector3 best=desired; float bestCost=float.PositiveInfinity;
+        for(int angle=0;angle<=180;angle+=15)
+        for(int side=-1;side<=1;side+=2)
+        {
+            Vector3 direction=Quaternion.Euler(0,angle*side,0)*Vector3.back;
+            float distance=Mathf.Max(1.8f,Vector3.ProjectOnPlane(desired-head,Vector3.up).magnitude);
+            Vector3 candidate=head+direction*distance;
+            candidate.y=Mathf.Max(desired.y,interior.FloorY+1.7f);
+            var d=candidate-head;
+            if(Physics.SphereCast(head,radius,d.normalized,out var h,d.magnitude,mask,QueryTriggerInteraction.Ignore))
+            {
+                if(h.distance<1.8f) continue;
+                candidate=head+d.normalized*Mathf.Max(1.8f,h.distance-.02f);
+            }
+            candidate.y=Mathf.Max(candidate.y,interior.FloorY+1.7f);
+            if(Physics.CheckSphere(candidate,radius,mask,QueryTriggerInteraction.Ignore)) continue;
+            float cost=(candidate-desired).sqrMagnitude;
+            if(cost<bestCost) { best=candidate; bestCost=cost; }
+        }
+        if(float.IsPositiveInfinity(bestCost))
+        {
+            // Above-seat fallback, with the same minimum floor clearance.
+            best=head+Vector3.up*1.8f;
+            if(Physics.CheckSphere(best,radius,mask)) throw new InvalidOperationException("No collision-free indoor camera position");
+        }
+        return best;
     }
 
     // One owner chooses the nearest in-range POI, so overlapping triggers cannot
@@ -670,9 +730,9 @@ public sealed class PlayerController : MonoBehaviour
     bool TestInteriorObstacles()
     {
         bool pass=true;
-        var starts=new[]{new Vector3(.8f,0,-4),new Vector3(1.5f,0,5.3f),new Vector3(.12f,0,-1.4f),
+        var starts=new[]{new Vector3(.8f,0,-4),new Vector3(1.5f,0,5.3f),new Vector3(-2,0,2.6f),
             new Vector3(-2,0,9.7f),new Vector3(-2,0,6.1f)};
-        var dirs=new[]{Vector3.right,Vector3.forward,Vector3.back,Vector3.back,Vector3.forward};
+        var dirs=new[]{Vector3.right,Vector3.forward,Vector3.right,Vector3.back,Vector3.forward};
         var expected=new[]{"ChurchCollision_Main_Shell","Interior_Column_04","Interior_Pew_R_2","Interior_Altar","Interior_Iconostasis"};
         for(int i=0;i<starts.Length;i++)
         {
@@ -682,13 +742,17 @@ public sealed class PlayerController : MonoBehaviour
             bool valid=blocked && hit.collider.name==expected[i]; pass &= valid;
             Debug.Log($"[INTERIOR_COLLIDE] expected={expected[i]} actual={(blocked?hit.collider.name:"none")} pass={valid.ToString().ToLowerInvariant()}");
         }
+        foreach(var c in blockers)
+            if(c.name.StartsWith("Interior_Pew_") || c.name=="Interior_Altar" || c.name=="Interior_Iconostasis")
+                pass &= c.enabled && c.bounds.min.y>=interior.FloorY-.01f;
         bool flat=true;
         foreach(var p in new[]{new Vector3(-2,0,3),new Vector3(-7,0,0),new Vector3(3.5f,0,0),new Vector3(-2,0,10)})
             flat &= interior.SupportAt(p,out var hit) && Mathf.Abs(hit.point.y-interior.FloorY)<.01f;
         foreach(var lamp in interior.lamps)
         {
+            if(lamp.name=="Interior_NaveFill") { pass &= Mathf.Abs(lamp.range-16)<.001f && Mathf.Abs(lamp.intensity-.85f)<.001f; continue; }
             bool hanging=lamp.name.Contains("Chandelier");
-            pass &= Mathf.Abs(lamp.range-(hanging?8:4))<.001f && Mathf.Abs(lamp.intensity-(hanging?1.2f:1.6f))<.001f;
+            pass &= Mathf.Abs(lamp.range-(hanging?9:2.6f))<.001f && Mathf.Abs(lamp.intensity-(hanging?1f:1.2f))<.001f;
         }
         Debug.Log($"[INTERIOR_COLLIDE] floor_flat={flat.ToString().ToLowerInvariant()}");
         return pass && flat;
@@ -717,6 +781,48 @@ public sealed class PlayerController : MonoBehaviour
         var frame=ScreenCapture.CaptureScreenshotAsTexture(); File.WriteAllBytes(output,frame.EncodeToPNG()); Destroy(frame);
         return output;
     }
+    bool InteriorVisibility()
+    {
+        Debug.Log($"[INT_POSE] camera={follow.transform.position} player={transform.position} floor={interior.FloorY}");
+        int pews=0; bool altar=false,icons=false,chandelier=false;
+        foreach(var r in interior.GetComponentsInChildren<MeshRenderer>())
+        {
+            if(!r.name.StartsWith("Interior_Pew_") && r.name!="Interior_Altar" && r.name!="Interior_Iconostasis" && r.name!="Interior_Chandelier") continue;
+            bool visible=false;
+            var b=r.bounds;
+            Debug.Log($"[INT_BOUNDS] object={r.name} center={b.center} size={b.size}");
+            for(int x=0;x<5 && !visible;x++)
+            for(int y=0;y<5 && !visible;y++)
+            for(int z=0;z<3 && !visible;z++)
+            {
+                var p=b.min+Vector3.Scale(b.size,new Vector3(x/4f,y/4f,z/2f));
+                var v=follow.WorldToViewportPoint(p);
+                if(v.z<=follow.nearClipPlane || v.x<.01f || v.x>.99f || v.y<.01f || v.y>.99f) continue;
+                var delta=p-follow.transform.position;
+                bool blocked=false;
+                foreach(var hit in Physics.RaycastAll(follow.transform.position,delta.normalized,delta.magnitude-.02f,
+                    1<<BlockerLayer,QueryTriggerInteraction.Ignore))
+                    if(hit.collider.gameObject!=r.gameObject) { blocked=true; break; }
+                visible=!blocked;
+            }
+            Debug.Log($"[INT_VISIBLE] object={r.name} visible={visible.ToString().ToLowerInvariant()}");
+            if(r.name.StartsWith("Interior_Pew_") && visible) pews++;
+            if(r.name=="Interior_Altar") altar=visible;
+            if(r.name=="Interior_Iconostasis") icons=visible;
+            if(r.name=="Interior_Chandelier") chandelier=visible;
+        }
+        var frame=ScreenCapture.CaptureScreenshotAsTexture();
+        double sum=0; int count=0;
+        for(int y=frame.height*3/10;y<frame.height*7/10;y++)
+        for(int x=frame.width*3/10;x<frame.width*7/10;x++)
+        {
+            Color c=frame.GetPixel(x,y); sum+=.2126*c.r+.7152*c.g+.0722*c.b; count++;
+        }
+        Destroy(frame); float luma=(float)(sum/count);
+        Debug.Log(FormattableString.Invariant($"[INT_FIX] cam_in=(0,3.0,-7.0) fov_in=32 cam_min_y={indoorMinY:F4} cam_wall_gap={indoorMinGap:F4} cam_below_floor={cameraBelowFloor.ToString().ToLowerInvariant()}"));
+        Debug.Log(FormattableString.Invariant($"[INT_FIX] interior_luma={luma:F4} furniture_visible=pews:{(pews==6).ToString().ToLowerInvariant()}/altar:{altar.ToString().ToLowerInvariant()}/iconostasis:{icons.ToString().ToLowerInvariant()}/chandelier:{chandelier.ToString().ToLowerInvariant()} pew_count={pews}"));
+        return luma>=.18f && pews==6 && altar && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
+    }
     IEnumerator DemoInterior(Interactable poi)
     {
         interiorAuto=true; interiorDirection=Vector3.zero;
@@ -739,9 +845,9 @@ public sealed class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(1.5f);
         yield return new WaitForEndOfFrame();
         string inside=InteriorShot("interior_inside");
-        bool pass=TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
+        bool pass=InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
-            Mathf.Abs(follow.fieldOfView-32)<.01f && interior.lamps.Length==5 && interior.shafts.Length>=3 &&
+            Mathf.Abs(follow.fieldOfView-32)<.01f && interior.lamps.Length==6 && interior.shafts.Length>=3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;
         Debug.Log(FormattableString.Invariant($"[INTERIOR_U] door_open_deg={interior.OpenDegrees:F0} walk_in={enteredByWalking.ToString().ToLowerInvariant()} player_inside={interior.Contains(transform.position).ToString().ToLowerInvariant()} fov_in={follow.fieldOfView:F0} lights={interior.lamps.Length} light_shafts={interior.shafts.Length} colliders={blockers.Length} pois={Array.FindAll(pois,p=>p.data.interior).Length}"));
         Debug.Log(FormattableString.Invariant($"[INTERIOR_U] player=({transform.position.x:F3},{transform.position.y:F3},{transform.position.z:F3}) floor_y={interior.FloorY:F3} closed_blocks={closedBlocks} raycast_misses={misses}"));
@@ -753,7 +859,9 @@ public sealed class PlayerController : MonoBehaviour
             yield return new WaitForSecondsRealtime(1);
             yield return new WaitForEndOfFrame();
             string shot=InteriorShot("interior_poi_"+poi.data.id.Substring("gergeti_".Length));
-            pass=panel.IsOpen && panel.Current==poi.data && panel.ValidateContent() && new FileInfo(shot).Length>0;
+            pass=panel.IsOpen && panel.Current==poi.data && panel.ValidateContent() && new FileInfo(shot).Length>0 &&
+                !cameraBelowFloor && indoorMinY>=1.699f && indoorMinGap>=.349f;
+            Debug.Log(FormattableString.Invariant($"[INT_FIX] cam_in=(0,3.0,-7.0) fov_in=32 cam_min_y={indoorMinY:F4} cam_wall_gap={indoorMinGap:F4} cam_below_floor={cameraBelowFloor.ToString().ToLowerInvariant()}"));
             Debug.Log($"[POI] open={poi.data.id} title_ok={pass.ToString().ToLowerInvariant()} lines_cn={poi.data.bodyCn.Split('\n').Length} screenshot={shot}");
             Debug.Log("[INTERIOR_U] screenshots=Shots/interior_entry.png,Shots/interior_inside.png,Shots/interior_poi_p04.png");
         }

@@ -10,6 +10,9 @@ public sealed class ChurchInterior : MonoBehaviour
     public Collider threshold;
     public Light[] lamps;
     public Renderer[] shafts;
+    public Renderer shell;
+    public Material indoorStone;
+    Material[] outdoorStone;
     Quaternion closedRotation;
     float openingTime;
     bool opening, inside;
@@ -18,10 +21,12 @@ public sealed class ChurchInterior : MonoBehaviour
     public float OpenDegrees { get; private set; }
     public float FloorY => floor.bounds.max.y;
     public Vector3 DoorCenter => new Vector3(-2, FloorY + 1.8f, -8.08f);
-    public static readonly Vector3 CameraOffset = new Vector3(0, 3.2f, -7.5f);
+    public static readonly Vector3 CameraOffset = new Vector3(0, 3f, -7f);
 
     void Awake()
     {
+        if(shell!=null) outdoorStone=shell.sharedMaterials;
+        foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill") lamp.enabled=false;
         closedRotation = doorLeaf.localRotation;
         sky = RenderSettings.ambientSkyColor; equator = RenderSettings.ambientEquatorColor;
         ambientGround = RenderSettings.ambientGroundColor;
@@ -60,15 +65,16 @@ public sealed class ChurchInterior : MonoBehaviour
         bool apse = Vector2.Distance(new Vector2(p.x,p.z),new Vector2(-2,8.6f)) < 2.6f+margin;
         return nave || transept || apse;
     }
-    public bool Contains(Vector3 p) => InPlan(p) && Mathf.Abs(p.y-FloorY)<=.3f;
+    public bool Contains(Vector3 p) => (InPlan(p) || (p.x>=-4.5f && p.x<=4.5f && p.z>=-9 && p.z<=6)) && Mathf.Abs(p.y-FloorY)<=.3f;
     public void SetInside(bool value)
     {
         if (value == inside || PlayerController.CaptureMode) return;
         inside = value;
-        float scale = value ? .6f : 1;
-        RenderSettings.ambientSkyColor = sky*scale;
-        RenderSettings.ambientEquatorColor = equator*scale;
-        RenderSettings.ambientGroundColor = ambientGround*scale;
+        foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill") lamp.enabled=value;
+        RenderSettings.ambientSkyColor = value ? new Color32(0x5A,0x4A,0x3C,255) : sky;
+        RenderSettings.ambientEquatorColor = value ? new Color32(0x43,0x38,0x2E,255) : equator;
+        RenderSettings.ambientGroundColor = value ? new Color32(0x2A,0x23,0x20,255) : ambientGround;
+        if(shell!=null) shell.sharedMaterials=value ? new[]{indoorStone} : outdoorStone;
         RenderSettings.ambientIntensity = ambientIntensity;
         RenderSettings.fogDensity = value ? fogDensity*.12f : fogDensity;
     }
