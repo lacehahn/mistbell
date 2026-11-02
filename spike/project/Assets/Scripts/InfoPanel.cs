@@ -45,6 +45,8 @@ public sealed class InfoPanel : MonoBehaviour
     }
     void Start()
     {
+        // Automated regressions must not consume the real player's first-entry hint.
+        if(System.Array.Exists(System.Environment.GetCommandLineArgs(),a=>a.StartsWith("-demo-",System.StringComparison.Ordinal))) return;
         const string key="Mistbell.MovementHintSeen";
         if(PlayerPrefs.GetInt(key,0)!=0) return;
         string message="W A S D 移动 · Shift 加速 · E 交互";

@@ -880,16 +880,17 @@ public sealed class PlayerController : MonoBehaviour
             Debug.Log(FormattableString.Invariant($"[CLIMB] seg={segment+1} start=({start.x:F3},{start.y:F3},{start.z:F3}) end=({transform.position.x:F3},{transform.position.y:F3},{transform.position.z:F3}) ground_err_max={error:F6}"));
             if(error>.03f || transform.position.z<endZ-.08f) { Application.Quit(1); yield break; }
         }
-        while(transform.position.z < -8 && Time.realtimeSinceStartup<deadline)
+        bool DeckReached() => SurfaceAt(transform.position,out var support) &&
+            (support.collider==stairDeck || (support.collider.name.StartsWith("TerraceFill_",StringComparison.Ordinal) &&
+             transform.position.z>=stairDeck.bounds.min.z)) && Mathf.Abs(transform.position.y-support.point.y)<=.03f;
+        while(!DeckReached() && Time.realtimeSinceStartup<deadline)
         {
             interiorDirection=new Vector3(-transform.position.x,0,1.5f).normalized;
             yield return null;
         }
         interiorDirection=Vector3.zero;
         yield return new WaitForSeconds(.3f);
-        bool onDeck=SurfaceAt(transform.position,out var deck) &&
-            (deck.collider==stairDeck || deck.collider.name.StartsWith("TerraceFill_",StringComparison.Ordinal)) &&
-            Mathf.Abs(transform.position.y-deck.point.y)<=.03f;
+        bool onDeck=DeckReached();
         Debug.Log($"[CLIMB] on_deck={onDeck.ToString().ToLowerInvariant()} raycast_misses={misses}");
         Application.Quit(onDeck && misses==0?0:1);
     }

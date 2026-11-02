@@ -107,7 +107,7 @@ public static class SpikeScene
         }
 
         // 只移动角色：教堂门廊左前方，两固定机位共同可见；落点只查询地形碰撞体。
-        var pilgrimPos = new Vector3(2.7f, 0f, -66f);   // 相机前 16m，约 150px，与参考图人物占比一致
+        var pilgrimPos = new Vector3(8.5f, 0f, -66f);   // New route lowers the cut: stand on its snow shoulder, keeping the fixed capture cameras.
         Physics.SyncTransforms();
         float terrainY = 0f;
         if (terrainCollider.Raycast(
@@ -1765,12 +1765,12 @@ public static class SpikeScene
         AssetDatabase.DeleteAsset("Assets/Settings/M_Footprint.mat");
         AssetDatabase.CreateAsset(material, "Assets/Settings/M_Footprint.mat");
         // 从相机脚下一直铺到台阶：让视线沿脚印走上山（原来只有教堂前 20 个，前景是空的）
-        const int steps = 64;
+        const int steps = 176;
         for (int i = 0; i < steps; i++)
         {
             float t = i / (float)(steps - 1);
-            float z = Mathf.Lerp(-92f, -14f, t);
-            float pathX = 3f * Mathf.Sin(((z + 70f) / 56.75f) * 2f * Mathf.PI);
+            float z = Mathf.Lerp(-208f, -14f, t);
+            float pathX = ClimbRoute.CenterX(z);
             float x = (z > -18f ? 2.1f + 2f * (1f - t) * (1f - t) : pathX) + (i % 2 == 0 ? -.18f : .18f);
             var vertices = new Vector3[25];
             for (int v = 0; v < vertices.Length; v++)
@@ -1786,7 +1786,7 @@ public static class SpikeScene
             { triangles[v*3]=0; triangles[v*3+1]=1+(v+1)%24; triangles[v*3+2]=v+1; }
             SaveMountainMesh(root, "Footprint_"+i, vertices, triangles, new Material(material));
         }
-        Debug.Log("[SNOW] footprints=64 ellipse=.3x.5m darken=.08 curve_z=-92..-14 follows_path=true");
+        Debug.Log("[SNOW] footprints=176 ellipse=.3x.5m darken=.08 curve_z=-208..-14 follows_path=true");
     }
 
     static void BuildStonePath(MeshCollider terrainCollider, Material stone)

@@ -365,4 +365,7 @@
 | 21:12 | 修复后验收 | `[CLOSEUP] church_top_y=0.079469`（门槛 0.06–0.20）、`[REVEAL] gate=pass ratio=1.949423`、`-demo-reveal exit=0` | 三张 reveal 图重出，教堂不再切顶 |
 | 21:12 | **修 capture_runtime.sh 潜在 bug** | macOS 自带 bash 3.2 + `set -u` 展开空数组 `GFX_ARGS[@]` 报 unbound variable → 脚本立即退 1，截图链路整体失效 | 改为以 APP 开头的非空数组 `CMD` 再展开；`capture exit=0` 恢复 |
 | 21:12 | 回归 | walk / stairs / tower / cinema 四个 demo 全部 exit=0；capture exit=0 | 全绿 |
+| 23:10–23:35 | **路线加长（Codex）** | `[ROUTE] segments=3 total_len_m=210.455 climb_m=27.442 spawn=(-18,-205) pois=5 trench=5m×0.25m`、`[CLIMB] seg1/2/3 ground_err_max=0.000000 on_deck=true misses=0` | 山脚 Z01 → 林线 Z02 → 草甸 Z03 → 石阶；总爬升 27.4 m；新增 2 个野外 POI（回望点/界石） |
+| 23:37 | 回归 | `[REACH] tower_dist_end=1.075 reached=true blocks=0`、capture exit=0、magenta=0 | 路线改动未破坏既有交互 |
+| 23:37 | 文档 | `docs/07-gameplay-slice.md` 更新为 8 个 POI、室内、仰视过场、音频与未做边界 | 已推 `f0a71ee` |
 
