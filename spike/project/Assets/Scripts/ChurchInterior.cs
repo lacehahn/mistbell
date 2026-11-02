@@ -17,8 +17,10 @@ public sealed class ChurchInterior : MonoBehaviour
     public Material[] pewOutdoorMaterials;
     public Material pewWood, pewLegs;
     public int floorSlabs;
+    [NonSerialized] public Renderer pewBatch;
     void SetDetail(bool value)
     {
+        if(pewBatch!=null) pewBatch.sharedMaterials=value?new[]{pewWood,pewLegs}:new[]{pewOutdoorMaterials[0],pewOutdoorMaterials[0]};
         if(detailRoot!=null) detailRoot.SetActive(value);
         if(floor!=null) floor.GetComponent<Renderer>().enabled=!value;
         if(legacyChandelier!=null) legacyChandelier.enabled=!value;

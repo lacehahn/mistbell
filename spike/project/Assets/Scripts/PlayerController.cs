@@ -5,7 +5,7 @@ using System.IO;
 using UnityEngine;
 
 /// <summary>Playable slice. Capture flags always take precedence over demos and input.</summary>
-public sealed class PlayerController : MonoBehaviour
+public sealed partial class PlayerController : MonoBehaviour
 {
     public MeshCollider ground;
     public MeshCollider stairRamp;
@@ -134,6 +134,8 @@ public sealed class PlayerController : MonoBehaviour
         if(ClimbRoute.Length<200 || climb<24 || outdoorCount!=5 || outdoorSlots!=5)
         { Debug.LogError("[ROUTE] gate failed"); Application.Quit(1); return; }
         var args = Environment.GetCommandLineArgs();
+        if (Array.IndexOf(args, "-bench") >= 0)
+        { suppressCinema = true; interiorAuto = true; StartCoroutine(Benchmark(args)); return; }
         cinemaDemo = Array.IndexOf(args,"-demo-cinema")>=0;
         if(cinemaDemo) {
             var cinemaStart=new Vector3(0,0,-40);
