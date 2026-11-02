@@ -90,7 +90,7 @@ public static class SpikeScene
         var church = ImportChurch(churchStone, roofMat, terrainCollider);
         BuildChurchContact(church, terrainCollider);
         ValidateContact(church, terrainCollider);
-        BuildTerrace(church, terrainCollider, stone);
+        var stairRamp = BuildTerrace(church, terrainCollider, stone);
         BuildWarmDetails();
         var cameraPosition = EyeAt(5f, -82f);   // 走近到 ~74m：参考图里教堂占画面 55%+，96m 时只占 30%
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
@@ -144,6 +144,8 @@ public static class SpikeScene
         // Runtime-only playable slice; screenshot flags disable all three components in Awake.
         var player = pilgrim.AddComponent<PlayerController>();
         player.ground = terrainCollider;
+        player.stairRamp = stairRamp;
+        player.stairDeck = stairRamp.transform.parent.Find("TerraceLanding").GetComponent<Collider>();
         var panel = new GameObject("Church Info Canvas").AddComponent<InfoPanel>();
         var entrance = new GameObject("Church Entrance Interaction").AddComponent<Interactable>();
         entrance.transform.SetParent(church, true);
@@ -365,7 +367,7 @@ public static class SpikeScene
 
     // Terrace follows the existing 6-degree site grade: never deform the snow terrain.
     // Its front is the ninth tread's back edge, not the centre of the old path tile.
-    static void BuildTerrace(Transform church, MeshCollider terrain, Material sourceStone)
+    static MeshCollider BuildTerrace(Transform church, MeshCollider terrain, Material sourceStone)
     {
         const int steps = 9;
         const float rise = .18f, run = .34f, width = 5f, wallHeight = 1.62f;
@@ -475,6 +477,33 @@ public static class SpikeScene
             treads.Add(Prism("TerraceStep_"+i,-width/2,width/2,startZ+i*run,startZ+(i+1)*run,
                 Base,(x,z)=>top,stone,true));
         }
+        // Player-only upper envelope of the treads. The central incline has exactly
+        // atan((9 * .18) / (9 * .34)) grade; the approach joins the road at z=-16.
+        // One extra tread of lead-in keeps the sloped surface above every stone top.
+        float[] rampZ = { -16f, startZ - run, frontZ - run, frontZ };
+        float[] rampY = { Ground(0, -16f), footY, landingY, landingY };
+        var rampVertices = new Vector3[8];
+        var rampUV = new Vector2[8];
+        var rampTriangles = new int[18];
+        for (int i = 0; i < rampZ.Length; i++)
+        {
+            for (int side = 0; side < 2; side++)
+            {
+                int k = i * 2 + side;
+                rampVertices[k] = new Vector3((side - .5f) * width, rampY[i] + .005f, rampZ[i]);
+                rampUV[k] = new Vector2(side, i);
+            }
+            if (i == rampZ.Length - 1) continue;
+            int v = i * 2, t = i * 6;
+            rampTriangles[t] = v; rampTriangles[t+1] = v+2; rampTriangles[t+2] = v+1;
+            rampTriangles[t+3] = v+1; rampTriangles[t+4] = v+2; rampTriangles[t+5] = v+3;
+        }
+        var ramp = ContactMesh(root, "PlayerStairRamp", rampVertices, rampTriangles, rampUV, snow);
+        ramp.gameObject.layer = PlayerController.TraversalLayer;
+        ramp.GetComponent<Renderer>().enabled = false;
+        var rampCollider = ramp.gameObject.AddComponent<MeshCollider>();
+        rampCollider.sharedMesh = ramp.GetComponent<MeshFilter>().sharedMesh;
+        rampCollider.excludeLayers = ~(1 << PlayerController.PlayerLayer);
         // Stepped cheek walls are 0.9m above each tread and 0.5m wide.
         for(int side=-1;side<=1;side+=2) for(int i=0;i<steps;i++)
         {
@@ -552,6 +581,7 @@ public static class SpikeScene
         Debug.Log(FormattableStringInvariant($"[TERRACE_CHECK] grounded_vertices={checkedFeet} max_error_m={maxError:F6} landing_error_m={landingError:F6} deck_lift_m={deckLift:F4} front_z={frontZ:F2} back_z={backZ:F2} grade_deg={SlopeDeg:F1}"));
         if(segments<12||wallHeight<1.4f||wallHeight>1.8f||steps<8||steps>10||Mathf.Abs(width-5)>.1f||checkedFeet==0||errors!=0)
             throw new System.InvalidOperationException("Terrace hard gate failed");
+        return rampCollider;
     }
 
     static string FormattableStringInvariant(System.FormattableString text) =>
