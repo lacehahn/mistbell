@@ -12,6 +12,7 @@
 | `measure_shot.py` dark_ratio_lower | 0.0352 | ≤0.06 | ✅ 保持（黑雀斑已消，别再长回来） |
 | `measure_shot.py` ground_shadow_gap | 0.0723 | ≥0.05 | ✅ 保持（长影已成立） |
 | `region.py 300,900,900,1050`（近景雪地） | mean (198,200,196)、**Lstd 3.8**、p5 192.4 | Lstd ≥12 | ❌ 雪面是一张平白纸 |
+| `measure_shot.py hf_energy_lower`（下半画面粒度） | **0.0115** | ≥0.02 | ❌ 同上一行，是同一件事的另一种量法 |
 | `region.py 60,470,420,640`（左山） | sat 0.208、Lstd 40.8、p5/p50 0.564 | sat≥0.10 | ✅ 保持 |
 | `region.py 1450,400,1820,560`（右山） | **sat 0.054**、Lstd 19.1、p5/p50 0.594 | sat≥0.10、Lstd≥25 | ❌ 右山仍是中性白 |
 | `verify_scene.py [WARM]` 窗形（bbox h≥20 且 w≤20） | **1 个**（488 px，box 932,598–943,641） | ≥4 | ❌ |
@@ -33,7 +34,8 @@
 
 ## 硬约束
 - **截图只能走窗口路径**：`caffeinate -dimu -t 260 bash spike/tools/capture_runtime.sh`。**严禁**加 `-batchmode`、严禁写离屏 RT 回读（实测那条路径整体亮 10 luma、削顶 23%，会让 snow/sky 两项虚假达标）。
-- 开工前 `git status` 必须干净；改完**不要 commit**。
+- **开工检查**：先跑 `git status --short` + `git log --oneline -3`，把结果记在心里。如果出现的是 `SpikeScene.cs` / `RidgeFog.shader` 这类**你要改的文件已被别人改动**，立刻停下报告（那说明另一会话在写同一批文件）。如果只是 `spike/brief-*.md`、`spike/tools/*.py` 之类文档/工具，可以继续。
+- 改完**不要 commit**。
 - 只许改：雪材质/`make_textures.py`（新增 `snow.png`）、地形着色器或 `M_Ground` 设置、`RidgeFog.shader` 的第三层配色、`BuildWarmDetails()` 的窗、相机背景色与 `postExposure`。
 - **不许动**：`SpikeScene` 里 `BuildMountains()` 的网格尺寸（120×14 已定）、教堂 FBX/几何、角色、`ShotRig`/机位/FOV、`docs/`、`capture_runtime.sh`。
 - 已加仓库级并发锁：`spike/tools/codex.sh` 会用 `spike/.codexlock` 串行化；如果看到 `ABORT: another Codex holds the repo lock`，说明另一会话正在改同一工作区 —— 直接退出，不要强写。
