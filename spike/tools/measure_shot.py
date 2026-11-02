@@ -38,6 +38,7 @@ def main():
     step = 2
     mag = clip = warm = 0
     lower = snow = dark = mid = 0
+    hf = hf_n = 0
     left_sum = right_sum = 0
     left_n = right_n = 0
     for y in range(0, h, step):
@@ -60,6 +61,10 @@ def main():
                     dark += 1
                 if 0.30 < v < 0.70:
                     mid += 1
+            if y > h * 0.5 and x + step < w:
+                j = row + (x + step) * 3
+                hf += abs(r - buf[j]) + abs(g - buf[j + 1]) + abs(b - buf[j + 2])
+                hf_n += 3
             if y > h * 0.66:
                 lum = 0.299 * r + 0.587 * g + 0.114 * b
                 if x < w * 0.42:
@@ -73,6 +78,7 @@ def main():
         "white_clip_ratio": round(clip / max(n, 1), 4),
         "dark_ratio_lower": round(dark / max(lower, 1), 4),
         "mid_ratio_lower": round(mid / max(lower, 1), 4),
+        "hf_energy_lower": round(hf / max(hf_n, 1) / 255.0, 4),
         "warm_px": warm,
         "ground_shadow_gap": round(abs(left_sum / max(left_n, 1) - right_sum / max(right_n, 1)) / 255.0, 4),
         "size": f"{w}x{h}",
