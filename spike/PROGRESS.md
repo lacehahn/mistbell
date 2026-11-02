@@ -336,4 +336,9 @@
 | 15:03 | **用户真机试玩反馈**（第一次有人实际玩） | 用户口述 | ①手感是匀速滑行（确认我的判断）②45m 钟声＋Bloom"没有太突兀" → 保留 ③**BUG：无法登上 9 级台阶** → 派 step-up 0.28m + 隐形斜坡兜底 + 出生点 z −82→−88（开场钟声早响）＋加减速 12/18 m·s⁻² |
 | 15:20 | 碰撞修复通过 | `[COLLIDE] church_colliders=3 wall_colliders=28 clearance=0.310`；自测 `on_deck=true`（0.313 vs 0.286） | 上台阶 OK、穿模已挡、墙沿不可站 |
 | 15:20 | **用户第二轮试玩**：其余 OK，但**被挡住走不到钟楼** | 用户口述 | 派发：阻挡诊断 `[BLOCK] by=<collider>`、钟楼 MeshCollider→Capsule(r2.2 h13)、挡土墙外移、POI 锚点挪到塔前 2.4m；新增 `-demo-walk-to-tower`（10s 自动走向，要求 ≤2.6m 且提示出现） |
+| 15:39 | 打磨三项通过（我手写，未占 Codex） | 相机 SphereCast 防穿墙；风声随距离 ×0.45；显现改两段式（`churchEdge` 1.744→**2.353**）；回归 tower 1.075m/0 blocks、walk 17.734m | — |
+| 15:39 | **Codex 配额再次耗尽** | `codex.sh` exit=1 | `You've hit your usage limit ... try again at 5:46 PM` → 17:46 重置；按用户指示"没 token 时不写代码"，我转为排期 |
+| 15:39 | 用户四项任务写成任务书 | `spike/tasks/` | ①底座外扩 1.5m（石阶两侧 ≥1.2m）②远山宽度 ≥屏幕×1.25、抬高 35% ③跟随相机 (0,4.4,−10.5) 主角 130–175px ④到 z≤−15 触发 3.4s 仰视过场（教堂整栋入画）→ `church_exterior_finish.md` |
+| 15:39 | 教堂内部任务书写好 | `church_interior.md` | Blender 挖空（墙厚 0.6/净高 12m）、门可开合、6 个真实窗洞、柱4/椅6/祭坛/烛台4/吊灯/圣像屏/旗2（tris ≤95k）；Unity 侧门交互、室内碰撞、暖光+冷光柱、FOV 32、室内 POI p04–p06 |
+| 15:39 | 自动派发已武装 | `spike/tools/handoff_queue.sh 17:47 ...` | 17:47 探测配额→依次跑外观收尾→内部；每轮前等 Unity/codex 空闲；失败重试 8 次（每 5 分钟） |
 
