@@ -6,6 +6,10 @@ Shader "Mistbell/PixelBillboard"
     {
         [MainTexture] _MainTex ("Sprite", 2D) = "white" {}
         [MainColor] _Color ("Tint", Color) = (1,1,1,1)
+        _Cols ("Atlas Columns", Float) = 6
+        _Rows ("Atlas Rows", Float) = 4
+        _Frame ("Animation Frame", Float) = 0
+        _Row ("Direction Row (down/left/right/up)", Float) = 0
         _Cutoff ("Alpha Cutoff", Range(0,1)) = 0.5
         _PivotY ("Pivot Y (0=脚底, 0.5=中心)", Range(0,1)) = 0.0
         [HideInInspector] _BottomOrigin ("Bottom-origin mesh", Float) = 0
@@ -39,6 +43,10 @@ Shader "Mistbell/PixelBillboard"
                 float _ScaleY;
                 float _Cull;
                 float _BottomOrigin;
+                float _Cols;
+                float _Rows;
+                float _Frame;
+                float _Row;
             CBUFFER_END
 
             struct Attributes
@@ -67,6 +75,13 @@ Shader "Mistbell/PixelBillboard"
                     + float3(0,1,0) * ((quad.y-_PivotY)*_ScaleY);
             }
 
+            float2 AtlasUV(float2 uv)
+            {
+                float2 cells = max(float2(_Cols, _Rows), 1);
+                float2 cell = float2(clamp(floor(_Frame), 0, cells.x-1), cells.y-1-clamp(floor(_Row), 0, cells.y-1));
+                return (saturate(uv) + cell) / cells;
+            }
+
             Varyings Vert(Attributes input)
             {
                 Varyings output;
@@ -75,7 +90,7 @@ Shader "Mistbell/PixelBillboard"
                 float3 worldPos = BillboardPosition(input);
 
                 output.positionCS = TransformWorldToHClip(worldPos);
-                output.uv = TRANSFORM_TEX(input.uv, _MainTex);
+                output.uv = AtlasUV(input.uv);
                 return output;
             }
 
@@ -139,7 +154,7 @@ Shader "Mistbell/PixelBillboard"
                 #else
                     output.positionCS.z = max(output.positionCS.z, UNITY_NEAR_CLIP_VALUE * output.positionCS.w);
                 #endif
-                output.uv = TRANSFORM_TEX(input.uv, _MainTex);
+                output.uv = AtlasUV(input.uv);
                 return output;
             }
             ENDHLSL

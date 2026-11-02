@@ -101,6 +101,8 @@ public class Screenshotter : MonoBehaviour
                     var c = Camera.main;
                     Debug.Log(string.Format("[SHOT] pose[{0}] {1} pos=({2:F1},{3:F1},{4:F1}) fov={5:F1}",
                         i, p.name, c.transform.position.x, c.transform.position.y, c.transform.position.z, c.fieldOfView));
+                    var pilgrim = UnityEngine.Object.FindFirstObjectByType<PilgrimAnimator>();
+                    if (pilgrim != null) pilgrim.ReportMeasurements(rig);
                     var file = Path.Combine(shotsDir, p.name + ".png");
                     if (File.Exists(file)) File.Delete(file);
                     ScreenCapture.CaptureScreenshot(file);

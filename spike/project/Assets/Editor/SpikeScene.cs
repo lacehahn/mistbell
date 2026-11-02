@@ -71,7 +71,8 @@ public static class SpikeScene
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
 
         // ---------- 像素角色（Billboard）----------
-        var sprite = ImportSprite("Assets/Art/Character/pilgrim.png");
+        SlicePilgrim.Run();
+        var pilgrimAtlas = AssetDatabase.LoadAssetAtPath<Texture2D>(SlicePilgrim.AtlasPath);
         var bbShader = Shader.Find("Mistbell/PixelBillboard");
         if (bbShader == null)
         {
@@ -79,8 +80,8 @@ public static class SpikeScene
             return;
         }
 
-        // 角色在相机视轴前方 20 m 的地面上；落点只查询地形碰撞体。
-        var pilgrimPos = cameraPosition + cameraRotation * Vector3.forward * 20f;
+        // 只移动角色：教堂门廊左前方，两固定机位共同可见；落点只查询地形碰撞体。
+        var pilgrimPos = new Vector3(-6f, 0f, -9.5f);
         Physics.SyncTransforms();
         float terrainY = 0f;
         if (terrainCollider.Raycast(
@@ -93,13 +94,15 @@ public static class SpikeScene
         Debug.Log($"[SPIKE] pilgrim y={pilgrimPos.y:F4} terrain y={terrainY:F4}");
 
         var bbMat = new Material(bbShader) { name = "M_Pilgrim" };
-        bbMat.SetTexture("_MainTex", sprite != null ? sprite.texture : null);
-        bbMat.SetFloat("_ScaleX", 1.0f);
-        bbMat.SetFloat("_ScaleY", 1.75f);
+        bbMat.SetTexture("_MainTex", pilgrimAtlas);
+        bbMat.SetFloat("_ScaleX", 1.45f * 64f / 80f);
+        bbMat.SetFloat("_ScaleY", 1.45f);
         bbMat.SetFloat("_PivotY", 0f);
         bbMat.SetFloat("_Cutoff", 0.5f);
-        bbMat.mainTextureScale = new Vector2(1f / 3f, 1f / 4f);      // 图集 3 列 × 4 行
-        bbMat.mainTextureOffset = new Vector2(0f, 0.75f);            // 顶行 = down
+        bbMat.SetFloat("_Cols", 6f);
+        bbMat.SetFloat("_Rows", 4f);
+        bbMat.SetFloat("_Frame", 0f);
+        bbMat.SetFloat("_Row", 3f);
         AssetDatabase.DeleteAsset("Assets/Settings/M_Pilgrim.mat");
         AssetDatabase.CreateAsset(bbMat, "Assets/Settings/M_Pilgrim.mat");
 
@@ -109,6 +112,7 @@ public static class SpikeScene
         pilgrim.transform.position = pilgrimPos;
         pilgrim.GetComponent<MeshRenderer>().sharedMaterial = bbMat;
         pilgrim.GetComponent<MeshRenderer>().shadowCastingMode = ShadowCastingMode.On;
+        pilgrim.AddComponent<PilgrimAnimator>();
 
         // ---------- 光与雾（曝光整体提亮：HD-2D 要能看清像素细节）----------
         var sun = new GameObject("Sun").AddComponent<Light>();
