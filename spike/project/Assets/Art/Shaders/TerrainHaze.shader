@@ -4,6 +4,9 @@ Shader "Mistbell/TerrainHaze"
     {
         [MainTexture] _BaseMap ("Grass", 2D) = "white" {}
         [MainColor] _BaseColor ("Tint", Color) = (1,1,1,1)
+        _SnowMedium ("Snow 256px middle", 2D) = "gray" {}
+        _SnowLow ("Snow 1024px low", 2D) = "gray" {}
+        _StoneSurface ("Stone surface", Float) = 0
         _RockOnly ("World projected rock texture", Float) = 0
         _SnowAlbedo ("Snow linear albedo", Range(0,1)) = 0.86
         _SnowShadowColor ("Snow shadow tint", Color) = (0.472,0.584,0.716,1)
@@ -40,10 +43,12 @@ Shader "Mistbell/TerrainHaze"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_SnowMedium); SAMPLER(sampler_SnowMedium);
+            TEXTURE2D(_SnowLow); SAMPLER(sampler_SnowLow);
             TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap);
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor;
-                float _SnowAlbedo, _RockSnowCap, _Footprint, _RockOnly;
+                float _StoneSurface, _SnowAlbedo, _RockSnowCap, _Footprint, _RockOnly;
                 float _NormalScale, _Metallic, _Smoothness;
                 float _HazeStart, _HazeEnd, _HazePower, _HazeStrength;
             CBUFFER_END
@@ -77,6 +82,33 @@ Shader "Mistbell/TerrainHaze"
                 output.vertexLighting = VertexLighting(output.positionWS, normals.normalWS);
                 return output;
             }
+            float HashChunk(float2 p) { return frac(sin(dot(p,float2(127.1,311.7)))*43758.5453); }
+            float2 ChunkUV(float2 p, float2 cell, float seed)
+            {
+                float angle = HashChunk(cell+seed)*1.570796327;
+                float sn,cs; sincos(angle,sn,cs);
+                float2 q=p-cell;
+                return float2(cs*q.x-sn*q.y,sn*q.x+cs*q.y)
+                    + float2(HashChunk(cell+seed+19),HashChunk(cell+seed+73))*13;
+            }
+            // Four overlapping independently rotated chunks, continuous across every boundary.
+            half3 SnowLayer(float2 p, int layer)
+            {
+                float2 cell=floor(p), f=smoothstep(0,1,frac(p));
+                half3 result=0;
+                [unroll] for(int y=0;y<2;y++) [unroll] for(int x=0;x<2;x++)
+                {
+                    float2 c=cell+float2(x,y);
+                    float2 uv=ChunkUV(p,c,layer*29.7);
+                    float w=(x?f.x:1-f.x)*(y?f.y:1-f.y);
+                    half3 v;
+                    if(layer==0) v=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb;
+                    else if(layer==1) v=SAMPLE_TEXTURE2D(_SnowMedium,sampler_SnowMedium,uv).rgb;
+                    else v=SAMPLE_TEXTURE2D(_SnowLow,sampler_SnowLow,uv).rgb;
+                    result+=v*w;
+                }
+                return result;
+            }
             half4 Frag(Varyings input) : SV_Target
             {
                 half3 normalWS = NormalizeNormalPerPixel(input.normalWS);
@@ -101,10 +133,9 @@ Shader "Mistbell/TerrainHaze"
                 float3 weights = abs(input.normalWS);
                 weights = pow(weights, 8); weights /= max(dot(weights, 1.0), .0001);
                 float3 p = input.positionWS * _BaseMap_ST.x;
-                // Fixed world wind basis; elongated ground texels compensate foreshortening.
-                float2 snowUV = float2(dot(input.positionWS.xz,float2(.963,.270)),
-                    dot(input.positionWS.xz,float2(-.270,.963))) * _BaseMap_ST.xy;
-                half3 texel = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,snowUV).rgb;
+                half3 texel = SnowLayer(input.positionWS.xz / 3.2,0);
+                half middle = SnowLayer(input.positionWS.xz / 12.8,1).r;
+                half lowField = SnowLayer(input.positionWS.xz / 51.2,2).r;
                 if (_RockOnly > .5)
                     texel = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,p.zy).rgb*weights.x
                           + SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,p.xz).rgb*weights.y
@@ -118,6 +149,15 @@ Shader "Mistbell/TerrainHaze"
                 half3 snowAlbedo = _SnowAlbedo * _BaseColor.rgb / max(_BaseColor.b, .001);
                 surface.albedo = lerp(texel * _BaseColor.rgb,
                     snowAlbedo * texel / half3(.651, .744, .842), snowCoverage);
+                // Middle field modulates detail subtly; low field is bounded to +/-6%.
+                surface.albedo *= lerp(1, (1+(middle-.5)*.12)*(1+(lowField*2-1)*.06), snowCoverage);
+                if(_StoneSurface>.5)
+                {
+                    half3 stone=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,input.uv).rgb;
+                    half baseSnow=(1-smoothstep(0,.8,input.positionWS.y))*step(1.5,_StoneSurface);
+                    surface.albedo=lerp(stone*_BaseColor.rgb,half3(.80,.84,.88),baseSnow);
+                    snowCoverage=0;
+                }
                 surface.emission = 0;
                 surface.metallic = _Metallic;
                 surface.smoothness = _Smoothness;

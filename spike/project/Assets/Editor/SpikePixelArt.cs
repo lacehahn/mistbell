@@ -29,7 +29,9 @@ public static class SpikePixelArt
         var importer = (TextureImporter)AssetImporter.GetAtPath(path);
         // Clear any platform override so the explicit no-compression contract holds in both builds.
         importer.ClearPlatformTextureSettings("Standalone");
+        importer.maxTextureSize = Mathf.Max(512,size);
         importer.SaveAndReimport();
+        result = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         if (result.width != size || result.height != size || importer.filterMode != FilterMode.Point
             || !importer.mipmapEnabled || importer.anisoLevel != 0
             || importer.textureCompression != TextureImporterCompression.Uncompressed)
@@ -46,22 +48,38 @@ public static class SpikePixelArt
         {
             int index = (int)(Hash(x/4,y/4,9021)%5);
             // Sparse, broken diagonal wind strokes, never a continuous sinusoidal stripe.
-            if (Hash(x/12,y/12,401)%11==0 && (x-y+64)%16<2) index = Mathf.Max(0,index-1);
+
             pixels[y*64+x] = snow[index];
         }
         Save("Snow_Pixel",64,pixels);
-        Color32[] stone = { Hex("#AC8D66"), Hex("#C9A87C"), Hex("#E0BF94") };
+        // Independent non-directional fields: 64 detail, 256 middle, 1024 low frequency.
+        foreach (int size in new[] {256,1024})
+        {
+            pixels = new Color32[size*size];
+            float cell = size == 256 ? 16f : 128f;
+            for(int y=0;y<size;y++) for(int x=0;x<size;x++)
+            {
+                float v = Mathf.PerlinNoise(x/cell+17.31f,y/cell+81.73f);
+                byte c = (byte)Mathf.RoundToInt(v*255);
+                pixels[y*size+x] = new Color32(c,c,c,255);
+            }
+            Save(size==256 ? "Snow_Medium" : "Snow_Low",size,pixels);
+        }
         pixels = new Color32[128*128];
+        Color baseStone = Hex("#B9A78E"), weather = Hex("#9C8B74");
+        int weatherCount=0;
         for (int y=0;y<128;y++) for (int x=0;x<128;x++)
         {
             int row=y/10, sx=x+(row%2)*8, block=sx/16;
-            uint h=Hash(block,row,3157);
-            var c=stone[h%3];
-            if (sx%16==0 || y%10==0) c=Hex("#6B5A47");
-            else if (h%10==0 && Hash(x/2,y/2,555)%7<2) c=stone[0];
+            float shade = .94f + (Hash(block,row,3157)%1001)/1000f*.12f;
+            if(sx%16==0 || y%10==0) shade=.92f;
+            Color c=baseStone*shade; c.a=1;
+            // Exactly ~15% of texels, in irregular small patches.
+            if(Hash(x/3,y/3,555)%1000<150) { c=weather; weatherCount++; }
             pixels[y*128+x]=c;
         }
         Save("Stone_Pixel",128,pixels);
+        Debug.Log($"[SURFACE] stone=#B9A78E blocks=+-6% mortar=-8% weather={weatherCount/16384f:F3} snowBase=0.8m");
         Color32[] rock = { Hex("#514A42"), Hex("#6B6157"), Hex("#8D8172") };
         pixels = new Color32[64*64];
         for (int y=0;y<64;y++) for (int x=0;x<64;x++)

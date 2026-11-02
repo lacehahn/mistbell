@@ -29,7 +29,7 @@ public static class SpikeScene
         // ---------- 材质（程序化像素贴图 + 法线图；UV 以米计，tiling 按每张贴图覆盖的米数反推）----------
         const string TEX = "Assets/Art/Textures/";
         SpikePixelArt.Generate();
-        var stone = ChurchMaterial("stone", "#C9A87C");
+        var stone = ChurchMaterial("stone", "#B9A78E");
         stone.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(TEX + "Stone_Pixel.png"));
         stone.SetTexture("_BumpMap", null);
         stone.DisableKeyword("_NORMALMAP");
@@ -40,8 +40,12 @@ public static class SpikeScene
         var stoneTiling = stone.GetTextureScale("_BaseMap");
         Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
             "[SPIKE] stone tiling=({0:F8}, {1:F8})", (double)stoneTiling.x, (double)stoneTiling.y));
-        // 固定石材乘色：恢复暖色受光面；不动曝光、灯位和教堂网格。
-        stone.SetColor("_BaseColor", new Color(1.12f, 1.02f, .88f, 1f));
+        // 石材沿用主光/PBR；中性乘色校准截图受光面，积雪在 shader 世界高度中混合。
+        stone.shader = Shader.Find("Mistbell/TerrainHaze");
+        stone.SetColor("_BaseColor", new Color(.75f,.75f,.75f,1));
+        stone.SetFloat("_StoneSurface",1);
+        stone.SetFloat("_HazeStrength",0);
+        stone.SetFloat("_Smoothness",.02f);
         var roofMat = ChurchMaterial("roof", "#A06B4A");
         // 屋顶：贴图本身已是深石板冷灰（meanRGB 75,81,89）；_BaseColor 是乘性归一系数，
         // 必须写死在代码里——Assets/Settings/M_Roof.mat 被 .gitignore 忽略，写进 .mat 等于不可复现。
@@ -65,7 +69,12 @@ public static class SpikeScene
         BuildProps(terrainCollider, stone, wood);
 
         // ---------- Blender FBX：保留导出时的米制比例与原点 ----------
-        var church = ImportChurch(stone, roofMat);
+        // Wall accumulation belongs only to the church; the existing path keeps exposed stone.
+        var churchStone = new Material(stone) { name = "M_ChurchStone" };
+        churchStone.SetFloat("_StoneSurface",2);
+        AssetDatabase.DeleteAsset("Assets/Settings/M_ChurchStone.mat");
+        AssetDatabase.CreateAsset(churchStone,"Assets/Settings/M_ChurchStone.mat");
+        var church = ImportChurch(churchStone, roofMat);
         BuildWarmDetails();
         var cameraPosition = EyeAt(28f, -100f);
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
@@ -232,8 +241,10 @@ public static class SpikeScene
         else material.DisableKeyword("_NORMALMAP");
         material.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/Snow_Pixel.png"));
         // Grazing-angle compensation: .075m across / .375m along the slope.
-        // Four-texel blocks project to about 4–6px across the sharp snow band.
+        // Three independent world-space scales are sampled by TerrainHaze; terrain UVs stay untouched.
         material.SetTextureScale("_BaseMap", new Vector2(1f / 1.2f, 1f / 6f));
+        material.SetTexture("_SnowMedium",AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/" + "Snow_Medium.png"));
+        material.SetTexture("_SnowLow",AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/" + "Snow_Low.png"));
         material.SetFloat("_SnowAlbedo", .88f);
         material.SetColor("_SnowShadowColor", Hex("#A9C0D8"));
         material.SetColor("_HazeColor", Hex("#DCE2E6"));
