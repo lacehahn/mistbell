@@ -548,10 +548,24 @@ public static class SpikeScene
     static void BuildMountains()
     {
         var root = new GameObject("Mountain Ridges").transform;
-        // Closed 3D ridges: front flank, broken crest, rear flank and end caps.
+        uint fingerprint = 2166136261u;
+        // Fixed integer hash: mesh generation never consumes Unity's shared random state.
+        float Hash(uint value)
+        {
+            unchecked
+            {
+                value ^= value >> 16; value *= 0x7feb352du;
+                value ^= value >> 15; value *= 0x846ca68bu;
+                value ^= value >> 16;
+            }
+            return (value & 0x00ffffffu) / 16777216f;
+        }
+        float Rig(float phase) => 1f - Mathf.Abs(2f * Mathf.Repeat(phase, 1f) - 1f);
+        // Closed 3D ridges: asymmetric terraced flanks, angular crest and end caps.
         for (int layer = 0; layer < 3; layer++)
         {
-            const int n = 120, rows = 14;
+            const int n = 240, rows = 40;
+            const float terrace = 14f;
             float distance = 345f + layer * 190f;
             var peakHeights = new float[n];
             var vertices = new Vector3[n * rows];
@@ -560,14 +574,39 @@ public static class SpikeScene
             for (int i = 0; i < n; i++)
             {
                 float x = -700f + i * 1400f / (n - 1);
-                float peak = 130f + layer * 60f + 35f * Mathf.Sin(x * .011f + layer * 2)
-                    + 20f * Mathf.Sin(x * .027f + layer) + 10f * Mathf.Cos(x * .069f)
-                    + 4f * Mathf.Sin(x * .151f + layer);
+                float peak = 82f + layer * 60f;
+                for (int octave = 0; octave < 4; octave++)
+                {
+                    float frequency = .006f / (1 << octave);
+                    float amplitude = octave == 0 ? 72f : octave == 1 ? 48f : octave == 2 ? 10f : 4f;
+                    float phaseOffset = Hash((uint)(731 + layer * 17));
+                    // Lock octave 1 to alternating primary peaks: >25m height contrast,
+                    // even after the two smaller, independently phased octaves are added.
+                    if (octave == 1) phaseOffset = phaseOffset * .5f + .25f;
+                    else if (octave > 1) phaseOffset = Hash((uint)(731 + layer * 17 + octave));
+                    peak += amplitude * Rig(x * frequency + phaseOffset);
+                }
                 peakHeights[i] = peak;
                 float t = r / (float)(rows - 1);
-                float h = -10f + (peak + 10f) * Mathf.Pow(1f - Mathf.Abs(t * 2f - 1f), .85f);
-                float z = distance + (t - .5f) * 170f + 9f * Mathf.Sin(x * .043f) * Mathf.Sin(t * Mathf.PI);
+                // Crest lies on row 26: broad front shelves, steep rear wall, no rounded cap.
+                const float crest = 26f / (rows - 1);
+                float flank = t <= crest ? t / crest : (1f - t) / (1f - crest);
+                float h = -10f + (peak + 10f) * Mathf.Pow(flank, .55f);
+                float phase = Mathf.Repeat((h + 10f) / terrace, 1f);
+                float ramp = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.34f, .66f, phase));
+                float terraced = Mathf.Floor((h + 10f) / terrace) * terrace + ramp * terrace - 10f;
+                h = .55f * terraced + .45f * h;
+                float gully = 2f * (.7f * Rig(x * .035f + Hash((uint)(951 + layer)))
+                    + .3f * Rig(x * .075f + Hash((uint)(1121 + layer)))) - 1f;
+                float envelope = Mathf.Sin(t * Mathf.PI);
+                h += 6f * gully * envelope * (1f - flank);
+                float z = distance + (t - .5f) * 170f + 18f * gully * envelope;
                 vertices[r * n + i] = new Vector3(x, h, z);
+                unchecked
+                {
+                    fingerprint = (fingerprint ^ (uint)Mathf.RoundToInt(h * 1000f)) * 16777619u;
+                    fingerprint = (fingerprint ^ (uint)Mathf.RoundToInt(z * 1000f)) * 16777619u;
+                }
                 if (r < rows - 1 && i < n - 1)
                 {
                     int v = r * n + i;
@@ -592,19 +631,24 @@ public static class SpikeScene
             mat.SetTexture("_SnowMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/Snow_Pixel.png"));
             mat.SetTexture("_RockMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/Rock_Pixel.png"));
             mat.SetColor("_RockShade", Hex("#5B6470"));
-            mat.SetColor("_SnowColor", Hex("#EAF1F7"));
+            // Ridge snow uses broad skylight; gain is local to this material, never scene exposure.
+            mat.SetColor("_SnowColor", Hex("#EAF1F7") * 1.27f);
             mat.SetColor("_SnowShade", Hex("#B9C8D4"));
             mat.SetColor("_AirColor", Hex("#7B97B4"));
             // Local height fraction follows each irregular crest, measured from the -10m foot.
-            mat.SetFloat("_SnowHeight", .72f);
-            mat.SetFloat("_SnowSoftness", .025f);
+            mat.SetFloat("_SnowHeight", .62f);
+            mat.SetFloat("_SnowWorldFloor", 125f + layer * 55f);
+            mat.SetFloat("_SnowSoftness", .004f);
             mat.SetFloat("_FogFloor", 0f);
             mat.SetFloat("_Aerial", new[] { .25f, .50f, .78f }[layer]);
             var ridge = SaveMountainMesh(root, "Mountain_" + (layer+1), flat, tris, mat);
             var ridgeMesh = ridge.GetComponent<MeshFilter>().sharedMesh;
             var normals = ridgeMesh.normals;
             for (int i = 0; i < normals.Length; i++)
-                normals[i] = Vector3.Slerp(normals[i], smoothNormals[indices[i]], .88f).normalized;
+            {
+                float blend = normals[i].y < .30f ? .92f : .88f;
+                normals[i] = Vector3.Slerp(normals[i], smoothNormals[indices[i]], blend).normalized;
+            }
             ridgeMesh.normals = normals;
             var heights = new Vector2[flat.Length];
             for (int i = 0; i < flat.Length; i++)
@@ -615,7 +659,7 @@ public static class SpikeScene
             ridge.GetComponent<MeshFilter>().sharedMesh.uv = heights;
             EditorUtility.SetDirty(ridge.GetComponent<MeshFilter>().sharedMesh);
         }
-        Debug.Log("[SCENE] mountains=3 grid=120x14 snowline=.72 aerial=.25/.50/.78 rock=#A8A29A/#5B6470 snow=#EAF1F7/#B9C8D4");
+        Debug.Log($"[MOUNTAINS] cols=240 rows=40 terrace=14m seed=731 octaves=4 crestRow=26 gullyZ=18m gullyH=6m snowline=.62 aerial=.25/.50/.78 meshHash={fingerprint:X8}");
     }
 
     static Transform SaveMountainMesh(Transform parent, string name, Vector3[] vertices,

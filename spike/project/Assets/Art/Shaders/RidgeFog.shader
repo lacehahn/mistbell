@@ -7,8 +7,9 @@ Shader "Mistbell/RidgeFog"
         _GradLow ("Gradient bottom world Y", Float) = -300
         _GradHigh ("Gradient top world Y", Float) = 100
         _GradPow ("Crest concentration", Float) = 1.65
-        _SnowHeight ("Snow world Y", Float) = 250
-        _SnowSoftness ("Snow transition metres", Float) = 55
+        _SnowHeight ("Snow local height fraction", Float) = 250
+        _SnowSoftness ("Snow transition half width", Float) = 55
+        _SnowWorldFloor ("Minimum snow altitude", Float) = 125
         _SnowColor ("Snow", Color) = (0.835,0.882,0.914,1)
         _SnowMap ("Pixel snow", 2D) = "white" {}
         _RockMap ("Pixel rock", 2D) = "white" {}
@@ -53,7 +54,7 @@ Shader "Mistbell/RidgeFog"
                 float _Aerial;
                 float _CloudBand;
                 float _GradLow, _GradHigh, _GradPow;
-                float _SnowHeight, _SnowSoftness, _FogFloor;
+                float _SnowHeight, _SnowSoftness, _SnowWorldFloor, _FogFloor;
             CBUFFER_END
             struct Attributes { float4 positionOS : POSITION; float2 slopeCrest : TEXCOORD0; float3 normalOS : NORMAL; };
             struct Varyings
@@ -90,15 +91,38 @@ Shader "Mistbell/RidgeFog"
                 // Existing .78 aerial identifies the third ridge; keep the other two unchanged.
                 float farRidge = step(.7, _Aerial);
                 float snowHeight = lerp(_SnowHeight, .88, farRidge);
-                float snowWidth = lerp(_SnowSoftness, .003, farRidge);
-                float snow=smoothstep(snowHeight-snowWidth, snowHeight+snowWidth, input.ridge.x+breakup);
-                half3 rock=lerp(_RockShade.rgb,_ColorBottom.rgb,lightFace);
-                rock = lerp(rock, lerp(half3(.156,.195,.246),half3(.34,.40,.48),lightFace),farRidge);
-                half3 ice=lerp(_SnowShade.rgb,_SnowColor.rgb,lightFace);
-                float2 pixelUV = input.positionWS.xy / 16.0;
+                float snowWidth = min(lerp(_SnowSoftness, .003, farRidge), .004);
+                float heightGate=smoothstep(snowHeight-snowWidth, snowHeight+snowWidth, input.ridge.x+breakup);
+                // Low saddles share a climatic snow floor; local crest UV still controls higher peaks.
+                float altitudeGate=smoothstep(_SnowWorldFloor-.4,_SnowWorldFloor+.4,
+                    input.positionWS.y+breakup*8);
+                heightGate=min(heightGate,altitudeGate);
+                float slopeGate=smoothstep(.30,.62,n.y);
+                float snow=heightGate*slopeGate;
+                // A narrow exposed strip immediately below the snowline reads as cornice shadow.
+                float edgeLocal=step(snowHeight-.022,input.ridge.x+breakup)*altitudeGate;
+                float edgeAltitude=step(_SnowWorldFloor-2,input.positionWS.y)*step(_SnowWorldFloor,input.positionWS.y+2);
+                float underEdge=(1-heightGate)*max(edgeLocal,edgeAltitude)*slopeGate;
+                // Bedding carries the large-scale albedo; directional light only modulates it.
+                float rockFace=.2+.4*lightFace;
+                half3 rock=lerp(_RockShade.rgb,_ColorBottom.rgb,rockFace);
+                rock = lerp(rock, lerp(half3(.156,.195,.246),half3(.34,.40,.48),rockFace),farRidge);
+                // Snow receives broad sky light on shelves; rock retains directional cliff shadows.
+                float snowLight=.72+.28*smoothstep(.1,.65,face);
+                half3 ice=lerp(_SnowShade.rgb,_SnowColor.rgb,snowLight);
+                // Quantize the strata phase to a screen pixel footprint; three hard albedo levels.
+                float strataPhase=input.positionWS.y*.9+sin(input.positionWS.x*.018)*.7;
+                float phasePixel=max(fwidth(strataPhase),.001);
+                strataPhase=floor(strataPhase/phasePixel)*phasePixel;
+                // Three beds, each 28 phase units (~31.1m), survive distance and the macro filter.
+                float stratum=floor(frac(strataPhase/84.0)*3);
+                rock *= (stratum < 1 ? .18 : (stratum < 2 ? .52 : 1.0));
+                rock *= lerp(1,.38,farRidge);
+                rock *= lerp(1,.78,underEdge);
+                float2 pixelUV = input.positionWS.xy / 6.0;
                 half3 snowTex = SAMPLE_TEXTURE2D(_SnowMap,sampler_SnowMap,pixelUV).rgb;
                 // The snow-flecked top rows belong to rock caps, not vertical mountain faces.
-                float2 rockUV=float2(pixelUV.x,frac(pixelUV.y)*.80);
+                float2 rockUV=float2(input.positionWS.x/8.0,frac(input.positionWS.y/8.0*.35)*.80);
                 half3 rockTex = SAMPLE_TEXTURE2D(_RockMap,sampler_RockMap,rockUV).rgb;
                 #if defined(UNITY_COLORSPACE_GAMMA)
                     snowTex=SRGBToLinear(snowTex); rockTex=SRGBToLinear(rockTex);
