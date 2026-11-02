@@ -121,7 +121,7 @@ public static class ChurchInteriorBuilder
         fill.type=LightType.Point; fill.range=16; fill.intensity=.85f;
         fill.color=new Color32(255,217,168,255); fill.shadows=LightShadows.None;
         fill.renderMode=LightRenderMode.ForcePixel; fill.enabled=false; lamps.Add(fill);
-        interior.lamps=lamps.ToArray();
+
         // Terrain/terrace triangles under the indoor volume cannot protrude through its flat floor.
         // The exterior vertices, heights and materials stay exactly as generated.
         CutBelowFloor(terrain.GetComponent<MeshFilter>());
@@ -141,11 +141,13 @@ public static class ChurchInteriorBuilder
             if(r.name=="Interior_Chandelier")
             {
                 var anchor=new Vector3(r.bounds.center.x,interior.FloorY,r.bounds.center.z);
+                interior.outdoorChandelierPosition=new Vector3(r.bounds.center.x,interior.FloorY+(r.bounds.center.y-interior.FloorY)*.42f-.2f,r.bounds.center.z);
                 ScaleWorld(r.transform,anchor,new Vector3(1,.42f,1));
+                r.transform.position+=Vector3.up*(7.2f-r.bounds.center.y);
             }
             if(r.name=="Interior_Iconostasis" || r.name.StartsWith("Interior_IconFrame_"))
             {
-                ScaleWorld(r.transform,new Vector3(-2,interior.FloorY,7.5f),new Vector3(.5f,1,1));
+                ScaleWorld(r.transform,new Vector3(-2,interior.FloorY,7.5f),new Vector3(1,.55f,1));
             }
             if(r.name.StartsWith("Interior_Pew_") || r.name=="Interior_Altar" || r.name=="Interior_Iconostasis")
                 if(r.bounds.min.y<interior.FloorY) r.transform.position+=Vector3.up*(interior.FloorY-r.bounds.min.y);
@@ -153,6 +155,35 @@ public static class ChurchInteriorBuilder
         var chandelier=lamps.Find(l=>l.name.Contains("Chandelier"));
         var ring=System.Array.Find(church.GetComponentsInChildren<MeshRenderer>(),r=>r.name=="Interior_Chandelier");
         chandelier.transform.position=ring.bounds.center+Vector3.down*.2f;
+        interior.chandelierLamp=chandelier; interior.indoorChandelierPosition=chandelier.transform.position;
+        var wax=Lit("M_InteriorWax",new Color(.88f,.74f,.46f));
+        for(int i=0;i<8;i++)
+        {
+            float angle=i*Mathf.PI/4;
+            var candle=GameObject.CreatePrimitive(PrimitiveType.Cylinder); candle.name="Interior_ChandelierCandle_"+i;
+            Object.DestroyImmediate(candle.GetComponent<Collider>()); candle.transform.SetParent(church,true);
+            candle.transform.position=ring.bounds.center+new Vector3(Mathf.Cos(angle)*1.2f,.15f,Mathf.Sin(angle)*1.2f);
+            candle.transform.localScale=new Vector3(.12f,.15f,.12f); candle.GetComponent<Renderer>().sharedMaterial=wax;
+            var glow=GameObject.CreatePrimitive(PrimitiveType.Sphere); glow.name=candle.name+"_Flame";
+            Object.DestroyImmediate(glow.GetComponent<Collider>()); glow.transform.SetParent(church,true);
+            glow.transform.position=candle.transform.position+Vector3.up*.19f; glow.transform.localScale=new Vector3(.045f,.10f,.045f);
+            glow.GetComponent<Renderer>().sharedMaterial=flame;
+            var lamp=new GameObject(candle.name+"_Light").AddComponent<Light>(); lamp.transform.SetParent(church,true); lamp.transform.position=glow.transform.position;
+            lamp.type=LightType.Point; lamp.color=new Color(1,.62f,.25f); lamp.intensity=.35f; lamp.range=1.2f; lamp.shadows=LightShadows.None; lamps.Add(lamp);
+        }
+        interior.lamps=lamps.ToArray();
+        var frameMat=Lit("M_InteriorArchFrame",new Color(.09f,.045f,.018f),new Color(.035f,.018f,.008f));
+        var iconMat=Lit("M_InteriorIconCore",new Color(.58f,.28f,.075f),new Color(.65f,.30f,.075f));
+        var doorMat=Lit("M_InteriorHolyDoor",new Color(.72f,.42f,.14f),new Color(.95f,.53f,.16f));
+        foreach(var r in church.GetComponentsInChildren<MeshRenderer>())
+            if(r.name.StartsWith("Interior_IconFrame_")) r.enabled=false;
+        var screen=System.Array.Find(church.GetComponentsInChildren<MeshRenderer>(),r=>r.name=="Interior_Iconostasis");
+        for(int i=0;i<3;i++)
+        {
+            var center=new Vector3(screen.bounds.center.x+(i-1)*1.02f,screen.bounds.center.y,screen.bounds.min.z-.025f);
+            Arch(church,"Interior_ArchFrame_"+i,center,.9f,1.6f,frameMat);
+            Arch(church,"Interior_ArchCore_"+i,center+Vector3.back*.015f,.74f,1.42f,i==1?doorMat:iconMat);
+        }
         Physics.SyncTransforms();
         // Short stone threshold joins the graded courtyard to the flat local-zero floor.
         float fy=interior.FloorY;
@@ -165,35 +196,41 @@ public static class ChurchInteriorBuilder
         threshold.AddComponent<MeshFilter>().sharedMesh=mesh; threshold.AddComponent<MeshRenderer>().sharedMaterial=thresholdStone;
         var ramp=threshold.AddComponent<MeshCollider>(); ramp.sharedMesh=mesh; threshold.layer=PlayerController.TraversalLayer;
         interior.threshold=ramp;
-        // Cone sections use an existing transparent shader, lit cool against candle warmth.
-        var shaftMat=new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name="M_InteriorShaft" };
-        shaftMat.SetFloat("_Surface",1); shaftMat.SetFloat("_Blend",0); shaftMat.SetFloat("_ZWrite",0);
-        shaftMat.SetFloat("_SrcBlend",(float)BlendMode.SrcAlpha); shaftMat.SetFloat("_DstBlend",(float)BlendMode.OneMinusSrcAlpha);
-        shaftMat.SetFloat("_Cull",0); shaftMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); shaftMat.renderQueue=3000;
-        shaftMat.SetColor("_BaseColor",new Color(.45f,.64f,.9f,.22f));
+        // Camera-facing volumes carry a radial cross-section; additive blending never darkens stone.
+        var shaftMat=new Material(Shader.Find("Mistbell/InteriorShaft")) { name="M_InteriorShaft" };
+        shaftMat.SetColor("_BaseColor",new Color(.45f,.64f,.9f,.08f));
+        shaftMat.SetFloat("_DstBlend",(float)BlendMode.One);
         AssetDatabase.DeleteAsset("Assets/Settings/M_InteriorShaft.mat"); AssetDatabase.CreateAsset(shaftMat,"Assets/Settings/M_InteriorShaft.mat");
         var shafts=new List<Renderer>();
-        for(int i=0;i<4;i++)
+        var rng=new System.Random(2170);
+        for(int i=0;i<3;i++)
         {
-            float x=i%2==0?-5.55f:1.55f, z=i<2?-5.5f:5.6f;
-            Vector3 top=new Vector3(x,fy+6.5f,z), bottom=new Vector3(-2+(x+2)*.3f,fy+.08f,z+1.2f);
-            var points=new List<Vector3>(); var ts=new List<int>();
-            var axis=(bottom-top).normalized; var a=Vector3.Cross(axis,Vector3.forward).normalized; var b=Vector3.Cross(axis,a);
-            for(int j=0;j<12;j++)
-            {
-                float t=j*Mathf.PI*2/12; var radial=a*Mathf.Cos(t)+b*Mathf.Sin(t);
-                points.Add(top+radial*.2f); points.Add(bottom+radial*.9f);
-                int k=j*2, next=(j+1)%12*2; ts.AddRange(new[]{k,next,next+1,k,next+1,k+1});
-            }
-            var m=new Mesh { name="Interior_LightShaft_"+i }; m.vertices=points.ToArray(); m.triangles=ts.ToArray(); m.RecalculateNormals();
-            string path="Assets/Art/Church/"+m.name+".asset"; AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(m,path);
-            var go=new GameObject(m.name); go.transform.SetParent(church,true);
-            go.AddComponent<MeshFilter>().sharedMesh=m; var r=go.AddComponent<MeshRenderer>(); r.sharedMaterial=shaftMat;
+            float x=i%2==0?-5.55f:1.55f, z=i==0?-5.5f:5.6f;
+            Vector3 offset=new Vector3((float)rng.NextDouble()*.22f-.11f,0,(float)rng.NextDouble()*.4f-.2f);
+            Vector3 top=new Vector3(x,fy+6.5f,z)+offset, bottom=new Vector3(-2+(x+2)*.3f,fy+.08f,z+1.2f)+offset;
+            var go=GameObject.CreatePrimitive(PrimitiveType.Quad); go.name="Interior_LightShaft_"+i;
+            Object.DestroyImmediate(go.GetComponent<Collider>()); go.transform.SetParent(church,true);
+            go.transform.position=(top+bottom)*.5f;
+            go.transform.rotation=Quaternion.LookRotation(Vector3.Cross(Vector3.right,top-bottom).normalized,(top-bottom).normalized);
+            go.transform.localScale=new Vector3(.9f,(top-bottom).magnitude,1);
+            var r=go.GetComponent<MeshRenderer>(); r.sharedMaterial=shaftMat;
             r.shadowCastingMode=ShadowCastingMode.Off; r.receiveShadows=false; shafts.Add(r);
         }
         interior.shafts=shafts.ToArray();
         Debug.Log($"[INTERIOR_BUILD] floor_y={fy:F3} lamps={lamps.Count} shafts={shafts.Count} hinge={interior.doorLeaf.position}");
         return interior;
+    }
+    static void Arch(Transform parent,string name,Vector3 center,float width,float height,Material material)
+    {
+        var vertices=new List<Vector3> { new Vector3(0,0,0),new Vector3(-width/2,-height/2,0),new Vector3(width/2,-height/2,0) };
+        float radius=width/2, spring=height/2-radius;
+        for(int i=0;i<=20;i++) { float a=i*Mathf.PI/20; vertices.Add(new Vector3(Mathf.Cos(a)*radius,spring+Mathf.Sin(a)*radius,0)); }
+        var triangles=new List<int>();
+        for(int i=1;i<vertices.Count;i++) triangles.AddRange(new[]{0,i==vertices.Count-1?1:i+1,i});
+        var mesh=new Mesh {name=name}; mesh.vertices=vertices.ToArray(); mesh.triangles=triangles.ToArray(); mesh.RecalculateNormals(); mesh.RecalculateBounds();
+        string path="Assets/Art/Church/"+name+".asset"; AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(mesh,path);
+        var go=new GameObject(name); go.transform.SetParent(parent,true); go.transform.position=center;
+        go.AddComponent<MeshFilter>().sharedMesh=mesh; go.AddComponent<MeshRenderer>().sharedMaterial=material;
     }
     static void CutBelowFloor(MeshFilter f)
     {

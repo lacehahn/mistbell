@@ -634,9 +634,9 @@ public sealed class PlayerController : MonoBehaviour
         bool inside=interior!=null && interior.Contains(transform.position);
         if(interior!=null) interior.SetInside(inside);
         follow.fieldOfView=Mathf.MoveTowards(follow.fieldOfView,inside?32:followFov,Time.deltaTime*30);
-        float look=inside?2.4f:LookHeight;
+        float look=inside?2.2f:LookHeight;
         Vector3 target = transform.position + (inside?ChurchInterior.CameraOffset:FollowOffset);
-        Vector3 head = transform.position + Vector3.up * (inside?2.4f:look+.4f);
+        Vector3 head = transform.position + Vector3.up * (inside?2.2f:look+.4f);
         Vector3 delta = target - head;
         float span = delta.magnitude;
         const int ignoreMask = ~((1 << PlayerLayer) | (1 << TraversalLayer));
@@ -657,6 +657,9 @@ public sealed class PlayerController : MonoBehaviour
         follow.transform.position = cameraPosition;
         var rotation=Quaternion.LookRotation(transform.position + Vector3.up * look - cameraPosition);
         follow.transform.rotation = inside ? rotation : Quaternion.Lerp(follow.transform.rotation,rotation,.12f);
+        // Off-axis indoor framing preserves the specified eye position, aim and 32 degree lens.
+        follow.ResetProjectionMatrix();
+        if(inside) { var projection=follow.projectionMatrix; projection.m12-=.72f; follow.projectionMatrix=projection; }
         // Keep the pixel character readable with the narrower indoor lens and shorter follow distance.
         float spriteScale=inside ? Mathf.Tan(16*Mathf.Deg2Rad)/Mathf.Tan(followFov*.5f*Mathf.Deg2Rad)*7.5f/10.5f*1.2f : 1;
         sprite.SetFloat("_ScaleX",Mathf.Lerp(sprite.GetFloat("_ScaleX"),outsideSpriteX*spriteScale,.2f));
@@ -751,6 +754,7 @@ public sealed class PlayerController : MonoBehaviour
         foreach(var lamp in interior.lamps)
         {
             if(lamp.name=="Interior_NaveFill") { pass &= Mathf.Abs(lamp.range-16)<.001f && Mathf.Abs(lamp.intensity-.85f)<.001f; continue; }
+            if(lamp.name.StartsWith("Interior_ChandelierCandle_")) { pass &= Mathf.Abs(lamp.range-1.2f)<.001f && Mathf.Abs(lamp.intensity-.35f)<.001f; continue; }
             bool hanging=lamp.name.Contains("Chandelier");
             pass &= Mathf.Abs(lamp.range-(hanging?9:2.6f))<.001f && Mathf.Abs(lamp.intensity-(hanging?1f:1.2f))<.001f;
         }
@@ -819,9 +823,21 @@ public sealed class PlayerController : MonoBehaviour
             Color c=frame.GetPixel(x,y); sum+=.2126*c.r+.7152*c.g+.0722*c.b; count++;
         }
         Destroy(frame); float luma=(float)(sum/count);
-        Debug.Log(FormattableString.Invariant($"[INT_FIX] cam_in=(0,3.0,-7.0) fov_in=32 cam_min_y={indoorMinY:F4} cam_wall_gap={indoorMinGap:F4} cam_below_floor={cameraBelowFloor.ToString().ToLowerInvariant()}"));
+        Debug.Log(FormattableString.Invariant($"[INT_FIX] cam_in=(0,1.75,-5.2) fov_in=32 cam_min_y={indoorMinY:F4} cam_wall_gap={indoorMinGap:F4} cam_below_floor={cameraBelowFloor.ToString().ToLowerInvariant()}"));
         Debug.Log(FormattableString.Invariant($"[INT_FIX] interior_luma={luma:F4} furniture_visible=pews:{(pews==6).ToString().ToLowerInvariant()}/altar:{altar.ToString().ToLowerInvariant()}/iconostasis:{icons.ToString().ToLowerInvariant()}/chandelier:{chandelier.ToString().ToLowerInvariant()} pew_count={pews}"));
-        return luma>=.18f && pews==6 && altar && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
+        var iconRenderer=Array.Find(interior.GetComponentsInChildren<MeshRenderer>(),r=>r.name=="Interior_Iconostasis");
+        var ringRenderer=Array.Find(interior.GetComponentsInChildren<MeshRenderer>(),r=>r.name=="Interior_Chandelier");
+        float py=1-follow.WorldToViewportPoint(transform.position).y;
+        float iy=1-follow.WorldToViewportPoint(iconRenderer.bounds.center).y;
+        float cy=1-follow.WorldToViewportPoint(ringRenderer.bounds.center).y;
+        int candles=Array.FindAll(interior.lamps,l=>l.name.StartsWith("Interior_ChandelierCandle_")).Length;
+        int frames=Array.FindAll(interior.GetComponentsInChildren<MeshRenderer>(),r=>r.name.StartsWith("Interior_ArchFrame_")).Length;
+        var shaftMaterial=interior.shafts[0].sharedMaterial;
+        float alpha=shaftMaterial.GetColor("_BaseColor").a;
+        bool additive=shaftMaterial.GetFloat("_DstBlend")==1;
+        Debug.Log(FormattableString.Invariant($"[INT2] cam_in=(0,1.75,-5.2) player_screen_y={py:F4} iconostasis_screen_y={iy:F4} chandelier_screen_y={cy:F4} shafts={interior.shafts.Length} shaft_alpha={alpha:F2} additive={additive.ToString().ToLowerInvariant()} chandelier_candles={candles} frames={frames}"));
+        bool composition=py>=.80f && py<=.95f && iy>=.28f && iy<=.50f && cy>=.12f && cy<=.26f;
+        return composition && candles==8 && frames==3 && additive && Mathf.Abs(alpha-.08f)<.001f && luma>=.18f && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
     }
     IEnumerator DemoInterior(Interactable poi)
     {
@@ -847,11 +863,11 @@ public sealed class PlayerController : MonoBehaviour
         string inside=InteriorShot("interior_inside");
         bool pass=InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
-            Mathf.Abs(follow.fieldOfView-32)<.01f && interior.lamps.Length==6 && interior.shafts.Length>=3 &&
+            Mathf.Abs(follow.fieldOfView-32)<.01f && interior.lamps.Length==14 && interior.shafts.Length==3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;
         Debug.Log(FormattableString.Invariant($"[INTERIOR_U] door_open_deg={interior.OpenDegrees:F0} walk_in={enteredByWalking.ToString().ToLowerInvariant()} player_inside={interior.Contains(transform.position).ToString().ToLowerInvariant()} fov_in={follow.fieldOfView:F0} lights={interior.lamps.Length} light_shafts={interior.shafts.Length} colliders={blockers.Length} pois={Array.FindAll(pois,p=>p.data.interior).Length}"));
         Debug.Log(FormattableString.Invariant($"[INTERIOR_U] player=({transform.position.x:F3},{transform.position.y:F3},{transform.position.z:F3}) floor_y={interior.FloorY:F3} closed_blocks={closedBlocks} raycast_misses={misses}"));
-        if(!pass) { Debug.LogError("[INTERIOR_U] entry gates failed"); Application.Quit(1); yield break; }
+        if(!pass) { Debug.LogError("[INTERIOR_U] entry gates failed"); if(poi==null) { Application.Quit(1); yield break; } }
         if(poi!=null)
         {
             yield return WalkInteriorTo(poi.transform.position+Vector3.back*1.1f);
@@ -859,11 +875,13 @@ public sealed class PlayerController : MonoBehaviour
             yield return new WaitForSecondsRealtime(1);
             yield return new WaitForEndOfFrame();
             string shot=InteriorShot("interior_poi_"+poi.data.id.Substring("gergeti_".Length));
+            bool entryPass=pass;
             pass=panel.IsOpen && panel.Current==poi.data && panel.ValidateContent() && new FileInfo(shot).Length>0 &&
                 !cameraBelowFloor && indoorMinY>=1.699f && indoorMinGap>=.349f;
-            Debug.Log(FormattableString.Invariant($"[INT_FIX] cam_in=(0,3.0,-7.0) fov_in=32 cam_min_y={indoorMinY:F4} cam_wall_gap={indoorMinGap:F4} cam_below_floor={cameraBelowFloor.ToString().ToLowerInvariant()}"));
+            Debug.Log(FormattableString.Invariant($"[INT_FIX] cam_in=(0,1.75,-5.2) fov_in=32 cam_min_y={indoorMinY:F4} cam_wall_gap={indoorMinGap:F4} cam_below_floor={cameraBelowFloor.ToString().ToLowerInvariant()}"));
             Debug.Log($"[POI] open={poi.data.id} title_ok={pass.ToString().ToLowerInvariant()} lines_cn={poi.data.bodyCn.Split('\n').Length} screenshot={shot}");
             Debug.Log("[INTERIOR_U] screenshots=Shots/interior_entry.png,Shots/interior_inside.png,Shots/interior_poi_p04.png");
+            pass &= entryPass;
         }
         Application.Quit(pass?0:1);
     }

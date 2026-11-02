@@ -10,6 +10,8 @@ public sealed class ChurchInterior : MonoBehaviour
     public Collider threshold;
     public Light[] lamps;
     public Renderer[] shafts;
+    public Light chandelierLamp;
+    public Vector3 indoorChandelierPosition, outdoorChandelierPosition;
     public Renderer shell;
     public Material indoorStone;
     Material[] outdoorStone;
@@ -21,12 +23,13 @@ public sealed class ChurchInterior : MonoBehaviour
     public float OpenDegrees { get; private set; }
     public float FloorY => floor.bounds.max.y;
     public Vector3 DoorCenter => new Vector3(-2, FloorY + 1.8f, -8.08f);
-    public static readonly Vector3 CameraOffset = new Vector3(0, 3f, -7f);
+    public static readonly Vector3 CameraOffset = new Vector3(0, 1.75f, -5.2f);
 
     void Awake()
     {
         if(shell!=null) outdoorStone=shell.sharedMaterials;
-        foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill") lamp.enabled=false;
+        foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill" || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=false;
+        if(chandelierLamp!=null) chandelierLamp.transform.position=outdoorChandelierPosition;
         closedRotation = doorLeaf.localRotation;
         sky = RenderSettings.ambientSkyColor; equator = RenderSettings.ambientEquatorColor;
         ambientGround = RenderSettings.ambientGroundColor;
@@ -39,6 +42,17 @@ public sealed class ChurchInterior : MonoBehaviour
         if (!DoorInRange(p) || opening || OpenDegrees >= 99.9f) return false;
         opening = true; openingTime = 0;
         return true;
+    }
+    Vector3[] shaftOrigins;
+    void LateUpdate()
+    {
+        if(shafts==null) return;
+        if(shaftOrigins==null) shaftOrigins=Array.ConvertAll(shafts,r=>r.transform.position);
+        for(int i=0;i<shafts.Length;i++)
+        {
+            float phase=Time.time*.3f*2*Mathf.PI+i*2.39996f;
+            shafts[i].transform.position=shaftOrigins[i]+new Vector3(Mathf.Sin(phase)*.035f,0,Mathf.Cos(phase+1.7f)*.025f);
+        }
     }
     void Update()
     {
@@ -70,7 +84,8 @@ public sealed class ChurchInterior : MonoBehaviour
     {
         if (value == inside || PlayerController.CaptureMode) return;
         inside = value;
-        foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill") lamp.enabled=value;
+        foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill" || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=value;
+        if(chandelierLamp!=null) chandelierLamp.transform.position=value?indoorChandelierPosition:outdoorChandelierPosition;
         RenderSettings.ambientSkyColor = value ? new Color32(0x5A,0x4A,0x3C,255) : sky;
         RenderSettings.ambientEquatorColor = value ? new Color32(0x43,0x38,0x2E,255) : equator;
         RenderSettings.ambientGroundColor = value ? new Color32(0x2A,0x23,0x20,255) : ambientGround;
