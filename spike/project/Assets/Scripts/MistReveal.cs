@@ -90,6 +90,7 @@ public sealed class MistReveal : MonoBehaviour
         {
             bellFired = pulsing = true;
             pulseTime = 0;
+            player.GetComponent<AudioDirector>().PlayBell(d);
             Debug.Log("[REVEAL] bell pulse once rise=1.2s fall=0.8s bloom=x1.6 vignette=x1.3");
         }
         previousDistance = d;
@@ -179,6 +180,18 @@ public sealed class MistReveal : MonoBehaviour
         for (int i = 0; i < distances.Length; i++)
         {
             float d = distances[i];
+            if (d == 20)
+            {
+                // Exercise the actual 45 m crossing before the existing 20 m
+                // screenshot teleport, rather than reporting its overshoot as 20 m.
+                Vector3 bellPoint = Anchor + Vector3.back * BellDistance;
+                if (!player.ground.Raycast(new Ray(bellPoint + Vector3.up * 500, Vector3.down), out var bellHit, 1000))
+                { Debug.LogError("[REVEAL] demo bell ground ray missed"); Application.Quit(1); yield break; }
+                bellPoint.y = bellHit.point.y;
+                player.transform.position = bellPoint;
+                yield return null;
+                yield return null;
+            }
             Vector3 p = Anchor + Vector3.back * d;
             if (!player.ground.Raycast(new Ray(new Vector3(p.x, 500, p.z), Vector3.down), out var hit, 1000))
             { Debug.LogError("[REVEAL] demo ground ray missed"); Application.Quit(1); yield break; }
@@ -209,7 +222,10 @@ public sealed class MistReveal : MonoBehaviour
             pass ? "pass" : "FAIL", edges[2] / Math.Max(edges[0], double.Epsilon), bellFired,
             (bloom == null || Mathf.Approximately(bloom.intensity.value, baseBloom)) &&
             (vignette == null || Mathf.Approximately(vignette.intensity.value, baseVignette))));
-        Application.Quit(pass ? 0 : 1);
+        // Allow the complete synthesized decay to play before exiting this demo.
+        var audio = player.GetComponent<AudioDirector>();
+        yield return new WaitForSecondsRealtime(4);
+        Application.Quit(pass && audio.RevealPass ? 0 : 1);
     }
 
     bool ValidateCloseup(Camera cam)

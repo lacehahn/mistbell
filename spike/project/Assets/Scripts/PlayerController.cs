@@ -15,6 +15,8 @@ public sealed class PlayerController : MonoBehaviour
         Array.IndexOf(Environment.GetCommandLineArgs(), "-shots") >= 0;
     public static readonly Vector3 FollowOffset = new Vector3(0, 5.5f, -14);
     public const float LookHeight = 3.5f;
+    AudioDirector audioDirector;
+    int lastSoundFrame = -1;
     Interactable[] pois;
     Camera follow;
     Material sprite;
@@ -23,7 +25,11 @@ public sealed class PlayerController : MonoBehaviour
     bool walkingDemo;
     Vector3 walkStart;
 
-    void Awake() { if (CaptureMode) enabled = false; }
+    void Awake()
+    {
+        if (CaptureMode) { enabled = false; return; }
+        audioDirector = gameObject.AddComponent<AudioDirector>();
+    }
 
     void Start()
     {
@@ -132,6 +138,16 @@ public sealed class PlayerController : MonoBehaviour
             animationTime += dt;
         }
         else animationTime = 0;
+        if (Moving)
+        {
+            int soundFrame = Mathf.FloorToInt(animationTime * 10);
+            // Use the animation clock itself; include frame zero when starting and
+            // retain crossed contact frames if a render frame spans several ticks.
+            for (int tick = lastSoundFrame + 1; tick <= soundFrame; tick++)
+                if (tick % 6 == 0 || tick % 6 == 3) audioDirector.PlayFootstep();
+            lastSoundFrame = soundFrame;
+        }
+        else lastSoundFrame = -1;
         sprite.SetFloat("_Row", Row);
         sprite.SetFloat("_Frame", Moving ? Mathf.FloorToInt(animationTime * 10) % 6 : 0);
         if (walkingDemo && elapsed >= demoSeconds)
@@ -149,7 +165,8 @@ public sealed class PlayerController : MonoBehaviour
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "[PLAY] ground_error_max={0:F6} raycast_misses={1} fps={2:F2} animation_fps=10 frames=6",
                 maxGroundError, misses, fps));
-            Application.Quit(distance >= 15 && maxGroundError <= .02f && misses == 0 && Row >= 0 && Row <= 3 && fpsOK ? 0 : 1);
+            Application.Quit(distance >= 15 && maxGroundError <= .02f && misses == 0 && Row >= 0 && Row <= 3 && fpsOK &&
+                audioDirector.ClipsPass && audioDirector.Footsteps >= 6 ? 0 : 1);
             walkingDemo = false;
         }
     }

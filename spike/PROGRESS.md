@@ -329,4 +329,8 @@
 | 14:15 | 玩法切片落地（Codex）：PlayerController / Interactable / InfoPanel | `[PLAY] distance=18.106m ground_error=0.000000 row=3`、`[UI] panel_open=true paragraphs=2` | 走路 6 秒 18.1m、贴地误差 0、四向 6 帧动画；门口 E 弹出中英面板，截图 `Shots/ui_panel.png` |
 | 14:15 | 中文换行修了三轮 | 改 InfoPanel.cs | 根因：Unity legacy Text 在**空格**和**中日韩/数字边界**都会断行 → 用显式 `\n` 手工排版 5 行才稳定；面板 720×600、细金边、正文 656 宽 |
 | 14:15 | **操作教训** | — | 我手改 InfoPanel 时 Codex 还在跑（9 分 59 秒），它最后一次写盘把我的修改覆盖了 → 此后**必须先确认 codex 进程退出再手改同一文件** |
+| 14:54 | 台地石墙+石阶（Codex） | `[TERRACE] wall_segments=28 wall_h=1.62 steps=9` `[TERRACE_CHECK] deck_lift=1.3334 float_errors=0` | 教堂登台地，正面 9 级石阶 |
+| 14:54 | POI 系统数据化 + 钟楼/门廊浮雕（Codex） | `[POI] count=3 ids=gergeti_p01..p03 radius=3.5/3.0/2.5` | 面板数据驱动，中文显式换行 5 行 |
+| 14:54 | 程序化音频（Codex） | `[AUDIO] bell 4.00s rms=0.110 wind 8.00s rms=0.104 step 0.12s rms=0.074 bell_at=44.861m footsteps=21` | 钟声/风雪底噪/脚步全部代码合成，无外部素材 |
+| 14:54 | 新增 `docs/07-gameplay-slice.md` | — | 可玩切片说明：操作键位、三条验收证据、复现命令、明确边界 |
 
