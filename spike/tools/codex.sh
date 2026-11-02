@@ -55,4 +55,7 @@ if [ "${CODEX_NO_LOCK:-0}" != "1" ]; then
   done
 fi
 
-exec codex exec --sandbox danger-full-access -m gpt-6.1-sol -c model_reasoning_effort="medium" "$@"
+# 不能用 exec：exec 会替换掉本 shell，EXIT trap 再也不会执行 → 锁永远残留（2026-11-02 09:55 实证）
+codex exec --sandbox danger-full-access -m gpt-6.1-sol -c model_reasoning_effort="medium" "$@"
+rc=$?
+exit $rc
