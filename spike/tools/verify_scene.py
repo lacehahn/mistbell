@@ -81,6 +81,9 @@ def main():
             print(f'   area={n:5d} box=({x0},{y0})-({x1},{y1}) px_center=({(x0 + x1) // 2},{(y0 + y1) // 2})')
         print(f'[DARK] min_area={MIN_DARK} count={len(ds)} areas={[c[0] for c in ds[:10]]} '
               f'total_px={sum(c[0] for c in ds)}')
+        win = [c for c in ws if (c[4] - c[3] + 1) >= 20 and (c[3] - c[1] + 1) <= 20]
+        print(f'[WINDOW] tall-narrow (h>=20,w<=20) count={len(win)} boxes='
+              f'{[(c[1], c[2], c[3], c[4]) for c in win[:6]]}')
         print(f'[CHROMA] upper-half max(R-B within pixel chroma)={chroma_max}')
         print(path)
 

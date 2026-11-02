@@ -158,7 +158,7 @@ public static class SpikeScene
         cam.nearClipPlane = 0.3f;
         cam.farClipPlane = 1500f;
         cam.clearFlags = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.48f, 0.59f, 0.71f);
+        cam.backgroundColor = new Color(0.69f, 0.77f, 0.86f);
         camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = true;
 
         // ---------- 机位表：几何算过，保证塔顶不切、基座留出前景地面 ----------
@@ -316,9 +316,20 @@ public static class SpikeScene
             for (int i=0;i<=16;i++)
             { float a=i*Mathf.PI/16; rim.Add(new Vector3(Mathf.Cos(a)*outerWidth/2,
                 outerHeight-outerWidth/2+Mathf.Sin(a)*outerWidth/2,0)); }
-            var frame = SaveMountainMesh(root,name+"_Reveal",rim.ToArray(),ts.ToArray(),new Material(windowFrame));
+            // Open ring, rather than a filled arch covering the luminous insert.
+            int profileCount = vs.Count - 1;
+            var ring = new System.Collections.Generic.List<Vector3>();
+            for (int i=1;i<rim.Count;i++) ring.Add(rim[i] + Vector3.down*.09f);
+            for (int i=1;i<vs.Count;i++) ring.Add(vs[i]);
+            var ringTris = new System.Collections.Generic.List<int>();
+            for (int i=0;i<profileCount;i++)
+            {
+                int j=(i+1)%profileCount;
+                ringTris.AddRange(new[]{i,j,profileCount+j,i,profileCount+j,profileCount+i});
+            }
+            var frame = SaveMountainMesh(root,name+"_Reveal",ring.ToArray(),ringTris.ToArray(),new Material(windowFrame));
             frame.rotation=Quaternion.Euler(0,yaw,0);
-            frame.position=position+frame.rotation*new Vector3(0,-.09f,.025f);
+            frame.position=position+frame.rotation*new Vector3(0,0,.025f);
             var mat = new Material(glow);
             var tr=SaveMountainMesh(root,name,vs.ToArray(),ts.ToArray(),mat);
             tr.position=position; tr.rotation=Quaternion.Euler(0,yaw,0);

@@ -87,7 +87,7 @@ Shader "Mistbell/TerrainHaze"
                 #endif
                 // Wind-packed snow: oblique ripples, broken by slower drift lobes (world metres).
                 float2 p = input.positionWS.xz;
-                float wave = p.x * 3.1 + p.y * 1.2 + sin(p.y * .31) * 1.4 + sin(p.x*.47+p.y*.19)*2.1;
+                float wave = p.x * 22.0 + p.y * 8.0 + sin(p.y * 2.3) * 1.4 + sin(p.x*1.7+p.y*.9)*2.1;
                 float ripple = sin(wave);
                 normalWS = normalize(normalWS + half3(cos(wave)*.022, 0, cos(wave)*.009));
                 InputData lighting = (InputData)0;
@@ -103,7 +103,14 @@ Shader "Mistbell/TerrainHaze"
                 // Linear albedo .86, tinted #EDF3F8 (normalised by blue).
                 half snowCoverage = lerp(1.0h, smoothstep(.70h, .76h, input.capHeight), _RockSnowCap);
                 half3 snowAlbedo = _SnowAlbedo * _BaseColor.rgb / max(_BaseColor.b, .001);
-                float detail = .975 + ripple*.009 + sin(p.x*.37+p.y*.24)*.012;
+                // Two staggered grain grids (3.5 / 5.3 cm), bounded bright snow, no black speckles.
+                float2 cellA = floor(p / .035);
+                float2 cellB = floor((p + float2(.017,.029)) / .053);
+                float grainA = frac(sin(dot(cellA,float2(127.1,311.7)))*43758.5453);
+                float grainB = frac(sin(dot(cellB,float2(269.5,183.3)))*43758.5453);
+                // 2026-11-02 09:40：调制幅度 .34/.40 把雪面读成「搓衣板」（等距正弦波纹）。
+                // 颗粒必须是各向同性小幅度噪声 + 极弱的斜向风纹；方差靠噪声堆，不靠正弦。
+                float detail = 1.0 + ripple*.045 + (grainA+grainB-1)*.13;
                 surface.albedo = lerp(_RockColor.rgb, snowAlbedo * detail, snowCoverage);
                 surface.emission = (1.0h - snowCoverage) * half3(.065h, .075h, .085h);
                 surface.metallic = _Metallic;

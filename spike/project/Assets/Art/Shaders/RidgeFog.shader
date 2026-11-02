@@ -83,14 +83,19 @@ Shader "Mistbell/RidgeFog"
                 // Explicit warm/cool face colours in linear light, independent of exposure.
                 float lightFace=smoothstep(.62,.94,face);
                 float breakup=sin(input.positionWS.x*.22+sin(input.positionWS.z*.11)*2)*.012;
-                float snow=smoothstep(_SnowHeight-_SnowSoftness, _SnowHeight+_SnowSoftness, input.ridge.x+breakup);
+                // Existing .78 aerial identifies the third ridge; keep the other two unchanged.
+                float farRidge = step(.7, _Aerial);
+                float snowHeight = lerp(_SnowHeight, .88, farRidge);
+                float snowWidth = lerp(_SnowSoftness, .003, farRidge);
+                float snow=smoothstep(snowHeight-snowWidth, snowHeight+snowWidth, input.ridge.x+breakup);
                 half3 rock=lerp(_RockShade.rgb,_ColorBottom.rgb,lightFace);
+                rock = lerp(rock, lerp(half3(.156,.195,.246),half3(.34,.40,.48),lightFace),farRidge);
                 half3 ice=lerp(_SnowShade.rgb,_SnowColor.rgb,lightFace);
                 half3 color=lerp(rock,ice,snow);
                 float grain=sin(input.positionWS.x*.65+sin(input.positionWS.y*.43)*3)*sin(input.positionWS.y*.81)*.025;
                 color*=1+grain;
                 float foot=(1-smoothstep(0,15,input.positionWS.y))*step(0,input.positionWS.y)*.18;
-                color=lerp(color,_AirColor.rgb,saturate(_Aerial+_FogFloor+foot));
+                color=lerp(color,_AirColor.rgb,saturate(lerp(_Aerial,.24,farRidge)+_FogFloor+foot));
                 return half4(color, 1);
             }
             ENDHLSL
