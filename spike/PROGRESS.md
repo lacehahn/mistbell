@@ -284,3 +284,6 @@
 | 09:58 | 队列项⑩：像素纹理统一（第 34 轮） | 派发 | 程序化生成 Snow/Stone/Rock 三张像素贴图（Point 过滤）+ 5bit 量化 + 4×4 Bayer 抖动；门槛 hf_energy_lower ≥0.025；进行中 |
 | 09:59 | 待办：人物三视图 | 用户口头指定 | 用户称"用这个作为人物三视图"，但**附件未送达**（cache 无新图）；待重发后存入 art-ref/char-turnaround.png，**不改变当前优先级**，在纹理统一之后应用 |
 | 10:05 | 收入人物设定画两张 | 用户提供 | `art-ref/char-turnaround.jpg`（三视图+色板+细节+表情）、`art-ref/char-walk-sheet.jpg`（Walk 4方向×6帧=24帧）；规格 `art-ref/notes-character-v1.md`；**不改变当前优先级**，排在纹理统一之后 |
+| 10:20 | 队列项⑩：像素纹理统一（第 34 轮） | md5 绑定 e708404a + 自量 | **过门槛**：hf_energy_lower **0.0115 → 0.0301**、snow 0.603、clip 0.0075、shadow 0.0625；三张贴图 Snow/Stone/Rock_Pixel 已生成（Point 过滤） |
+| 10:25 | 目视判定该帧 | vision | 颗粒有了，但**雪地是均匀盐粒噪点**（非块状像素簇）、**教堂石材偏姜黄像姜饼**、山体像撒糖霜的布、围栏浮空、角色仍是黑柱 |
+| 10:26 | 队列项⑪：主角落地（第 35 轮） | 派发 | 24 帧按内容裁边→64×80 图集 384×320、shader 改 6 帧 10fps、方位选行；门槛 emptyCells=0、baseline_jitter≤3、art_close 120–170px；进行中 |

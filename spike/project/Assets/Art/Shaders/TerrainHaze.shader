@@ -4,6 +4,7 @@ Shader "Mistbell/TerrainHaze"
     {
         [MainTexture] _BaseMap ("Grass", 2D) = "white" {}
         [MainColor] _BaseColor ("Tint", Color) = (1,1,1,1)
+        _RockOnly ("World projected rock texture", Float) = 0
         _SnowAlbedo ("Snow linear albedo", Range(0,1)) = 0.86
         _SnowShadowColor ("Snow shadow tint", Color) = (0.472,0.584,0.716,1)
         _Footprint ("Footprint darkening", Range(0,1)) = 0
@@ -42,7 +43,7 @@ Shader "Mistbell/TerrainHaze"
             TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap);
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor;
-                float _SnowAlbedo, _RockSnowCap, _Footprint;
+                float _SnowAlbedo, _RockSnowCap, _Footprint, _RockOnly;
                 float _NormalScale, _Metallic, _Smoothness;
                 float _HazeStart, _HazeEnd, _HazePower, _HazeStrength;
             CBUFFER_END
@@ -85,11 +86,6 @@ Shader "Mistbell/TerrainHaze"
                     normalWS = NormalizeNormalPerPixel(TransformTangentToWorld(normalTS,
                         half3x3(input.tangentWS.xyz, bitangent, input.normalWS)));
                 #endif
-                // Wind-packed snow: oblique ripples, broken by slower drift lobes (world metres).
-                float2 p = input.positionWS.xz;
-                float wave = p.x * 22.0 + p.y * 8.0 + sin(p.y * 2.3) * 1.4 + sin(p.x*1.7+p.y*.9)*2.1;
-                float ripple = sin(wave);
-                normalWS = normalize(normalWS + half3(cos(wave)*.022, 0, cos(wave)*.009));
                 InputData lighting = (InputData)0;
                 lighting.positionWS = input.positionWS;
                 lighting.normalWS = normalWS;
@@ -100,19 +96,29 @@ Shader "Mistbell/TerrainHaze"
                 lighting.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
                 lighting.shadowMask = half4(1,1,1,1);
                 SurfaceData surface = (SurfaceData)0;
-                // Linear albedo .86, tinted #EDF3F8 (normalised by blue).
-                half snowCoverage = lerp(1.0h, smoothstep(.70h, .76h, input.capHeight), _RockSnowCap);
+                // Pixel-painted albedo in world metres; no UV edits required on rocks.
+                half snowCoverage = 1.0h - _RockOnly;
+                float3 weights = abs(input.normalWS);
+                weights = pow(weights, 8); weights /= max(dot(weights, 1.0), .0001);
+                float3 p = input.positionWS * _BaseMap_ST.x;
+                // Fixed world wind basis; elongated ground texels compensate foreshortening.
+                float2 snowUV = float2(dot(input.positionWS.xz,float2(.963,.270)),
+                    dot(input.positionWS.xz,float2(-.270,.963))) * _BaseMap_ST.xy;
+                half3 texel = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,snowUV).rgb;
+                if (_RockOnly > .5)
+                    texel = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,p.zy).rgb*weights.x
+                          + SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,p.xz).rgb*weights.y
+                          + SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,p.xy).rgb*weights.z;
+                #if defined(UNITY_COLORSPACE_GAMMA)
+                    // This spike runs in Gamma: sRGB textures are not hardware-decoded.
+                    // Decode snow explicitly before normalizing its linear palette mean.
+                    if (_RockOnly < .5) texel = SRGBToLinear(texel);
+                #endif
+                // Normalize the five-colour palette to the previous snow's average albedo.
                 half3 snowAlbedo = _SnowAlbedo * _BaseColor.rgb / max(_BaseColor.b, .001);
-                // Two staggered grain grids (3.5 / 5.3 cm), bounded bright snow, no black speckles.
-                float2 cellA = floor(p / .035);
-                float2 cellB = floor((p + float2(.017,.029)) / .053);
-                float grainA = frac(sin(dot(cellA,float2(127.1,311.7)))*43758.5453);
-                float grainB = frac(sin(dot(cellB,float2(269.5,183.3)))*43758.5453);
-                // 2026-11-02 09:40：调制幅度 .34/.40 把雪面读成「搓衣板」（等距正弦波纹）。
-                // 颗粒必须是各向同性小幅度噪声 + 极弱的斜向风纹；方差靠噪声堆，不靠正弦。
-                float detail = 1.0 + ripple*.045 + (grainA+grainB-1)*.13;
-                surface.albedo = lerp(_RockColor.rgb, snowAlbedo * detail, snowCoverage);
-                surface.emission = (1.0h - snowCoverage) * half3(.065h, .075h, .085h);
+                surface.albedo = lerp(texel * _BaseColor.rgb,
+                    snowAlbedo * texel / half3(.651, .744, .842), snowCoverage);
+                surface.emission = 0;
                 surface.metallic = _Metallic;
                 surface.smoothness = _Smoothness;
                 surface.normalTS = half3(0,0,1);

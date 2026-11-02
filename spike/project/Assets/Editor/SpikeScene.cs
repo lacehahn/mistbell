@@ -28,7 +28,11 @@ public static class SpikeScene
 
         // ---------- 材质（程序化像素贴图 + 法线图；UV 以米计，tiling 按每张贴图覆盖的米数反推）----------
         const string TEX = "Assets/Art/Textures/";
+        SpikePixelArt.Generate();
         var stone = ChurchMaterial("stone", "#C9A87C");
+        stone.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(TEX + "Stone_Pixel.png"));
+        stone.SetTexture("_BumpMap", null);
+        stone.DisableKeyword("_NORMALMAP");
         stone.SetTextureScale("_BaseMap", new Vector2(1f / 4.8f, 1f / 4.8f));
         stone.SetTextureScale("_BumpMap", new Vector2(1f / 4.8f, 1f / 4.8f));
         stone.SetFloat("_BumpScale", 1.8f);
@@ -222,8 +226,12 @@ public static class SpikeScene
         material.SetFloat("_NormalScale", ground.GetFloat("_BumpScale"));
         if (ground.GetTexture("_BumpMap") != null) material.EnableKeyword("_NORMALMAP");
         else material.DisableKeyword("_NORMALMAP");
-        material.SetFloat("_SnowAlbedo", .86f);
-        material.SetColor("_SnowShadowColor", Hex("#B7C9DC"));
+        material.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/Snow_Pixel.png"));
+        // Grazing-angle compensation: .075m across / .375m along the slope.
+        // Four-texel blocks project to about 4–6px across the sharp snow band.
+        material.SetTextureScale("_BaseMap", new Vector2(1f / 1.2f, 1f / 6f));
+        material.SetFloat("_SnowAlbedo", .88f);
+        material.SetColor("_SnowShadowColor", Hex("#A9C0D8"));
         material.SetColor("_HazeColor", Hex("#DCE2E6"));
         material.SetFloat("_HazeStart", 140f);
         material.SetFloat("_HazeEnd", 300f);
@@ -566,6 +574,8 @@ public static class SpikeScene
             for (int i = 0; i < flat.Length; i++) { flat[i] = vertices[indices[i]]; tris[i] = i; }
             var mat = new Material(Shader.Find("Mistbell/RidgeFog"));
             mat.SetColor("_ColorBottom", Hex("#A8A29A"));
+            mat.SetTexture("_SnowMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/Snow_Pixel.png"));
+            mat.SetTexture("_RockMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/Rock_Pixel.png"));
             mat.SetColor("_RockShade", Hex("#5B6470"));
             mat.SetColor("_SnowColor", Hex("#EAF1F7"));
             mat.SetColor("_SnowShade", Hex("#B9C8D4"));
@@ -684,8 +694,8 @@ public static class SpikeScene
         var root = new GameObject("Props").transform;
         var roadside = new GameObject("Roadside Props").transform;
         roadside.SetParent(root, false);
-        var rockMat = MakeLit("Assets/Settings/M_WinterRock.mat", Hex("#6B6157"), 0f, .02f);
-        var rockShade = MakeLit("Assets/Settings/M_WinterRockShade.mat", Hex("#4E463E"), 0f, .02f);
+        var rockMat = SpikePixelArt.RockMaterial("Assets/Settings/M_WinterRock.mat", 1f);
+        var rockShade = SpikePixelArt.RockMaterial("Assets/Settings/M_WinterRockShade.mat", .72f);
         var snowMat = new Material(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat"))
             { name = "M_RockSnow" };
         snowMat.SetColor("_BaseColor", Hex("#E7EDF4"));

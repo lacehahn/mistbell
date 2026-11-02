@@ -10,6 +10,8 @@ Shader "Mistbell/RidgeFog"
         _SnowHeight ("Snow world Y", Float) = 250
         _SnowSoftness ("Snow transition metres", Float) = 55
         _SnowColor ("Snow", Color) = (0.835,0.882,0.914,1)
+        _SnowMap ("Pixel snow", 2D) = "white" {}
+        _RockMap ("Pixel rock", 2D) = "white" {}
         _NoiseTex ("Snow breakup (red)", 2D) = "gray" {}
         [HideInInspector] _CloudBand ("Cloud band", Float) = 0
         [HideInInspector] _CloudColor ("Cloud tint", Color) = (0.65,0.72,0.80,0.05)
@@ -41,6 +43,8 @@ Shader "Mistbell/RidgeFog"
             #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            TEXTURE2D(_SnowMap); SAMPLER(sampler_SnowMap);
+            TEXTURE2D(_RockMap); SAMPLER(sampler_RockMap);
             TEXTURE2D(_NoiseTex);
             SAMPLER(sampler_NoiseTex);
             CBUFFER_START(UnityPerMaterial)
@@ -91,9 +95,17 @@ Shader "Mistbell/RidgeFog"
                 half3 rock=lerp(_RockShade.rgb,_ColorBottom.rgb,lightFace);
                 rock = lerp(rock, lerp(half3(.156,.195,.246),half3(.34,.40,.48),lightFace),farRidge);
                 half3 ice=lerp(_SnowShade.rgb,_SnowColor.rgb,lightFace);
-                half3 color=lerp(rock,ice,snow);
-                float grain=sin(input.positionWS.x*.65+sin(input.positionWS.y*.43)*3)*sin(input.positionWS.y*.81)*.025;
-                color*=1+grain;
+                float2 pixelUV = input.positionWS.xy / 16.0;
+                half3 snowTex = SAMPLE_TEXTURE2D(_SnowMap,sampler_SnowMap,pixelUV).rgb;
+                // The snow-flecked top rows belong to rock caps, not vertical mountain faces.
+                float2 rockUV=float2(pixelUV.x,frac(pixelUV.y)*.80);
+                half3 rockTex = SAMPLE_TEXTURE2D(_RockMap,sampler_RockMap,rockUV).rgb;
+                #if defined(UNITY_COLORSPACE_GAMMA)
+                    snowTex=SRGBToLinear(snowTex); rockTex=SRGBToLinear(rockTex);
+                #endif
+                // Retain the existing face lighting and aerial perspective, replacing only albedo detail.
+                half3 color=lerp(rock * lerp(1, rockTex / half3(.153,.125,.101), .20),
+                    ice * lerp(1, snowTex / half3(.651,.744,.842), .20),snow);
                 float foot=(1-smoothstep(0,15,input.positionWS.y))*step(0,input.positionWS.y)*.18;
                 color=lerp(color,_AirColor.rgb,saturate(lerp(_Aerial,.24,farRidge)+_FogFloor+foot));
                 return half4(color, 1);

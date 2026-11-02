@@ -2,6 +2,7 @@ Shader "Mistbell/TiltShift"
 {
     Properties
     {
+        _DitherStrength ("Ordered dither strength", Range(0,1)) = 0.5
         _FocusCenter ("Focus Center", Float) = 0.5
         _FocusBand ("Focus Band", Float) = 0.26
         _Falloff ("Falloff", Float) = 0.24
@@ -25,12 +26,31 @@ Shader "Mistbell/TiltShift"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
+                float _DitherStrength;
                 float _FocusCenter;
                 float _FocusBand;
                 float _Falloff;
                 float _MaskPower;
                 float _MaxRadius;
             CBUFFER_END
+
+            half4 Palette(float4 color, float2 positionCS)
+            {
+                const uint bayer[16]={0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5};
+                uint2 pixel=(uint2)positionCS;
+                float threshold=(bayer[(pixel.y&3)*4+(pixel.x&3)]+.5)/16.0-.5;
+                #if defined(UNITY_COLORSPACE_GAMMA)
+                    float3 srgb=saturate(color.rgb);
+                #else
+                    float3 srgb=LinearToSRGB(saturate(color.rgb));
+                #endif
+                srgb=floor(saturate(srgb+threshold*_DitherStrength/31.0)*31.0+.5)/31.0;
+                #if defined(UNITY_COLORSPACE_GAMMA)
+                    return half4(srgb,color.a);
+                #else
+                    return half4(SRGBToLinear(srgb),color.a);
+                #endif
+            }
 
             half4 Frag(Varyings input) : SV_Target
             {
@@ -43,7 +63,7 @@ Shader "Mistbell/TiltShift"
                 float radiusPixels = _MaxRadius * band;
                 [branch]
                 if (radiusPixels < 0.01)
-                    return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv);
+                    return Palette(SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv), input.positionCS.xy);
 
                 // _ScreenParams.zw contains 1 + reciprocal size, not texel size.
                 float2 pixelSize = rcp(_ScreenParams.xy);
@@ -56,7 +76,7 @@ Shader "Mistbell/TiltShift"
                     float2 offset = float2(cos(a), sin(a)) * r * pixelSize * radiusPixels;
                     color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset);
                 }
-                return color / 24.0;
+                return Palette(color / 24.0, input.positionCS.xy);
             }
             ENDHLSL
         }
