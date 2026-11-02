@@ -49,7 +49,7 @@ public static class SpikeScene
         var roofMat = ChurchMaterial("roof", "#A06B4A");
         // 屋顶：贴图本身已是深石板冷灰（meanRGB 75,81,89）；_BaseColor 是乘性归一系数，
         // 必须写死在代码里——Assets/Settings/M_Roof.mat 被 .gitignore 忽略，写进 .mat 等于不可复现。
-        roofMat.SetColor("_BaseColor", new Color(0.50f, 0.47f, 0.43f, 1f));
+        roofMat.SetColor("_BaseColor", new Color(0.86f, 0.84f, 0.80f, 1f));   // 原来 0.50 太暗，屋顶读成黑洞
         var wood = ChurchMaterial("wood", "#6B4A32");
         var ground = MakeLit("Assets/Settings/M_Ground.mat", Hex("#EDF3F8"), 0f, 0.05f);
 
@@ -114,6 +114,8 @@ public static class SpikeScene
         bbMat.SetFloat("_Rows", 4f);
         bbMat.SetFloat("_Frame", 0f);
         bbMat.SetFloat("_Row", 3f);
+        // 角色是 unlit 像素贴图：给一点日照暖色增益，免得在亮雪地上变成一团黑
+        if (bbMat.HasProperty("_Color")) bbMat.SetColor("_Color", new Color(1.14f, 1.11f, 1.06f, 1f));
         AssetDatabase.DeleteAsset("Assets/Settings/M_Pilgrim.mat");
         AssetDatabase.CreateAsset(bbMat, "Assets/Settings/M_Pilgrim.mat");
 
@@ -481,11 +483,14 @@ public static class SpikeScene
         float amplitude = Mathf.Lerp(.1f, .3f, Mathf.PerlinNoise(x / 48f + 7f, z / 48f + 11f));
         float snowDrift = amplitude * (.65f * Mathf.Sin(x * .15f + z * .12f)
             + .35f * Mathf.Cos(z * .19f - x * .08f));
-        return height + mask * snowDrift
-            + 7f * Mathf.Sin(x / 37f + 0.9f)
-                * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(8f, 50f, z))
-            + 3f * Mathf.Sin(x / 13f - 1.1f)
-                * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(8f, 40f, z));
+        // 教堂后方雪丘：单一正弦会给出光溜溜的"半个球"轮廓，叠加多尺度噪声与二次谐波打碎。
+        float hillMask = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(8f, 50f, z));
+        float hills = 5.2f * Mathf.Sin(x / 41f + 0.9f)
+                    + 2.4f * Mathf.Sin(x / 18f + 2.3f)
+                    + 1.1f * Mathf.Sin(x / 8.5f - 0.4f)
+                    + 3.2f * (Mathf.PerlinNoise(x / 55f + 3.7f, z / 70f + 1.9f) - .5f)
+                    + 1.4f * (Mathf.PerlinNoise(x / 17f + 8.1f, z / 21f + 5.3f) - .5f);
+        return height + mask * snowDrift + hills * hillMask;
     }
 
     static MeshCollider BuildTerrain(Material ground)

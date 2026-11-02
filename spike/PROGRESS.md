@@ -319,4 +319,6 @@
 | 11:25 | 队列⑱：石头埋深 70%→28–52%（只露平顶读成地砖） | 改 BuildProps | 石头略有改善仍偏"砖块"，mesh 需重做 |
 | 11:25 | 队列⑲：相机 x 28→7、z −100→−96 对齐小道；主角 (−6,−9.5)→(2.7,−60) | 改 SpikeScene | 构图成立：小道自下往教堂、主角 34.6px→**83.9px** 站在道上；教堂占比 47% |
 | 11:25 | 山体交给 Codex 的定时 handoff 已就绪 | `spike/tools/handoff_mtn.sh 12:46` | 12:46 探测配额→自动派发 `spike/tasks/mountain_triplanar.md`（triplanar 修横向拉伸）；含 Unity/codex 占用等待与 6 次重试 |
+| 11:27 | 队列⑳：教堂后雪丘 7m 单正弦 → 多尺度（3 谐波 + 2 层 perlin） | 改 TerrainHeight | "半个球"消失，变起伏雪原 |
+| 11:27 | 队列㉑：屋顶 _BaseColor 0.50→0.86、主角 unlit 加 14% 暖增益 | 改 SpikeScene | 屋顶不再是黑洞、能看出石板；主角亮一档 |
 
