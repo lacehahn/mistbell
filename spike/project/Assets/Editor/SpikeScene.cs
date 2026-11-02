@@ -16,8 +16,16 @@ public static class SpikeScene
     const float Fov = 35f;            // 揭示机位垂直视场
     const float SlopeDeg = 6f;        // 坡地倾角
 
+    static int contactDrifts, contactStrips, contactShadows, contactPosts, contactFloatErrors;
+    static float contactMaxError;
+    static bool entryCleared;
+    static float churchSeatY;
+
     public static void Run()
     {
+        contactDrifts = contactStrips = contactShadows = contactPosts = contactFloatErrors = 0;
+        contactMaxError = 0;
+        entryCleared = false;
         if (GraphicsSettings.currentRenderPipeline == null)
         {
             Debug.LogError("[SPIKE] 当前不是 URP，先跑 SpikeURP.Run");
@@ -76,9 +84,11 @@ public static class SpikeScene
         churchStone.SetFloat("_StoneSurface",2);
         AssetDatabase.DeleteAsset("Assets/Settings/M_ChurchStone.mat");
         AssetDatabase.CreateAsset(churchStone,"Assets/Settings/M_ChurchStone.mat");
-        var church = ImportChurch(churchStone, roofMat);
+        var church = ImportChurch(churchStone, roofMat, terrainCollider);
+        BuildChurchContact(church, terrainCollider);
+        ValidateContact(church, terrainCollider);
         BuildWarmDetails();
-        var cameraPosition = EyeAt(7f, -96f);   // 对齐朝圣小道：原来 x=28 把小道推到画面最左
+        var cameraPosition = EyeAt(5f, -82f);   // 走近到 ~74m：参考图里教堂占画面 55%+，96m 时只占 30%
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
 
         // ---------- 像素角色（Billboard）----------
@@ -92,7 +102,7 @@ public static class SpikeScene
         }
 
         // 只移动角色：教堂门廊左前方，两固定机位共同可见；落点只查询地形碰撞体。
-        var pilgrimPos = new Vector3(2.7f, 0f, -60f);   // 站在朝圣道上（相机前约 36m），远景约 70px 可辨
+        var pilgrimPos = new Vector3(2.7f, 0f, -66f);   // 相机前 16m，约 150px，与参考图人物占比一致
         Physics.SyncTransforms();
         float terrainY = 0f;
         if (terrainCollider.Raycast(
@@ -279,7 +289,7 @@ public static class SpikeScene
         return MakeLit(path, Hex(fallbackColor), 0f, 0.15f);
     }
 
-    static Transform ImportChurch(Material stone, Material roof)
+    static Transform ImportChurch(Material stone, Material roof, MeshCollider terrain)
     {
         const string path = "Assets/Art/Church/gergeti_church.fbx";
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
@@ -318,7 +328,362 @@ public static class SpikeScene
         Debug.Log($"[SPIKE] church materials stone={stoneCount} roof={roofCount} (submesh assignments; unclassified=stone)");
         if (triangles < 70000 || triangles > 78000 || Mathf.Abs(bounds.size.x - 28f) > 2f || Mathf.Abs(bounds.size.y - 24.5f) > 2f)
             throw new System.InvalidOperationException("Church v2 outside triangle/bounds acceptance limits");
+        // The imported floor was at y=0, over a metre above the sloping entrance.
+        // Seat the existing building at the first tread; retain its scale and rotation.
+        var entry = ContactGround(terrain, new Vector3(-2f, 0f, -10.65f));
+        churchSeatY = entry.y - .02f - bounds.min.y;
+        church.position += Vector3.up * churchSeatY;
+        Debug.Log($"[CONTACT_SEAT] church_y={churchSeatY:F4} first_tread_ground={entry.y:F4}");
         return church;
+    }
+
+    // All contact geometry queries the terrain collider explicitly; church/prop colliders
+    // must never become accidental grounding surfaces. Validate saved perimeter vertices too.
+    static Vector3 ContactGround(MeshCollider terrain, Vector3 p)
+    {
+        if (!terrain.Raycast(new Ray(new Vector3(p.x, 500f, p.z), Vector3.down), out var hit, 1000f))
+            throw new System.InvalidOperationException("Contact ray missed terrain: " + p);
+        return hit.point;
+    }
+
+    static void CheckContact(MeshCollider terrain, Vector3 p, float intendedOffset)
+    {
+        float error = Mathf.Abs(p.y - ContactGround(terrain, p).y - intendedOffset);
+        contactMaxError = Mathf.Max(contactMaxError, error);
+        if (error > .03f) contactFloatErrors++;
+    }
+
+    static Transform ContactMesh(Transform parent, string name, Vector3[] vertices, int[] triangles,
+                                 Vector2[] uv, Material material)
+    {
+        var mesh = new Mesh { name = name, vertices = vertices, triangles = triangles, uv = uv };
+        mesh.RecalculateNormals(); mesh.RecalculateTangents(); mesh.RecalculateBounds();
+        string path = "Assets/Settings/" + name + ".asset";
+        AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(mesh, path);
+        var go = new GameObject(name); go.transform.SetParent(parent, false);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var renderer = go.AddComponent<MeshRenderer>(); renderer.sharedMaterial = material;
+        renderer.shadowCastingMode = ShadowCastingMode.Off;
+        renderer.receiveShadows = true;
+        return go.transform;
+    }
+
+    static Material RockContactMaterial()
+    {
+        const string path = "Assets/Settings/M_RockContact.mat";
+        var saved = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (saved != null) return saved;
+        var texture = new Texture2D(64, 64, TextureFormat.RGBA32, false) { name = "RockContactSoft" };
+        texture.wrapMode = TextureWrapMode.Clamp;
+        for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++)
+        {
+            float r = new Vector2((x + .5f) / 32f - 1, (y + .5f) / 32f - 1).magnitude;
+            float alpha = .22f * (1 - Mathf.SmoothStep(.28f, 1f, r));
+            texture.SetPixel(x, y, new Color(.14f, .18f, .24f, alpha));
+        }
+        texture.Apply();
+        AssetDatabase.DeleteAsset("Assets/Settings/RockContactSoft.asset");
+        AssetDatabase.CreateAsset(texture, "Assets/Settings/RockContactSoft.asset");
+        var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { name = "M_RockContact" };
+        mat.SetTexture("_BaseMap", texture); mat.SetColor("_BaseColor", Color.white);
+        mat.SetFloat("_Surface", 1); mat.SetFloat("_Blend", 0);
+        mat.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+        mat.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+        mat.SetFloat("_ZWrite", 0); mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        mat.SetOverrideTag("RenderType", "Transparent"); mat.renderQueue = 3000;
+        AssetDatabase.CreateAsset(mat, path);
+        return mat;
+    }
+
+    static void ContactMound(Transform root, string name, MeshCollider terrain, Vector3 center,
+                             Vector2 radius, float height, Material mat, float lift = 0f)
+    {
+        const int sides = 24, rings = 8;
+        var vertices = new Vector3[1 + sides * rings];
+        var uv = new Vector2[vertices.Length];
+        var tris = new System.Collections.Generic.List<int>();
+        vertices[0] = ContactGround(terrain, center) + Vector3.up * (height + lift);
+        uv[0] = Vector2.one * .5f;
+        for (int ring = 1; ring <= rings; ring++) for (int j = 0; j < sides; j++)
+        {
+            float r = ring / (float)rings, a = j * 2 * Mathf.PI / sides;
+            var direction = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            var p = center + new Vector3(direction.x * radius.x * r, 0, direction.y * radius.y * r);
+            // Cosine dome has a broad foot, a narrow crown and zero derivative at the rim.
+            float h = height * .5f * (1 + Mathf.Cos(r * Mathf.PI));
+            p = ContactGround(terrain, p) + Vector3.up * (h + lift);
+            int index = 1 + (ring - 1) * sides + j;
+            vertices[index] = p; uv[index] = Vector2.one * .5f + direction * r * .5f;
+            if (ring == rings) CheckContact(terrain, p, lift);
+            int next = 1 + (ring - 1) * sides + (j + 1) % sides;
+            if (ring == 1) tris.AddRange(new[] { 0, next, index });
+            else
+            {
+                int inner = index - sides, innerNext = next - sides;
+                tris.AddRange(new[] {inner, innerNext, next, inner, next, index});
+            }
+        }
+        ContactMesh(root, name, vertices, tris.ToArray(), uv, mat);
+    }
+
+    // Only subdivide existing triangles intersecting the 3 x 4 m entrance patch.
+    // Barycentric interpolation preserves every pre-existing surface outside that patch.
+    static void ClearEntrySnow(Mesh mesh)
+    {
+        var source = mesh.vertices; var indices = mesh.triangles;
+        var vertices = new System.Collections.Generic.List<Vector3>();
+        var uv = new System.Collections.Generic.List<Vector2>();
+        var triangles = new System.Collections.Generic.List<int>();
+        void Add(Vector3 a, Vector3 b, Vector3 c)
+        {
+            foreach (var p in new[] { a, b, c })
+            {
+                float dx = Mathf.Min(p.x + 3.5f, -.5f - p.x);
+                float dz = Mathf.Min(p.z + 14.8f, -10.8f - p.z);
+                float mask = Mathf.SmoothStep(0, 1, Mathf.Min(dx, dz) / .25f);
+                var v = p; v.y -= .06f * mask;
+                triangles.Add(vertices.Count); vertices.Add(v); uv.Add(new Vector2(v.x, v.z));
+            }
+        }
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            var a = source[indices[i]]; var b = source[indices[i+1]]; var c = source[indices[i+2]];
+            float minX = Mathf.Min(a.x, Mathf.Min(b.x,c.x)), maxX = Mathf.Max(a.x,Mathf.Max(b.x,c.x));
+            float minZ = Mathf.Min(a.z, Mathf.Min(b.z,c.z)), maxZ = Mathf.Max(a.z,Mathf.Max(b.z,c.z));
+            if (maxX <= -3.5f || minX >= -.5f || maxZ <= -14.8f || minZ >= -10.8f)
+            {
+                // Preserve shared vertices for smooth terrain normals.
+                continue;
+            }
+            const int n = 16;
+            Vector3 Point(int x, int y) => a + (b-a) * (x/(float)n) + (c-a) * (y/(float)n);
+            for (int x = 0; x < n; x++) for (int y = 0; y < n-x; y++)
+            {
+                Add(Point(x,y), Point(x+1,y), Point(x,y+1));
+                if (x+y < n-1) Add(Point(x+1,y), Point(x+1,y+1), Point(x,y+1));
+            }
+        }
+        // Keep the original shared mesh everywhere except the intersecting triangles.
+        var finalVertices = new System.Collections.Generic.List<Vector3>(source);
+        var finalUV = new System.Collections.Generic.List<Vector2>(mesh.uv);
+        var finalTris = new System.Collections.Generic.List<int>();
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            var a=source[indices[i]]; var b=source[indices[i+1]]; var c=source[indices[i+2]];
+            if (Mathf.Max(a.x,Mathf.Max(b.x,c.x)) <= -3.5f || Mathf.Min(a.x,Mathf.Min(b.x,c.x)) >= -.5f ||
+                Mathf.Max(a.z,Mathf.Max(b.z,c.z)) <= -14.8f || Mathf.Min(a.z,Mathf.Min(b.z,c.z)) >= -10.8f)
+                finalTris.AddRange(new[] {indices[i],indices[i+1],indices[i+2]});
+        }
+        int offset = finalVertices.Count;
+        finalVertices.AddRange(vertices); finalUV.AddRange(uv);
+        foreach (int i in triangles) finalTris.Add(offset+i);
+        mesh.indexFormat = IndexFormat.UInt32;
+        mesh.Clear(); mesh.SetVertices(finalVertices); mesh.SetUVs(0, finalUV); mesh.SetTriangles(finalTris,0);
+    }
+
+    static void WallSnow(Transform root, string name, MeshCollider terrain, Vector2 a, Vector2 b, Material snow)
+    {
+        // Clockwise footprint: the left normal points outwards. A thin, upward-facing
+        // shelf climbs into the wall; its outer edge is seated 2 cm into the snow.
+        var outward = new Vector2(-(b-a).y, (b-a).x).normalized;
+        int steps = Mathf.CeilToInt(Vector2.Distance(a,b)/.35f);
+        const int across = 8;
+        var vs = new System.Collections.Generic.List<Vector3>();
+        var uv = new System.Collections.Generic.List<Vector2>();
+        var ts = new System.Collections.Generic.List<int>();
+        for (int i=0; i<=steps; i++) for (int j=0; j<=across; j++)
+        {
+            float t = i/(float)steps, w = j/(float)across;
+            var xz = Vector2.Lerp(a,b,t) + outward * Mathf.Lerp(-.04f,.6f,w);
+            var p = ContactGround(terrain,new Vector3(xz.x,0,xz.y));
+            float height = .42f * Mathf.Pow(1-w,2);
+            vs.Add(p+Vector3.up*height); uv.Add(xz);
+        }
+        int topCount=vs.Count;
+        for(int i=0;i<topCount;i++) {vs.Add(vs[i]-Vector3.up*.02f);uv.Add(uv[i]);}
+        int stride=across+1;
+        void Quad(int a0,int b0,int c0,int d0) {ts.AddRange(new[]{a0,b0,c0,a0,c0,d0});}
+        for(int i=0;i<steps;i++) for(int j=0;j<across;j++)
+        {
+            int k=i*stride+j;
+            Quad(k,k+1,k+stride+1,k+stride);
+            Quad(k+topCount,k+topCount+stride,k+topCount+stride+1,k+topCount+1);
+        }
+        for(int i=0;i<steps;i++)
+        {
+            int k=i*stride;
+            Quad(k,k+topCount,k+topCount+stride,k+stride);
+            k+=across;
+            Quad(k,k+stride,k+stride+topCount,k+topCount);
+        }
+        for(int j=0;j<across;j++)
+        {
+            Quad(j,j+1,j+1+topCount,j+topCount);
+            int k=steps*stride+j; Quad(k,k+topCount,k+topCount+1,k+1);
+        }
+        ContactMesh(root,name,vs.ToArray(),ts.ToArray(),uv.ToArray(),snow);
+        contactStrips++;
+    }
+
+    static void ChurchDrift(Transform root, MeshCollider terrain, Vector2[] corners, int side,
+                            float from, float to, Material snow)
+    {
+        const int along=4, across=16;
+        var a=corners[side];var b=corners[(side+1)%4];
+        Vector2 Normal(Vector2 delta)=>new Vector2(-delta.y,delta.x).normalized;
+        var normal=Normal(b-a);
+        var startNormal=(normal+Normal(a-corners[(side+3)%4])).normalized;
+        var endNormal=(normal+Normal(corners[(side+2)%4]-b)).normalized;
+        float length=Vector2.Distance(a,b);
+        var vs=new Vector3[(along+1)*(across+1)];var uv=new Vector2[vs.Length];
+        var ts=new System.Collections.Generic.List<int>();
+        for(int i=0;i<=along;i++)
+        {
+            float t=Mathf.Lerp(from,to,i/(float)along);
+            var p=Vector2.Lerp(a,b,t);
+            var n=normal;
+            if(t*length<1.2f) n=Vector2.Lerp(startNormal,normal,Mathf.SmoothStep(0,1,t*length/1.2f)).normalized;
+            else if((1-t)*length<1.2f) n=Vector2.Lerp(endNormal,normal,Mathf.SmoothStep(0,1,(1-t)*length/1.2f)).normalized;
+            float noise=Mathf.PerlinNoise(p.x*.18f+31.2f,p.y*.18f+9.1f);
+            float width=Mathf.Lerp(1.2f,2.2f,noise);
+            float wind=1-Mathf.SmoothStep(0,1,(p.x-corners[0].x)/2f);
+            float height=Mathf.Lerp(Mathf.Lerp(.25f,.6f,noise),Mathf.Lerp(.5f,.8f,noise),wind);
+            // Fade the bank down beside the three-metre entrance, instead of leaving
+            // vertical cut ends. Skip the central opening entirely in the caller.
+            if(side==3)
+            {
+                float entryDistance=Mathf.Max(-3.5f-p.x,p.x+.5f);
+                height*=Mathf.SmoothStep(0,1,entryDistance/1.2f);
+            }
+            for(int j=0;j<=across;j++)
+            {
+                float w=j/(float)across;
+                var xz=p+n*(width*(w-.5f));
+                var point=ContactGround(terrain,new Vector3(xz.x,0,xz.y));
+                float profile=Mathf.Sin(w*Mathf.PI);profile*=profile;
+                int k=i*(across+1)+j;
+                vs[k]=point+Vector3.up*(height*profile);uv[k]=xz;
+                if(i==along||j==across) continue;
+                ts.AddRange(new[]{k,k+1,k+across+2,k,k+across+2,k+across+1});
+            }
+        }
+        ContactMesh(root,"ChurchDrift_"+contactDrifts++,vs,ts.ToArray(),uv,snow);
+    }
+
+    static void BuildChurchContact(Transform church, MeshCollider terrain)
+    {
+        var root = new GameObject("Church Snow Contact").transform;
+        var snow = AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat");
+        var bounds = ChurchBounds(church);
+        var corners = new[] { new Vector2(bounds.min.x,bounds.min.z),new Vector2(bounds.min.x,bounds.max.z),
+            new Vector2(bounds.max.x,bounds.max.z),new Vector2(bounds.max.x,bounds.min.z) };
+        for(int side=0;side<4;side++)
+        {
+            var a=corners[side]; var b=corners[(side+1)%4];
+            int count=Mathf.CeilToInt(Vector2.Distance(a,b)/1.35f);
+            for(int i=0;i<count;i++)
+            {
+                float from=i/(float)count,to=(i+1)/(float)count;
+                var p=Vector2.Lerp(a,b,(from+to)*.5f);
+                if(side==3 && p.x > -3.5f && p.x < -.5f) continue;
+                // Clip to the exact opening; keep a continuous snow bank on both sides.
+                if(side==3)
+                {
+                    float xa=Vector2.Lerp(a,b,from).x, xb=Vector2.Lerp(a,b,to).x;
+                    if(xa>=-.5f && xb<-.5f) to=Mathf.InverseLerp(a.x,b.x,-.5f);
+                    if(xa> -3.5f && xb<=-3.5f) from=Mathf.InverseLerp(a.x,b.x,-3.5f);
+                }
+                ChurchDrift(root,terrain,corners,side,from,to,snow);
+            }
+        }
+        // Main cruciform wall footprint, plus west annex and detached bell tower.
+        // Front wall is split around the portal, so the entry is never snowed shut.
+        var walls=new[] {new Vector2(-4.5f,-8),new Vector2(-6.5f,-8),new Vector2(-6.5f,-3.5f),
+            new Vector2(-9,-3.5f),new Vector2(-9,3.5f),new Vector2(-6.5f,3.5f),new Vector2(-6.5f,8),
+            new Vector2(-5.15f,8),new Vector2(-5.2f,8.6f)};
+        var outline=new System.Collections.Generic.List<Vector2>(walls);
+        for(int i=1;i<=16;i++)
+        { float angle=Mathf.PI-i*Mathf.PI/16;outline.Add(new Vector2(-2+Mathf.Cos(angle)*3.2f,8.6f+Mathf.Sin(angle)*3.2f)); }
+        outline.AddRange(new[]{new Vector2(1.15f,8),new Vector2(2.5f,8),new Vector2(2.5f,3.5f),
+            new Vector2(5,3.5f),new Vector2(5,-3.5f),new Vector2(2.5f,-3.5f),new Vector2(2.5f,-8),new Vector2(.5f,-8)});
+        for(int i=0;i<outline.Count-1;i++) WallSnow(root,"WallSnow_"+contactStrips,terrain,outline[i],outline[i+1],snow);
+        void Loop(Vector2[] points)
+        { for(int i=0;i<points.Length;i++) WallSnow(root,"WallSnow_"+contactStrips,terrain,points[i],points[(i+1)%points.Length],snow); }
+        Loop(new[]{new Vector2(-15.5f,-.5f),new Vector2(-15.5f,5.5f),new Vector2(-9,5.5f),new Vector2(-9,-.5f)});
+        // Tower lower octagon, matching the Blender base profile.
+        float y=Mathf.Sqrt(2.6f*2.6f-2.1f*2.1f), ny=Mathf.Sqrt(2.6f*2.6f-1.3f*1.3f);
+        Loop(new[]{new Vector2(12.6f,-2-y),new Vector2(11.8f,-2-ny),new Vector2(9.2f,-2-ny),
+            new Vector2(8.4f,-2-y),new Vector2(8.4f,-2+y),new Vector2(9.2f,-2+ny),
+            new Vector2(11.8f,-2+ny),new Vector2(12.6f,-2+y)});
+    }
+
+    static void ValidateContact(Transform church, MeshCollider terrain)
+    {
+        // Independently raycast the persisted meshes' foot vertices, including the
+        // 2 cm wall shelves and 1 cm shadow decals. No counter-only acceptance.
+        foreach(var filter in UnityEngine.Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+        {
+            string name=filter.name;
+            bool bank=name.StartsWith("ChurchDrift_");
+            bool mound=name.StartsWith("PostDrift_");
+            bool shadow=name.StartsWith("RockContact_");
+            bool wall=name.StartsWith("WallSnow_");
+            if(!bank&&!mound&&!shadow&&!wall) continue;
+            var vertices=filter.sharedMesh.vertices;
+            if(bank)
+                for(int i=0;i<vertices.Length;i+=17)
+                {
+                    CheckContact(terrain,filter.transform.TransformPoint(vertices[i]),0f);
+                    CheckContact(terrain,filter.transform.TransformPoint(vertices[i+16]),0f);
+                }
+            if(mound||shadow)
+                for(int i=vertices.Length-24;i<vertices.Length;i++)
+                    CheckContact(terrain,filter.transform.TransformPoint(vertices[i]),shadow?.01f:0f);
+            if(wall)
+            {
+                int topCount=vertices.Length/2;
+                for(int i=8;i<topCount;i+=9)
+                {
+                    CheckContact(terrain,filter.transform.TransformPoint(vertices[i]),0f);
+                    CheckContact(terrain,filter.transform.TransformPoint(vertices[i+topCount]),-.02f);
+                }
+            }
+        }
+        var center=ContactGround(terrain,new Vector3(-2f,0,-12.8f));
+        entryCleared=Mathf.Abs(center.y-(TerrainHeight(-2f,-12.8f)-.06f))<.003f;
+        // Raycast the imported stone mesh itself, rather than assuming that the
+        // five Blender steps survived the import or are still above the snow.
+        int exposedTreads = 0;
+        var treadHeights = new float[] { float.NegativeInfinity, float.NegativeInfinity };
+        foreach (var filter in church.GetComponentsInChildren<MeshFilter>())
+        {
+            var collider = filter.gameObject.AddComponent<MeshCollider>();
+            collider.sharedMesh = filter.sharedMesh;
+            Physics.SyncTransforms();
+            for (int i=0;i<2;i++)
+            {
+                var p=new Vector3(-2f,500f,-10.65f+i*.3f);
+                if (collider.Raycast(new Ray(p,Vector3.down),out var hit,1000f))
+                    treadHeights[i]=Mathf.Max(treadHeights[i],hit.point.y);
+            }
+            UnityEngine.Object.DestroyImmediate(collider);
+        }
+        for(int i=0;i<2;i++)
+        {
+            var p=new Vector3(-2f,0,-10.65f+i*.3f);
+            float expected=churchSeatY+(i+1)*.2f;
+            if(Mathf.Abs(treadHeights[i]-expected)<.01f && treadHeights[i]-ContactGround(terrain,p).y>.1f)
+                exposedTreads++;
+        }
+        entryCleared &= exposedTreads==2;
+        Debug.Log($"[CONTACT_ENTRY] exposed_treads={exposedTreads} tread0_y={treadHeights[0]:F4} tread1_y={treadHeights[1]:F4}");
+        int rocks=0,posts=0;
+        foreach(var tr in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+        { if(tr.name.StartsWith("ClusterRock_")) rocks++; if(tr.name.StartsWith("FencePost_")) posts++; }
+        Debug.Log($"[CONTACT] church_drift_segments={contactDrifts} wall_snow_strips={contactStrips} entry_cleared={entryCleared.ToString().ToLowerInvariant()} rock_shadows={contactShadows} post_drifts={contactPosts} float_errors={contactFloatErrors}");
+        Debug.Log($"[CONTACT_CHECK] rocks={rocks} posts={posts} max_ground_error_m={contactMaxError:F6} entry_m=3x4 entry_depth_m=0.06 wall_thickness_m=0.02");
+        if(contactDrifts<24||contactStrips<4||!entryCleared||contactShadows!=rocks||contactPosts!=posts||contactFloatErrors!=0)
+            throw new System.InvalidOperationException("Contact hard gate failed");
     }
 
     static void BuildWarmDetails()
@@ -357,10 +722,10 @@ public static class SpikeScene
             }
             var frame = SaveMountainMesh(root,name+"_Reveal",ring.ToArray(),ringTris.ToArray(),new Material(windowFrame));
             frame.rotation=Quaternion.Euler(0,yaw,0);
-            frame.position=position+frame.rotation*new Vector3(0,0,.025f);
+            frame.position=position+Vector3.up*churchSeatY+frame.rotation*new Vector3(0,0,.025f);
             var mat = new Material(glow);
             var tr=SaveMountainMesh(root,name,vs.ToArray(),ts.ToArray(),mat);
-            tr.position=position; tr.rotation=Quaternion.Euler(0,yaw,0);
+            tr.position=position + Vector3.up * churchSeatY; tr.rotation=Quaternion.Euler(0,yaw,0);
             tr.GetComponent<Renderer>().sharedMaterial.SetFloat("_Cull",0);
             EditorUtility.SetDirty(tr.GetComponent<Renderer>().sharedMaterial);
         }
@@ -518,6 +883,7 @@ public static class SpikeScene
             }
         }
         var mesh = new Mesh { name = "Terrain", vertices = vertices, uv = uv, triangles = triangles };
+        ClearEntrySnow(mesh);
         mesh.RecalculateNormals();
         mesh.RecalculateTangents();
         mesh.RecalculateBounds();
@@ -941,6 +1307,10 @@ public static class SpikeScene
                 Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                     "[ROCK] id={0} actual_size_m={1:F4},{2:F4},{3:F4} faces={4} burial_height_ratio={5:F4} flat_normals=true",
                     rocks, size.x, size.y, size.z, faces, burial));
+                ContactMound(root, "RockContact_" + rocks, terrain, p,
+                    new Vector2(size.x * .9f * .5f, size.z * 1.3f * .5f), 0f,
+                    RockContactMaterial(), .01f);
+                contactShadows++;
                 rocks++;
             }
         }
@@ -975,6 +1345,10 @@ public static class SpikeScene
                             new Vector3(0.06f, 0.05f, delta.magnitude), (a + b) * 0.5f, fenceWood);
                         rail.transform.rotation = Quaternion.LookRotation(delta);
                     }
+                ContactMound(roadside, "PostDrift_" + (posts - 1), terrain, p,
+                    Vector2.one * Mathf.Lerp(.18f, .28f, ((posts * 17) % 11) / 10f),
+                    Mathf.Lerp(.10f, .16f, ((posts * 7) % 9) / 8f), snowMat);
+                contactPosts++;
                 previous = p;
             }
         }
