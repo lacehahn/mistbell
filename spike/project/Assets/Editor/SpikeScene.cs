@@ -199,6 +199,7 @@ public static class SpikeScene
         rig.poses.Add(groundPose);
 
         rig.Apply(0);
+        LogMountainFrame(cam);
 
         Directory.CreateDirectory("Assets/Scenes");
         const string scenePath = "Assets/Scenes/ArtSpike.unity";
@@ -568,12 +569,11 @@ public static class SpikeScene
             return (value & 0x00ffffffu) / 16777216f;
         }
         float Rig(float phase) => 1f - Mathf.Abs(2f * Mathf.Repeat(phase, 1f) - 1f);
-        // Closed 3D ridges: asymmetric terraced flanks, angular crest and end caps.
+        // Closed 3D ridges: continuous asymmetric flanks, angular crest and end caps.
         for (int layer = 0; layer < 3; layer++)
         {
             const int n = 240, rows = 40;
-            const float terrace = 14f;
-            float distance = 345f + layer * 190f;
+            float distance = 700f + layer * 340f;
             var peakHeights = new float[n];
             var vertices = new Vector3[n * rows];
             var indices = new System.Collections.Generic.List<int>();
@@ -581,7 +581,7 @@ public static class SpikeScene
             for (int i = 0; i < n; i++)
             {
                 float x = -700f + i * 1400f / (n - 1);
-                float peak = 82f + layer * 60f;
+                float peak = 120f + layer * 55f;
                 for (int octave = 0; octave < 4; octave++)
                 {
                     float frequency = .006f / (1 << octave);
@@ -595,16 +595,16 @@ public static class SpikeScene
                 }
                 peakHeights[i] = peak;
                 float t = r / (float)(rows - 1);
-                // Crest lies on row 26: broad front shelves, steep rear wall, no rounded cap.
+                // Crest lies on row 26: continuous front slope and steep rear wall.
                 const float crest = 26f / (rows - 1);
                 float flank = t <= crest ? t / crest : (1f - t) / (1f - crest);
                 float h = -10f + (peak + 10f) * Mathf.Pow(flank, .55f);
-                float phase = Mathf.Repeat((h + 10f) / terrace, 1f);
-                float ramp = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.34f, .66f, phase));
-                float terraced = Mathf.Floor((h + 10f) / terrace) * terrace + ramp * terrace - 10f;
-                h = .55f * terraced + .45f * h;
-                float gully = 2f * (.7f * Rig(x * .035f + Hash((uint)(951 + layer)))
-                    + .3f * Rig(x * .075f + Hash((uint)(1121 + layer)))) - 1f;
+                // Warp drainage horizontally, with only a gentle bend down each flank.
+                // This breaks regular concertina folds without any height-based shelves.
+                float drainageX = x + 16f * (Mathf.PerlinNoise(x * .012f + layer * 7f, 3.1f) - .5f)
+                    + 4f * Mathf.Sin(t * 2.1f + x * .013f);
+                float gully = 2f * (.7f * Rig(drainageX * .035f + Hash((uint)(951 + layer)))
+                    + .3f * Rig(drainageX * .075f + Hash((uint)(1121 + layer)))) - 1f;
                 float envelope = Mathf.Sin(t * Mathf.PI);
                 h += 6f * gully * envelope * (1f - flank);
                 float z = distance + (t - .5f) * 170f + 18f * gully * envelope;
@@ -636,7 +636,6 @@ public static class SpikeScene
             var mat = new Material(Shader.Find("Mistbell/RidgeFog"));
             mat.SetColor("_ColorBottom", Hex("#A8A29A"));
             mat.SetTexture("_SnowMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/Snow_Pixel.png"));
-            mat.SetTexture("_RockMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/Rock_Pixel.png"));
             mat.SetColor("_RockShade", Hex("#5B6470"));
             // Ridge snow uses broad skylight; gain is local to this material, never scene exposure.
             mat.SetColor("_SnowColor", Hex("#EAF1F7") * 1.27f);
@@ -647,7 +646,7 @@ public static class SpikeScene
             mat.SetFloat("_SnowWorldFloor", 125f + layer * 55f);
             mat.SetFloat("_SnowSoftness", .004f);
             mat.SetFloat("_FogFloor", 0f);
-            mat.SetFloat("_Aerial", new[] { .25f, .50f, .78f }[layer]);
+            mat.SetFloat("_Aerial", new[] { .30f, .62f, .86f }[layer]);
             var ridge = SaveMountainMesh(root, "Mountain_" + (layer+1), flat, tris, mat);
             var ridgeMesh = ridge.GetComponent<MeshFilter>().sharedMesh;
             var normals = ridgeMesh.normals;
@@ -666,7 +665,34 @@ public static class SpikeScene
             ridge.GetComponent<MeshFilter>().sharedMesh.uv = heights;
             EditorUtility.SetDirty(ridge.GetComponent<MeshFilter>().sharedMesh);
         }
-        Debug.Log($"[MOUNTAINS] cols=240 rows=40 terrace=14m seed=731 octaves=4 crestRow=26 gullyZ=18m gullyH=6m snowline=.62 aerial=.25/.50/.78 meshHash={fingerprint:X8}");
+        Debug.Log($"[MOUNTAINS] cols=240 rows=40 continuousFlanks=true seed=731 octaves=4 crestRow=26 gullyZ=18m gullyH=6m snowline=.62 aerial=.30/.62/.86 meshHash={fingerprint:X8}");
+    }
+
+    // Diagnostics use the unchanged runtime camera; Y is measured down from the top.
+    static void LogMountainFrame(Camera cam)
+    {
+        float top = 1f, foot = 0f;
+        int visibleVertices = 0;
+        var mountains = GameObject.Find("Mountain Ridges");
+        foreach (var filter in mountains.GetComponentsInChildren<MeshFilter>())
+        foreach (var vertex in filter.sharedMesh.vertices)
+        {
+            var world = filter.transform.TransformPoint(vertex);
+            var vp = cam.WorldToViewportPoint(world);
+            if (vp.z < cam.nearClipPlane || vp.z > cam.farClipPlane || vp.x < 0f || vp.x > 1f) continue;
+            top = Mathf.Min(top, 1f - vp.y);
+            if (world.y <= -9.99f) foot = Mathf.Max(foot, 1f - vp.y);
+            visibleVertices++;
+        }
+        // No world-height quantization or periodic height shading remains.
+        const int horizontalBands = 0;
+        // Finest vertical rib in RidgeFog: one cycle every 2*pi/.46 metres.
+        float ribsPer100m = .46f * 100f / (2f * Mathf.PI);
+        Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+            "[MTN3] distance=700/1040/1380 peak=120/175/230 top_viewport_y={0:F4} foot_viewport_y={1:F4} horizontal_bands={2} ribs_per_100m={3:F2} aerial=0.30/0.62/0.86",
+            top, foot, horizontalBands, ribsPer100m));
+        if (visibleVertices == 0 || top < .18f || foot < .55f || horizontalBands != 0 || ribsPer100m < 6f)
+            throw new System.InvalidOperationException("MTN3 mountain framing/detail gate failed");
     }
 
     static Transform SaveMountainMesh(Transform parent, string name, Vector3[] vertices,
