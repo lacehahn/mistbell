@@ -179,6 +179,9 @@ public sealed class MistReveal : MonoBehaviour
     {
         // Start all normal components before moving the player. Keep normal follow-camera framing.
         yield return null;
+        // 关键：PlayerController.LateUpdate 每帧把相机朝向拉回"玩家上方 lookHeight"，
+        // 会把我们按教堂包围盒设的 FOV/朝向覆盖掉（表现为教堂顶被切）。演示期间停掉它。
+        player.enabled = false;
         var cam = Camera.main;
         var root = new DirectoryInfo(Application.dataPath);
         while (root != null && root.Name != "Builds") root = root.Parent;
@@ -209,7 +212,13 @@ public sealed class MistReveal : MonoBehaviour
             player.transform.position = p;
             // Teleport the existing follow rig with the player, avoiding frame-rate dependent camera lag.
             cam.transform.position = p + PlayerController.FollowOffset;
-            cam.transform.LookAt(p + Vector3.up * PlayerController.LookHeight);
+            // 底座扩到 37×27 后，35° 固定 FOV 在 20 m 处装不下 24.5 m 高的教堂（顶会被切）。
+            // 按教堂世界包围盒反算 FOV：保持机位不变（ValidateCloseup 校验 offset），只改视角。
+            var cb = ChurchWorldBounds();
+            float distToChurch = Vector3.Distance(cam.transform.position, cb.center);
+            float fitFov = 2f * Mathf.Atan((cb.extents.y * 1.10f) / Mathf.Max(distToChurch, 1f)) * Mathf.Rad2Deg;
+            cam.fieldOfView = Mathf.Clamp(fitFov, 35f, 58f);
+            cam.transform.LookAt(cb.center);
             yield return new WaitForSecondsRealtime(SettleSeconds);
             yield return new WaitForEndOfFrame();
             var frame = ScreenCapture.CaptureScreenshotAsTexture();
@@ -291,6 +300,20 @@ public sealed class MistReveal : MonoBehaviour
             Vector3.Distance(offset, PlayerController.FollowOffset) < .001f &&
             Mathf.Abs(tileM - 1.8f) < .001f && fire.type == LightType.Point &&
             Mathf.Approximately(fire.range, 7) && Mathf.Approximately(fire.intensity, 2.2f) && alpha <= .051f;
+    }
+
+    Bounds ChurchWorldBounds()
+    {
+        bool any = false;
+        Bounds bounds = default;
+        foreach (var mf in church.GetComponentsInChildren<MeshFilter>())
+        {
+            if (mf.sharedMesh == null) continue;
+            var r = mf.GetComponent<Renderer>();
+            if (r == null) continue;
+            if (!any) { bounds = r.bounds; any = true; } else bounds.Encapsulate(r.bounds);
+        }
+        return bounds;
     }
 
     RectInt ChurchRect(Camera cam, int width, int height)

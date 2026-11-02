@@ -16,9 +16,12 @@ if [ "${1:-}" = "--single" ]; then
 fi
 
 # Optional workaround for the macOS Metal worker deadlock; camera/renderer settings are unchanged.
-GFX_ARGS=()
-if [ "${MISTBELL_GFX_DIRECT:-0}" = "1" ]; then GFX_ARGS=(-force-gfx-direct); fi
-"$APP" "${GFX_ARGS[@]}" "${SHOT_ARGS[@]}" -screen-width 1920 -screen-height 1080 -screen-fullscreen 0 -logFile "$LOG" &
+# 注意：macOS 自带 bash 3.2 在 `set -u` 下展开**空数组**会报 unbound variable，
+# 所以这里把命令拼成以 APP 开头的非空数组再展开（历史 bug：GFX_ARGS[@] unbound）。
+CMD=("$APP")
+if [ "${MISTBELL_GFX_DIRECT:-0}" = "1" ]; then CMD+=(-force-gfx-direct); fi
+CMD+=("${SHOT_ARGS[@]}")
+"${CMD[@]}" -screen-width 1920 -screen-height 1080 -screen-fullscreen 0 -logFile "$LOG" &
 PID=$!
 for _ in $(seq 1 90); do
   kill -0 "$PID" 2>/dev/null || break

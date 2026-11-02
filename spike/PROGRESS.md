@@ -361,4 +361,8 @@
 | 19:16 | 派发台地/远山那轮 | `terrace_and_mountains.md` | 台地加雪堆/石墩/矮墙/石堆/墙根雪裙、墙顶 0.7m 外倾；远山雪帽按坡度、双层锯齿、三层亮度差≥0.18、山脚 12% 地雾 |
 | 19:54 | 台地/远山这轮生成达标但**打断 reveal** | `[TERRACE2] mounds=18 skirt=81 coping=0.70`、`[MTN9] gradient=0.307 foot_jump=0.0039` 通过；`-demo-reveal` exit=1（教堂顶 top=-0.706，机位未随底座 37×27 重算） | 已 WIP 提交 `5496a54`；任务书 `reveal_framing_fix.md`（重算三档机位 + 雪帽≥5px + 主角点采样 + 围栏台阶让位） |
 | 19:54 | **Codex 配额再次耗尽**（22:47 重置） | `try again at 10:47 PM`，本轮 tokens 51,746 | 按用户指示不手写代码；已武装 `handoff_queue 22:48`，顺序跑 reveal 修正 → 室内构图 |
+| 21:12 | **手写修 reveal 机位**（用户指定第 1 项由我做） | `MistReveal.cs` 两处 | 根因两条：①`PlayerController.LateUpdate` 每帧把相机朝向拉回"玩家上方 3.2m"，覆盖演示设置的 FOV/朝向 ②底座扩到 37×27 后 20m 处 35° FOV 装不下 24.5m 教堂。改法：演示期间 `player.enabled=false`；按教堂包围盒反算 FOV(35–58°)、对准包围盒中心 |
+| 21:12 | 修复后验收 | `[CLOSEUP] church_top_y=0.079469`（门槛 0.06–0.20）、`[REVEAL] gate=pass ratio=1.949423`、`-demo-reveal exit=0` | 三张 reveal 图重出，教堂不再切顶 |
+| 21:12 | **修 capture_runtime.sh 潜在 bug** | macOS 自带 bash 3.2 + `set -u` 展开空数组 `GFX_ARGS[@]` 报 unbound variable → 脚本立即退 1，截图链路整体失效 | 改为以 APP 开头的非空数组 `CMD` 再展开；`capture exit=0` 恢复 |
+| 21:12 | 回归 | walk / stairs / tower / cinema 四个 demo 全部 exit=0；capture exit=0 | 全绿 |
 
