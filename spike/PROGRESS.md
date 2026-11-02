@@ -304,4 +304,5 @@
 | 10:49 | **发现并行冲突** | `git log` + `cron list` | 09:57 `87566e4`（surface.py 定标 11/11）、10:06 `933c864`（去水波纹 corrX 8.3→2.6）**是定时任务自己做的**，与我的手动推进并行；两条线同一队列有覆盖风险 → **已暂停 cron 推进**（用户要求"所有都自己做"），改由本会话单线推进 |
 | 10:50 | 已知最新帧指标 | 933c864 自报 | 近景 corrX 8.3→2.6、aniso 5.69→1.58、PATTERN=0、snow 0.6003、shadow 0.0707（待我复量） |
 | 10:52 | **cron 会话撞车后自停** | `git log` + `ps` + 文件 mtime | 我 10:35 派 Codex 做山体第 1 轮；10:49:54 另一（手动）会话提交 `35462d0`「暂停 30 分钟 cron 推进」，把我这一轮的 `RidgeFog.shader`/`SpikeScene.cs`/`macro.py`/`brief-mountain.md` 一起卷进它的提交。PROGRESS mtime 10:49 证明它在活动 → **本轮不派发、不改源码**，只留 handoff。第 1 轮结论（我的独立复跑数字）：几何过关（`macroStd 23.8→64.4`、四块中三块 ROCK、尖峰+崖壁+沟壑，`meshHash=7448A17B`、`heightPct 44.8` 未动），**但着色坏**：`rock *= (stratum<1?.18:…)` 造出近纯黑岩带；`rock *= lerp(1,.38,farRidge)` 把远层压黑（空气透视方向反了）；`rockUV=/8.0` 在 400 m 处退化成均匀灰浆糊；雪掩码过窄 → 雪线成硬剪影。修法与硬门槛已写进 `spike/brief-mountain2.md`（未提交，留给手动会话直接用） |
+| 10:53 | **Codex 配额耗尽** | `codex.sh` exit=1 | `ERROR: You've hit your usage limit ... try again at 12:45 PM` → 记：**Codex 额度用尽，等待 12:45 窗口重置**；不空等，改由本会话手写实现 + 自己跑构建/截图/量测 |
 
