@@ -240,12 +240,12 @@ public static class SpikeScene
         if (ground.GetTexture("_BumpMap") != null) material.EnableKeyword("_NORMALMAP");
         else material.DisableKeyword("_NORMALMAP");
         material.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/Snow_Pixel.png"));
-        // Grazing-angle compensation: .075m across / .375m along the slope.
-        // Three independent world-space scales are sampled by TerrainHaze; terrain UVs stay untouched.
+        // Retained texture transform; snow grain uses TerrainHaze's fixed world XZ density.
         material.SetTextureScale("_BaseMap", new Vector2(1f / 1.2f, 1f / 6f));
         material.SetTexture("_SnowMedium",AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/" + "Snow_Medium.png"));
         material.SetTexture("_SnowLow",AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/" + "Snow_Low.png"));
         material.SetFloat("_SnowAlbedo", .88f);
+        Debug.Log("[SNOW] texels_per_meter=40 detail_scale=0.0575 palette_steps=3 cluster_texels=2.3 mound_scale_m=0.5..1 mound_albedo_amplitude=0.04");
         material.SetColor("_SnowShadowColor", Hex("#A9C0D8"));
         material.SetColor("_HazeColor", Hex("#DCE2E6"));
         material.SetFloat("_HazeStart", 140f);

@@ -83,6 +83,13 @@ Shader "Mistbell/TerrainHaze"
                 return output;
             }
             float HashChunk(float2 p) { return frac(sin(dot(p,float2(127.1,311.7)))*43758.5453); }
+            float SnowMound(float2 p)
+            {
+                float2 c = floor(p), f = frac(p);
+                f = f*f*(3.0-2.0*f);
+                return lerp(lerp(HashChunk(c), HashChunk(c+float2(1,0)), f.x),
+                            lerp(HashChunk(c+float2(0,1)), HashChunk(c+1), f.x), f.y);
+            }
             float2 ChunkUV(float2 p, float2 cell, float seed)
             {
                 float angle = HashChunk(cell+seed)*1.570796327;
@@ -133,24 +140,27 @@ Shader "Mistbell/TerrainHaze"
                 float3 weights = abs(input.normalWS);
                 weights = pow(weights, 8); weights /= max(dot(weights, 1.0), .0001);
                 float3 p = input.positionWS * _BaseMap_ST.x;
-                half3 texel = SnowLayer(input.positionWS.xz / 3.2,0);
-                half middle = SnowLayer(input.positionWS.xz / 12.8,1).r;
-                half lowField = SnowLayer(input.positionWS.xz / 51.2,2).r;
+                // Group the 40 texels/m world grid into hard 2.3-texel clusters (5.75 cm; about 3-4 screen pixels nearby).
+                // No interpolated noise in the fine palette: each cell has one flat value.
+                float2 snowXZ = input.positionWS.xz;
+                float grain = HashChunk(floor(snowXZ * (40.0 / 2.3)));
+                half detail = grain < .333333 ? .78h : (grain < .666667 ? 1.04h : 1.30h);
+                // Isotropic 0.5 / 0.75 / 1 m value fields, bounded albedo relief +/-4%.
+                float2 rotatedXZ = float2(.8*snowXZ.x-.6*snowXZ.y, .6*snowXZ.x+.8*snowXZ.y);
+                float mound = .5*SnowMound(snowXZ/.75+17.3)
+                            + .3*SnowMound(rotatedXZ/.5+43.1)
+                            + .2*SnowMound(snowXZ+91.7);
+                detail *= 1.0 + (mound*2.0-1.0)*.04;
+                half3 texel = half3(.651, .744, .842) * detail;
                 if (_RockOnly > .5)
                     texel = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,p.zy).rgb*weights.x
                           + SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,p.xz).rgb*weights.y
                           + SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,p.xy).rgb*weights.z;
-                #if defined(UNITY_COLORSPACE_GAMMA)
-                    // This spike runs in Gamma: sRGB textures are not hardware-decoded.
-                    // Decode snow explicitly before normalizing its linear palette mean.
-                    if (_RockOnly < .5) texel = SRGBToLinear(texel);
-                #endif
-                // Normalize the five-colour palette to the previous snow's average albedo.
+                // Normalize the procedural palette to the previous snow's average albedo.
                 half3 snowAlbedo = _SnowAlbedo * _BaseColor.rgb / max(_BaseColor.b, .001);
                 surface.albedo = lerp(texel * _BaseColor.rgb,
                     snowAlbedo * texel / half3(.651, .744, .842), snowCoverage);
-                // Middle field modulates detail subtly; low field is bounded to +/-6%.
-                surface.albedo *= lerp(1, (1+(middle-.5)*.12)*(1+(lowField*2-1)*.06), snowCoverage);
+                // Broad snow mounds modulate the three hard grain levels, without waves.
                 if(_StoneSurface>.5)
                 {
                     half3 stone=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,input.uv).rgb;

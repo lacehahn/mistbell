@@ -115,10 +115,21 @@ def discrete_peak(curve, min_lag=6):
     return best_v, best_l
 
 
+def band_spectrum(src, w, h, radii=(1, 2, 4, 8, 16)):
+    """多尺度细节能量：src − box_blur(r) 的 RMS，衡量「哪一档尺度上有结构」。"""
+    out = {}
+    for r in radii:
+        m = box_mean(src, w, h, r)
+        d = [src[i] - m[i] for i in range(w * h)]
+        out[r] = (sum(v * v for v in d) / len(d)) ** 0.5
+    return out
+
+
 def measure_src(src, w, h, max_lag=None, ground=False):
     max_lag = max_lag or w // 2
     d = detrend(src, w, h)
     grain = (sum(v * v for v in d) / len(d)) ** 0.5
+    bands = band_spectrum(src, w, h)
     cx = autocorr_curve(d, w, h, "x", max_lag)
     cy = autocorr_curve(d, w, h, "y", max_lag)
     cxl, cyl = corr_len(cx), corr_len(cy)
@@ -138,7 +149,7 @@ def measure_src(src, w, h, max_lag=None, ground=False):
     else:
         verdict = "OK"
     return dict(grain=grain, corrX=cxl, corrY=cyl, aniso=aniso,
-                peak=peak, peak_lag=lag, verdict=verdict)
+                peak=peak, peak_lag=lag, verdict=verdict, bands=bands)
 
 
 def measure_patch(path, x, y, w, h, max_lag=None, ground=False):
@@ -218,8 +229,9 @@ def scan(path, rect, patch, step, quiet=False, ground=False):
             m.update(x=xx, y=yy)
             results.append(m)
             if not quiet:
-                print("[PATCH] %4d,%4d grain=%5.2f corrX=%4.1f corrY=%4.1f aniso=%5.2f peak=%5.2f -> %s"
-                      % (xx, yy, m["grain"], m["corrX"], m["corrY"], m["aniso"], m["peak"], m["verdict"]))
+                print("[PATCH] %4d,%4d grain=%5.2f corrX=%4.1f corrY=%4.1f aniso=%5.2f peak=%5.2f -> %s  bands[1,2,4,8,16]=%.1f/%.1f/%.1f/%.1f/%.1f"
+                      % (xx, yy, m["grain"], m["corrX"], m["corrY"], m["aniso"], m["peak"], m["verdict"],
+                         m["bands"][1], m["bands"][2], m["bands"][4], m["bands"][8], m["bands"][16]))
             xx += step
         yy += step
     if not results:
@@ -233,6 +245,11 @@ def scan(path, rect, patch, step, quiet=False, ground=False):
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
     print("[SURFACE] patches=%d grain_med=%.2f corrX_med=%.1f corrY_med=%.1f aniso_med=%.2f peak_med=%.2f"
           % (len(results), med("grain"), med("corrX"), med("corrY"), med("aniso"), med("peak")))
+    bands_med = []
+    for r in (1, 2, 4, 8, 16):
+        vals = sorted(m["bands"][r] for m in results)
+        bands_med.append(vals[len(vals) // 2])
+    print("[SURFACE] bands_med[1,2,4,8,16]=%s" % "/".join("%.1f" % v for v in bands_med))
     print("[SURFACE] tally=%s" % counts)
     return 0
 
