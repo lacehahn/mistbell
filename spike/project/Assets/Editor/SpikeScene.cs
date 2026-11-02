@@ -401,7 +401,7 @@ public static class SpikeScene
     {
         const int steps = 9;
         const float rise = .18f, run = .34f, width = 5f, wallHeight = 1.62f;
-        const float thickness = .45f, capHeight = .12f, gap = .025f;
+        const float thickness = .45f, copingWidth = .70f, capHeight = .12f, gap = .025f;
         const float startZ = -13.25f, halfX = 18.5f;
         const float baseFrontZ = startZ - 1.5f;
         float frontZ = startZ + steps * run, backZ = baseFrontZ + 27f;
@@ -409,7 +409,32 @@ public static class SpikeScene
         float landingY = footY + steps * rise;
         // Leave a shallow coping above the graded courtyard; retain the original slope.
         float deckLift = landingY - GroundY(frontZ);
-        float Deck(float x, float z) => GroundY(z) + deckLift;
+        // Continuous perimeter drifts are part of the deck mesh and collision surface.
+        // Keep the central door/stair route and the tower approach at their old level.
+        var moundCenters = new System.Collections.Generic.List<Vector2>();
+        foreach(float x in new[]{-15.5f,-11f,-6.5f,6.5f,11f,15.5f})
+            moundCenters.Add(new Vector2(x,-12f));
+        foreach(float x in new[]{-17f,17f}) foreach(float z in new[]{-7f,-2f,4f,9f})
+            moundCenters.Add(new Vector2(x,z));
+        foreach(float x in new[]{-12f,-5f,3f,11f}) moundCenters.Add(new Vector2(x,10.8f));
+        float Drift(float x,float z)
+        {
+            float height=0;
+            foreach(var q in moundCenters)
+            {
+                float r=new Vector2((x-q.x)/2.1f,(z-q.y)/1.5f).magnitude;
+                if(r>=1) continue;
+                float amplitude=Mathf.Lerp(.15f,.35f,Mathf.PerlinNoise(q.x*.37f+40,q.y*.41f+60));
+                height=Mathf.Max(height,amplitude*.5f*(1+Mathf.Cos(r*Mathf.PI)));
+            }
+            float edge=Mathf.Min(halfX-thickness-Mathf.Abs(x),backZ-thickness-z);
+            float front= z<frontZ && Mathf.Abs(x)>3.5f ? z-baseFrontZ-thickness : 100;
+            edge=Mathf.Min(edge,front);
+            float wallBank=Mathf.Clamp01(1-edge/1.4f);
+            float noise=Mathf.PerlinNoise(x*.63f+30,z*.58f+50);
+            return Mathf.Max(height,wallBank*wallBank*Mathf.Lerp(.25f,.35f,noise));
+        }
+        float Deck(float x, float z) => GroundY(z) + deckLift + Drift(x,z);
         float Ground(float x, float z) => ContactGround(terrain, new Vector3(x, 0, z)).y;
         float WallTop(float x, float z) => GroundY(z) + wallHeight;
         var root = new GameObject("Church Terrace").transform;
@@ -491,8 +516,20 @@ public static class SpikeScene
                 var outward = alongX ? (z0 < (frontZ+backZ)/2 ? Vector3.back : Vector3.forward)
                     : (x0 < 0 ? Vector3.left : Vector3.right);
                 box.center += outward * (thickness / 2 + .25f);
-                caps.Add(Prism("TerraceCap_"+segments,xa,xb,za,zb,WallTop,
-                    (x,z)=>WallTop(x,z)+capHeight,snow,false));
+                float overhang=(copingWidth-thickness)/2;
+                float cx=(xa+xb)/2,cz=(za+zb)/2;
+                float CapBase(float x,float z) => WallTop(x,alongX?cz:z)+.04f-
+                    Vector3.Dot(new Vector3(x-cx,0,z-cz),outward)*Mathf.Tan(5*Mathf.Deg2Rad);
+                var cap=Prism("TerraceCap_"+segments,
+                    xa-(alongX?0:overhang),xb+(alongX?0:overhang),
+                    za-(alongX?overhang:0),zb+(alongX?overhang:0),CapBase,
+                    (x,z)=>CapBase(x,z)+capHeight,stone,false);
+                caps.Add(cap);
+                float actualWidth=alongX?cap.sharedMesh.bounds.size.z:cap.sharedMesh.bounds.size.x;
+                var topNormal=cap.sharedMesh.normals[0];
+                float tilt=Mathf.Atan2(Vector3.Dot(topNormal,outward),topNormal.y)*Mathf.Rad2Deg;
+                if(Mathf.Abs(actualWidth-copingWidth)>.001f || Mathf.Abs(tilt-5)>.01f)
+                    throw new System.InvalidOperationException("TERRACE2 coping width/tilt gate");
                 segments++;
             }
         }
@@ -565,7 +602,9 @@ public static class SpikeScene
         // original entry steps and window offsets remain intact.
         church.position+=Vector3.up*deckLift; churchSeatY+=deckLift;
 
-        // A 25cm bank follows actual wall footprints, leaving the portal clear.
+        // Continuous 40..70cm snow skirts follow the church/annex/tower exterior
+        // wall footprints as well as the retaining wall below. Keep the portal clear.
+        int skirtSegments=0;
         void Bank(Vector2 a,Vector2 b)
         {
             var normal=new Vector2(-(b-a).y,(b-a).x).normalized;
@@ -576,11 +615,13 @@ public static class SpikeScene
             {
                 float t=i/(float)n, w=j/8f;
                 var q=Vector2.Lerp(a,b,t)+normal*(w*.65f-.02f);
-                vs.Add(new Vector3(q.x,Deck(q.x,q.y)+.25f*Mathf.Pow(1-w,2),q.y)); uv.Add(q);
+                float height=Mathf.Lerp(.4f,.7f,Mathf.PerlinNoise(q.x*.3f+80,q.y*.3f+90));
+                vs.Add(new Vector3(q.x,Deck(q.x,q.y)+height*Mathf.Pow(1-w,2),q.y)); uv.Add(q);
                 if(i==n||j==8) continue;
                 int k=i*9+j; ts.AddRange(new[]{k,k+1,k+10,k,k+10,k+9});
             }
             ContactMesh(root,"TerraceBank_"+root.childCount,vs.ToArray(),ts.ToArray(),uv.ToArray(),snow);
+            skirtSegments++;
         }
         void BankLoop(Vector2[] points)
         { for(int i=0;i<points.Length-1;i++) Bank(points[i],points[i+1]); }
@@ -596,6 +637,123 @@ public static class SpikeScene
         var tower=new Vector2[9];
         for(int i=0;i<=8;i++) {float a=-Mathf.PI/2-i*Mathf.PI/4;tower[i]=new Vector2(10.5f+2.6f*Mathf.Cos(a),-2+2.6f*Mathf.Sin(a));}
         BankLoop(tower);
+
+        // Four snow-capped boundary stones, entirely outside the five-metre stairs.
+        int bollards=0,walls=0,rockpiles=0;
+        foreach(float side in new[]{-1f,1f}) foreach(float xAbs in new[]{5.2f,12.3f})
+        {
+            float x=side*xAbs,z=-11.8f;
+            float y=Deck(x,z);
+            Prism("TerraceBollard_"+bollards,x-.35f,x+.35f,z-.35f,z+.35f,
+                (a,b)=>Deck(a,b)-.04f,(a,b)=>y+.9f,stone,false);
+            Prism("TerraceBollardSnow_"+bollards,x-.37f,x+.37f,z-.37f,z+.37f,
+                (a,b)=>y+.89f,(a,b)=>y+.96f+.025f*Mathf.PerlinNoise(a*4+40,b*4+40),snow,false);
+            bollards++;
+        }
+        // Low wall remnants divide the lateral empty spaces without crossing any route.
+        foreach(float x in new[]{-16f,16f})
+        {
+            Prism("TerraceLowWall_"+walls,x-.28f,x+.28f,-10.2f,-4.2f,
+                (a,b)=>Deck(a,b)-.06f,(a,b)=>Deck(x,b)+.5f,stone,false);
+            Prism("TerraceLowWallSnow_"+walls,x-.33f,x+.33f,-10.25f,-4.15f,
+                (a,b)=>Deck(x,b)+.49f,(a,b)=>Deck(x,b)+.57f+.03f*Mathf.PerlinNoise(a*3+70,b*3+70),snow,false);
+            walls++;
+        }
+        var rockRng=new System.Random(26791);
+        foreach(float x in new[]{-16.8f,16.8f}) foreach(float z in new[]{-13f,10.5f})
+        {
+            var pile=new GameObject("TerraceRockpile_"+rockpiles).transform; pile.SetParent(root,false);
+            int count=3+rockpiles%3;
+            for(int i=0;i<count;i++)
+            {
+                var mesh=BuildWinterRock(rockRng);
+                float size=.4f+(float)rockRng.NextDouble()*.4f;
+                var verts=mesh.vertices; var bounds=mesh.bounds;
+                for(int k=0;k<verts.Length;k++) verts[k]=Vector3.Scale(verts[k]-bounds.center,
+                    new Vector3(size/bounds.size.x,size/bounds.size.y,size/bounds.size.z));
+                mesh.vertices=verts; mesh.RecalculateBounds();
+                string asset="Assets/Settings/TerracePile_"+rockpiles+"_"+i+".asset";
+                AssetDatabase.DeleteAsset(asset); AssetDatabase.CreateAsset(mesh,asset);
+                float angle=i*2.4f,px=x+Mathf.Cos(angle)*.38f,pz=z+Mathf.Sin(angle)*.38f;
+                var rock=new GameObject("Rock_"+i); rock.transform.SetParent(pile,false);
+                rock.transform.position=new Vector3(px,Deck(px,pz)+size*.28f,pz);
+                rock.AddComponent<MeshFilter>().sharedMesh=mesh;
+                rock.AddComponent<MeshRenderer>().sharedMaterials=new[]{stone,snow,stone};
+            }
+            rockpiles++;
+        }
+        // A continuous, mitred outer skirt at the retaining-wall foot; omit only the stair opening.
+        var skirtCorners=new[]{new Vector2(-halfX,baseFrontZ),new Vector2(halfX,baseFrontZ),
+            new Vector2(halfX,backZ),new Vector2(-halfX,backZ)};
+        for(int side=0;side<4;side++)
+        {
+            Vector2 a=skirtCorners[side],b=skirtCorners[(side+1)%4];
+            int n=Mathf.CeilToInt(Vector2.Distance(a,b)/1.5f);
+            for(int i=0;i<n;i++)
+            {
+                Vector2 p=Vector2.Lerp(a,b,i/(float)n),q=Vector2.Lerp(a,b,(i+1f)/n);
+                if(side==0 && p.x<width/2+.5f && q.x>-width/2-.5f) continue;
+                Vector2 Out(Vector2 v) => new Vector2(Mathf.Abs(v.x+halfX)<.001f?-1:Mathf.Abs(v.x-halfX)<.001f?1:0,
+                    Mathf.Abs(v.y-baseFrontZ)<.001f?-1:Mathf.Abs(v.y-backZ)<.001f?1:0);
+                var vs=new System.Collections.Generic.List<Vector3>(); var uv=new System.Collections.Generic.List<Vector2>();
+                var ts=new System.Collections.Generic.List<int>();
+                for(int k=0;k<=6;k++) for(int j=0;j<=8;j++)
+                {
+                    float t=k/6f,w=j/8f;
+                    Vector2 v=Vector2.Lerp(p,q,t),normal=Vector2.Lerp(Out(p),Out(q),t);
+                    // Interior points on a side share its normal; corner vectors miter the seam.
+                    if(side==0) normal.y=-1; if(side==1) normal.x=1;
+                    if(side==2) normal.y=1; if(side==3) normal.x=-1;
+                    var at=v+normal*(w*1.15f-.015f);
+                    float h=Mathf.Lerp(.4f,.7f,Mathf.PerlinNoise(v.x*.3f+80,v.y*.3f+90));
+                    vs.Add(new Vector3(at.x,Ground(at.x,at.y)+h*Mathf.Pow(1-w,2)+.006f,at.y)); uv.Add(at);
+                    if(k==6||j==8) continue;
+                    int id=k*9+j; ts.AddRange(new[]{id,id+10,id+1,id,id+9,id+10});
+                }
+                var skirt=ContactMesh(root,"TerraceSkirt_"+skirtSegments++,vs.ToArray(),ts.ToArray(),uv.ToArray(),snow);
+                foreach(var normal in skirt.GetComponent<MeshFilter>().sharedMesh.normals)
+                    if(normal.y<=0) throw new System.InvalidOperationException("TERRACE2 skirt winding gate");
+            }
+        }
+        // Keep named segments/colliders for inspection, but render the dressing in
+        // two material batches. Dozens of tiny snow strips must not add dozens of draws.
+        var dressingStone=new System.Collections.Generic.List<CombineInstance>();
+        var dressingSnow=new System.Collections.Generic.List<CombineInstance>();
+        int dressingRenderers=0;
+        foreach(var renderer in root.GetComponentsInChildren<MeshRenderer>())
+        {
+            string name=renderer.name;
+            bool dressing=name.StartsWith("TerraceSkirt_") || name.StartsWith("TerraceBank_") || name.StartsWith("TerraceBollard") ||
+                name.StartsWith("TerraceLowWall") || renderer.transform.parent.name.StartsWith("TerraceRockpile_");
+            if(!dressing) continue;
+            var mesh=renderer.GetComponent<MeshFilter>().sharedMesh;
+            for(int sub=0;sub<mesh.subMeshCount;sub++)
+            {
+                var material=renderer.sharedMaterials[sub];
+                var batch=material==snow?dressingSnow:dressingStone;
+                batch.Add(new CombineInstance { mesh=mesh,subMeshIndex=sub,
+                    transform=root.worldToLocalMatrix*renderer.transform.localToWorldMatrix });
+            }
+            renderer.enabled=false; dressingRenderers++;
+        }
+        void DressingBatch(string name,System.Collections.Generic.List<CombineInstance> parts,Material material)
+        {
+            var mesh=new Mesh { name=name,indexFormat=IndexFormat.UInt32 };
+            mesh.CombineMeshes(parts.ToArray(),true,true); mesh.RecalculateBounds();
+            string path="Assets/Settings/"+name+".asset";
+            AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(mesh,path);
+            var go=new GameObject(name); go.transform.SetParent(root,false);
+            go.AddComponent<MeshFilter>().sharedMesh=mesh;
+            var renderer=go.AddComponent<MeshRenderer>(); renderer.sharedMaterial=material;
+            renderer.shadowCastingMode=ShadowCastingMode.On; renderer.receiveShadows=true;
+        }
+        DressingBatch("TerraceDressingStone",dressingStone,stone);
+        DressingBatch("TerraceDressingSnow",dressingSnow,snow);
+        Debug.Log($"[TERRACE2_BATCH] source_renderers={dressingRenderers} active_renderers=2");
+
+        Debug.Log(FormattableStringInvariant($"[TERRACE2] mounds={moundCenters.Count} bollards={bollards} walls={walls} rockpiles={rockpiles} skirt_segments={skirtSegments} coping_m={copingWidth:F2} tilt_deg=5"));
+        if(moundCenters.Count<12||bollards!=4||walls!=2||rockpiles!=4||skirtSegments<20)
+            throw new System.InvalidOperationException("TERRACE2 count gate");
 
         // Measure actual generated mesh bounds rather than requested dimensions.
         var apronBounds = apron.GetComponent<Renderer>().bounds;
@@ -630,8 +788,6 @@ public static class SpikeScene
         }
         float landingError=Mathf.Abs(Deck(0,frontZ)-(footY+steps*rise));
         if(landingError>.03f) errors++;
-        foreach(var f in caps)
-            if(Mathf.Abs(f.sharedMesh.bounds.size.y-(capHeight+Mathf.Tan(SlopeDeg*Mathf.Deg2Rad)*f.sharedMesh.bounds.size.z))>.003f) errors++;
         Debug.Log(FormattableStringInvariant($"[TERRACE] wall_segments={segments} wall_h={wallHeight:F2} steps={steps} step_rise={rise:F2} step_run={run:F2} stair_w={width:F2} snow_cap=true float_errors={errors}"));
         Debug.Log(FormattableStringInvariant($"[TERRACE_CHECK] grounded_vertices={checkedFeet} max_error_m={maxError:F6} landing_error_m={landingError:F6} deck_lift_m={deckLift:F4} front_z={frontZ:F2} back_z={backZ:F2} grade_deg={SlopeDeg:F1}"));
         if(segments<12||wallHeight<1.4f||wallHeight>1.8f||steps<8||steps>10||Mathf.Abs(width-5)>.1f||checkedFeet==0||errors!=0)

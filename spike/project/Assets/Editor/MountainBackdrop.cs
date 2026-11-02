@@ -34,6 +34,8 @@ public static class MountainBackdrop
     static readonly int[] OriginalCrests = { 444, 460, 448 };
     static float maxPeakStdPct, maxDarkPct;
     static int darkestRgb;
+    static readonly float[] LayerLuma = new float[3];
+    static float maxFootJump;
     static int[] Profile(int layer, out int peaks, out float std)
     {
         var rng = new System.Random(Seeds[layer]);
@@ -94,25 +96,45 @@ public static class MountainBackdrop
             "[MTN7_PROFILE] L{0} peaks={1} rounded={2} peak_height_std_pct={3:F4}",layer+1,heights.Count,rounded,pct));
         return ridge;
     }
+    // Irregular knot spacing gives two genuinely distinct serration scales, without
+    // a fixed repeating sawtooth. Neither helper touches the scene random generator.
+    static float Jagged(int x,int seed,int minPeriod,int maxPeriod)
+    {
+        int start=0,index=0;
+        while(true)
+        {
+            int period=minPeriod+Mathf.FloorToInt(Hash(seed+index*31)*(maxPeriod-minPeriod+1));
+            period=Mathf.Min(period,maxPeriod);
+            if(x<start+period)
+                return Mathf.Lerp(Hash(seed+index*47+701),Hash(seed+(index+1)*47+701),(x-start)/(float)period)*2-1;
+            start+=period; index++;
+        }
+    }
+    static float Luma(Color32 p) => (.2126f*p.r+.7152f*p.g+.0722f*p.b)/255f;
     static Texture2D Paint(int layer,int[] ridge,float visibleFoot)
     {
         var pixels=new Color32[W*H];
-        Color floor=Hex("#5A6876"), mid=Hex("#7B8A99"), light=Hex("#A0ADBA");
-        Color snow=Hex("#EAF1F7"), haze=Hex("#C6D3E0");
-        Color air=layer==1?Hex("#9FB0C2"):Hex("#C6D3E0");
-        float mix=layer==0?0:layer==1?.35f:.60f;
+        Color floor=Hex("#5A6876"), mid=Hex("#6C7D8D"), light=Hex("#91A2B3");
+        Color snow=layer==0?Hex("#B7C7D4"):layer==1?Hex("#D1DFEA"):Hex("#EAF1F7");
+        Color haze=Hex("#EDF3F8"), air=Hex("#DAE5EF");
+        float mix=layer==0?0:layer==1?.48f:.88f;
+        double visibleLuma=0; int visibleArea=0;
         int seed=Seeds[layer],area=0,dark=0,minRgb=0xffffff;
         int crest=0;
         foreach(int h in ridge) crest=Math.Max(crest,h);
         // The cards extend underground. Anchor fog at the visible snow contact, so
         // its lower quarter is not lost behind the unchanged foreground terrain.
-        float hazeHeight=(crest-visibleFoot)*.25f;
+        float hazeHeight=(crest-visibleFoot)*.12f;
         for(int x=0;x<W;x++)
         {
             int l=Mathf.Max(0,x-4),r=Mathf.Min(W-1,x+4);
             float slope=Mathf.Abs((ridge[r]-ridge[l])/(float)Mathf.Max(1,r-l));
-            // Crest-only snow: steep ribs retain 6px, shallow shelves up to 26px.
-            int cap=Mathf.RoundToInt(Mathf.Lerp(26,6,Mathf.Clamp01(slope/2.2f)));
+            // Thickness in source pixels. Steep flanks: 2..6; shallow shelves: 10..22.
+            float large=Jagged(x,seed+503,6,12),small=Jagged(x,seed+907,2,4);
+            float depositNoise=Mathf.Clamp01(.5f+.35f*large+.15f*small);
+            float steep=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.35f,1.45f,slope));
+            int cap=Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(
+                Mathf.Lerp(10,22,depositNoise),Mathf.Lerp(2,6,depositNoise),steep)),2,22);
             for(int y=0;y<=ridge[x];y++)
             {
                 int depth=ridge[x]-y;
@@ -125,15 +147,17 @@ public static class MountainBackdrop
                     :Color.Lerp(mid,light,Mathf.SmoothStep(0,1,(exposure-.5f)*2));
                 float bed=Noise2(x/24f,(y+x*.24f)/7f,seed+211);
                 c=Color.Lerp(c,light,Mathf.Max(0,bed)*.10f);
-                float deposit=Mathf.SmoothStep(0,1,Mathf.InverseLerp(-.65f,-.05f,Noise(x/17f,seed+301)));
-                float coverage=depth<cap?deposit*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(cap-3,cap,depth))):0;
+                float deposit=Mathf.Lerp(.35f,1,Mathf.SmoothStep(0,1,
+                    Mathf.InverseLerp(-.55f,.2f,Noise2(x/13f,y/11f,seed+301))));
+                float coverage=depth<cap?deposit*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(cap-2,cap,depth))):0;
                 c=Color.Lerp(c,snow,coverage);
                 c=Color.Lerp(c,air,mix);
-                float fog=.65f*(1-Mathf.SmoothStep(0,1,Mathf.Clamp01((y-visibleFoot)/hazeHeight)));
+                float fog=1-Mathf.SmoothStep(0,1,Mathf.Clamp01((y-visibleFoot)/hazeHeight));
                 c=Color.Lerp(c,haze,fog);
                 // Quantized output is the source of every color/area measurement below.
                 Color32 pixel=c;
                 pixels[y*W+x]=pixel;
+                if(y>=visibleFoot) { visibleLuma+=Luma(pixel); visibleArea++; }
                 int rgb=(pixel.r<<16)|(pixel.g<<8)|pixel.b;
                 minRgb=Math.Min(minRgb,rgb);
                 if(pixel.r<0x5A || pixel.g<0x68 || pixel.b<0x76)
@@ -144,6 +168,20 @@ public static class MountainBackdrop
                 if(lum<119.6f) dark++;
             }
         }
+        LayerLuma[layer]=(float)(visibleLuma/Math.Max(1,visibleArea));
+        // Inspect the first two visible rows across the full width, not hidden card feet.
+        int footRow=Mathf.CeilToInt(visibleFoot);
+        float horizontalJump=0,verticalJump=0;
+        for(int x=1;x<W;x++)
+        {
+            horizontalJump=Mathf.Max(horizontalJump,Mathf.Abs(Luma(pixels[footRow*W+x])-Luma(pixels[footRow*W+x-1])));
+            verticalJump=Mathf.Max(verticalJump,Mathf.Abs(Luma(pixels[(footRow+1)*W+x])-Luma(pixels[footRow*W+x])));
+        }
+        maxFootJump=Mathf.Max(maxFootJump,horizontalJump,verticalJump);
+        Debug.Log(string.Format(CultureInfo.InvariantCulture,
+            "[MTN9_FOOT] L{0} visible_foot_px={1:F3} haze_height_px={2:F3} horizontal_jump={3:F6} vertical_jump={4:F6} luma_scope=visible_mountain_pixels",
+            layer+1,visibleFoot,hazeHeight,horizontalJump,verticalJump));
+        if(horizontalJump>.04f || verticalJump>.04f) throw new InvalidOperationException("MTN9 foot continuity gate");
         float darkPct=100f*dark/area;
         if(darkPct>25 || minRgb<0x5A6876 || HeightScale!=1.15f)
             throw new InvalidOperationException("MTN7 dark area/color/scale gate");
@@ -186,7 +224,7 @@ public static class MountainBackdrop
             poses.Add(ShotRig.Look("follow",player+PlayerController.FollowOffset,
                 player+Vector3.up*PlayerController.LookHeight,runtimeFov));
         }
-        maxPeakStdPct=0; maxDarkPct=0; darkestRgb=0xffffff;
+        maxPeakStdPct=0; maxDarkPct=0; darkestRgb=0xffffff; maxFootJump=0;
         for(int layer=0;layer<3;layer++)
         {
             int[] ridge=Profile(layer,out int peaks,out float std);
@@ -273,8 +311,14 @@ public static class MountainBackdrop
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN8] layer_width_m={0:F2}/{1:F2}/{2:F2} screen_fill_pct={3:F4}/{4:F4}/{5:F4} top_y={6:F4}/{7:F4}/{8:F4}",
             widths[0],widths[1],widths[2],fills[0],fills[1],fills[2],measured[0],measured[1],measured[2]));
+        float gradient=LayerLuma[2]-LayerLuma[0];
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
-            "[MTN7] peak_height_std_pct={0:F4} dark_area_pct={1:F4} darkest=#{2:X6} layer_mix=35/60 haze_band_pct=25 snow_cap_px=6..26 height_scale={3:F2}",
+            "[MTN9] snowcap_px=2..22 double_jagged=true layer_luma=L1:{0:F4}/L2:{1:F4}/L3:{2:F4} gradient={3:F4} haze_band_pct=12 foot_jump={4:F6}",
+            LayerLuma[0],LayerLuma[1],LayerLuma[2],gradient,maxFootJump));
+        if(gradient<.18f || LayerLuma[1]<=LayerLuma[0] || LayerLuma[1]>=LayerLuma[2])
+            throw new InvalidOperationException("MTN9 layer luminance gate");
+        Debug.Log(string.Format(CultureInfo.InvariantCulture,
+            "[MTN7] peak_height_std_pct={0:F4} dark_area_pct={1:F4} darkest=#{2:X6} layer_mix=48/88 haze_band_pct=12 snow_cap_px=2..22 height_scale={3:F2}",
             maxPeakStdPct,maxDarkPct,darkestRgb,HeightScale));
     }
 }
