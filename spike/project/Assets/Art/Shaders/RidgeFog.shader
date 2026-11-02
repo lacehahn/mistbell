@@ -72,6 +72,18 @@ Shader "Mistbell/RidgeFog"
                 output.normalWS = TransformObjectToWorldNormal(input.normalOS);
                 return output;
             }
+            float TriplanarNoise(float3 positionWS, float3 weights, float scale, float offset)
+            {
+                float3 p = positionWS / scale;
+                return SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,p.yz+offset).r * weights.x
+                     + SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,p.xz+offset).r * weights.y
+                     + SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,p.xy+offset).r * weights.z;
+            }
+            float2 RockUV(float2 projected)
+            {
+                // Keep the snow-flecked cap rows out of all three rock projections.
+                return float2(projected.x, frac(projected.y*.35)*.80);
+            }
             half4 Frag(Varyings input) : SV_Target
             {
                 if (_CloudBand > 0.5)
@@ -84,7 +96,9 @@ Shader "Mistbell/RidgeFog"
                     return half4(tint,alpha);
                 }
                 float3 n=normalize(input.normalWS);
-                float micro=SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,input.positionWS.xz/11.0).r;
+                float3 weights=pow(abs(n),4.0);
+                weights/=max(dot(weights,float3(1,1,1)),1e-5);
+                float micro=TriplanarNoise(input.positionWS,weights,11.0,0.0);
                 float face=saturate(dot(n,GetMainLight().direction))*(.95+.10*micro);
                 // Explicit warm/cool face colours in linear light, independent of exposure.
                 float lightFace=smoothstep(.62,.94,face);
@@ -113,25 +127,37 @@ Shader "Mistbell/RidgeFog"
                 // Snow receives broad sky light on shelves; rock retains directional cliff shadows.
                 float snowLight=.72+.28*smoothstep(.1,.65,face);
                 half3 ice=lerp(_SnowShade.rgb,_SnowColor.rgb,snowLight);
-                // 岩层改为**局部噪声斑块**：连续 Y 分带会横穿整条山脉，读成胶合板横纹。
-                float bandA=SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,input.positionWS.xz/47.0+.13).r;
-                float bandB=SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,input.positionWS.xz/129.0+.71).r;
+                // Cliff-facing projections retain detail on near-vertical rock.
+                float bandA=TriplanarNoise(input.positionWS,weights,47.0,.13);
+                float bandB=TriplanarNoise(input.positionWS,weights,129.0,.71);
                 rock *= lerp(.80,1.06,bandA*.65+bandB*.35);
+                // Height bedding stays subtle and local: thickness varies +/-35% along X.
+                float layerThickness=14.0*(1.0+.35*sin(input.positionWS.x*.0063));
+                float strataPhase=input.positionWS.y*(2.0*PI)/layerThickness;
+                float strataJitter=bandB*2.0-1.0;
+                // Multiplicative phase perturbation bounded to +/-18 degrees at every height.
+                strataPhase*=1.0+strataJitter*(18.0*PI/180.0)/max(abs(strataPhase),1e-3);
+                float strata=sin(strataPhase)*(.35+.65*bandA);
+                rock *= 1.0+.035*strata;
                 rock *= lerp(1,.38,farRidge);
                 rock *= lerp(1,.78,underEdge);
                 float2 pixelUV = input.positionWS.xy / 6.0;
                 half3 snowTex = SAMPLE_TEXTURE2D(_SnowMap,sampler_SnowMap,pixelUV).rgb;
                 // The snow-flecked top rows belong to rock caps, not vertical mountain faces.
-                float2 rockUV=float2(input.positionWS.x/8.0,frac(input.positionWS.y/8.0*.35)*.80);
-                half3 rockTex = SAMPLE_TEXTURE2D(_RockMap,sampler_RockMap,rockUV).rgb;
+                float3 rockPosition=input.positionWS/8.0;
+                half3 rockTex = SAMPLE_TEXTURE2D(_RockMap,sampler_RockMap,RockUV(rockPosition.yz)).rgb*weights.x
+                    + SAMPLE_TEXTURE2D(_RockMap,sampler_RockMap,RockUV(rockPosition.xz)).rgb*weights.y
+                    + SAMPLE_TEXTURE2D(_RockMap,sampler_RockMap,RockUV(rockPosition.xy)).rgb*weights.z;
                 #if defined(UNITY_COLORSPACE_GAMMA)
                     snowTex=SRGBToLinear(snowTex); rockTex=SRGBToLinear(rockTex);
                 #endif
                 // Retain the existing face lighting and aerial perspective, replacing only albedo detail.
-                half3 color=lerp(rock * lerp(1, rockTex / half3(.153,.125,.101), .35),
+                // Compensate the brighter three-axis rock average at the valley silhouette.
+                half3 color=lerp(.88 * rock * lerp(1, rockTex / half3(.153,.125,.101), .35),
                     ice * lerp(1, snowTex / half3(.651,.744,.842), .38),snow);
                 float foot=(1-smoothstep(0,15,input.positionWS.y))*step(0,input.positionWS.y)*.18;
                 color=lerp(color,_AirColor.rgb,saturate(lerp(_Aerial,.24,farRidge)+_FogFloor+foot));
+                color=lerp(color,_AirColor.rgb,.15*farRidge);
                 return half4(color, 1);
             }
             ENDHLSL
