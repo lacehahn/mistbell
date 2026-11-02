@@ -6,6 +6,7 @@ Shader "Mistbell/TerrainHaze"
         [MainColor] _BaseColor ("Tint", Color) = (1,1,1,1)
         _SnowMedium ("Snow 256px middle", 2D) = "gray" {}
         _SnowLow ("Snow 1024px low", 2D) = "gray" {}
+        _SnowRelief ("Snowfield relief only", Float) = 0
         _StoneSurface ("Stone surface", Float) = 0
         _RockOnly ("World projected rock texture", Float) = 0
         _SnowAlbedo ("Snow linear albedo", Range(0,1)) = 0.86
@@ -48,6 +49,7 @@ Shader "Mistbell/TerrainHaze"
             TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap);
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor;
+                float _SnowRelief;
                 float _StoneSurface, _SnowAlbedo, _RockSnowCap, _Footprint, _RockOnly;
                 float _NormalScale, _Metallic, _Smoothness;
                 float _HazeStart, _HazeEnd, _HazePower, _HazeStrength;
@@ -58,6 +60,7 @@ Shader "Mistbell/TerrainHaze"
                 float3 normalOS : NORMAL;
                 float4 tangentOS : TANGENT;
                 float2 uv : TEXCOORD0;
+                float2 relief : TEXCOORD1;
             };
             struct Varyings
             {
@@ -68,6 +71,7 @@ Shader "Mistbell/TerrainHaze"
                 float2 uv : TEXCOORD3;
                 half3 vertexLighting : TEXCOORD4;
                 float capHeight : TEXCOORD5;
+                float2 relief : TEXCOORD6;
             };
             Varyings Vert(Attributes input)
             {
@@ -79,6 +83,7 @@ Shader "Mistbell/TerrainHaze"
                 output.tangentWS = half4(normals.tangentWS, input.tangentOS.w * GetOddNegativeScale());
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 output.capHeight = input.uv.y;
+                output.relief = input.relief;
                 output.vertexLighting = VertexLighting(output.positionWS, normals.normalWS);
                 return output;
             }
@@ -160,6 +165,28 @@ Shader "Mistbell/TerrainHaze"
                 half3 snowAlbedo = _SnowAlbedo * _BaseColor.rgb / max(_BaseColor.b, .001);
                 surface.albedo = lerp(texel * _BaseColor.rgb,
                     snowAlbedo * texel / half3(.651, .744, .842), snowCoverage);
+                if (_SnowRelief > .5)
+                {
+                    float dist = distance(input.positionWS, _WorldSpaceCameraPos);
+                    if (_SnowRelief > 1.5 && dist > 45.0) clip(-1);
+                    // Metres per detail cell; smooth transitions prevent visible distance rings.
+                    float scale = lerp(.6, 1.6, smoothstep(23,27,dist));
+                    scale = lerp(scale, 3.0, smoothstep(57,63,dist));
+                    float field = SnowMound(snowXZ/scale + 17.3);
+                    float fine = HashChunk(floor(snowXZ * (10.0/scale)));
+                    float fade = 1.0-smoothstep(25,65,dist);
+                    float grainValue = fine < .3333 ? -.055 : (fine < .6667 ? 0 : .055);
+                    float reliefHeight = input.relief.x;
+                    float slope = length(input.normalWS.xz - float2(0,-.104528));
+                    float crest = max(smoothstep(.06,.25,reliefHeight), smoothstep(.045,.12,input.relief.y));
+                    half3 hollow = half3(.725490,.796078,.870588); // #B9CBDE
+                    half3 face = half3(.894118,.929412,.960784);   // #E4EDF5
+                    half3 top = half3(.964706,.980392,.992157);    // #F6FAFD
+                    half3 palette = lerp(hollow,face,smoothstep(-.15,.06,reliefHeight));
+                    palette = lerp(palette,top,crest*(1-saturate(slope*2.2)));
+                    palette *= 1.0 - saturate(slope)*.35;
+                    surface.albedo = palette * (1 + (field-.5)*.065 + grainValue*fade);
+                }
                 // Broad snow mounds modulate the three hard grain levels, without waves.
                 if(_StoneSurface>.5)
                 {
@@ -181,6 +208,10 @@ Shader "Mistbell/TerrainHaze"
                 Light sun = GetMainLight(lighting.shadowCoord);
                 half3 shadowTint = lerp(half3(1,1,1), _SnowShadowColor.rgb, snowCoverage); // #B7C9DC, material supplies linear color
                 color *= lerp(shadowTint, half3(1,1,1), sun.shadowAttenuation);
+                // Snow keeps cool skylight but loses bounce in occluded hollows.
+                // Local terrain only: shared church/path/rock materials stay unchanged.
+                if (_SnowRelief > .5)
+                    color *= lerp(.90h,1.0h,sun.shadowAttenuation);
                 // Ground mist is bounded in WORLD height, so no layer can cross a mountainside.
                 float d = distance(input.positionWS.xz, _WorldSpaceCameraPos.xz);
                 float t = saturate((d - _HazeStart) / max(1e-3, _HazeEnd - _HazeStart));

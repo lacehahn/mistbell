@@ -37,7 +37,7 @@ def main():
     buf, w, h = load(path)
     step = 2
     mag = clip = warm = 0
-    lower = snow = dark = mid = 0
+    lower = snow = dark = mid = shadowish = 0
     hf = hf_n = 0
     left_sum = right_sum = 0
     left_n = right_n = 0
@@ -59,6 +59,8 @@ def main():
                     snow += 1
                 if v < 0.25:
                     dark += 1
+                if v < 0.55:
+                    shadowish += 1
                 if 0.30 < v < 0.70:
                     mid += 1
             if y > h * 0.5 and x + step < w:
@@ -79,6 +81,7 @@ def main():
         "dark_ratio_lower": round(dark / max(lower, 1), 4),
         "mid_ratio_lower": round(mid / max(lower, 1), 4),
         "hf_energy_lower": round(hf / max(hf_n, 1) / 255.0, 4),
+        "shadow_ratio_lower": round(shadowish / max(lower, 1), 4),
         "warm_px": warm,
         "ground_shadow_gap": round(abs(left_sum / max(left_n, 1) - right_sum / max(right_n, 1)) / 255.0, 4),
         "size": f"{w}x{h}",

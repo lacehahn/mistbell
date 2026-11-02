@@ -75,6 +75,7 @@ public static class SpikeScene
         BuildStonePath(terrainCollider, stone);
         BuildFootprints(terrainCollider);
         BuildProps(terrainCollider, stone, wood);
+        BuildSnowSurface(terrainCollider);
         BuildSky();
         BuildSnowfall();
 
@@ -378,8 +379,8 @@ public static class SpikeScene
         for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++)
         {
             float r = new Vector2((x + .5f) / 32f - 1, (y + .5f) / 32f - 1).magnitude;
-            float alpha = .22f * (1 - Mathf.SmoothStep(.28f, 1f, r));
-            texture.SetPixel(x, y, new Color(.14f, .18f, .24f, alpha));
+            float alpha = .10f * (1 - Mathf.SmoothStep(.28f, 1f, r));
+            texture.SetPixel(x, y, new Color(.30f, .36f, .44f, alpha));
         }
         texture.Apply();
         AssetDatabase.DeleteAsset("Assets/Settings/RockContactSoft.asset");
@@ -908,6 +909,185 @@ public static class SpikeScene
         return collider;
     }
 
+    // Snow2 is an opt-in terrain material. Shared church, paving, rock caps and
+    // contact materials retain their original shader branch and transforms.
+    static void BuildSnowSurface(MeshCollider terrain)
+    {
+        var rockCenters = new System.Collections.Generic.List<Vector2>();
+        foreach (var filter in GameObject.Find("Props").GetComponentsInChildren<MeshFilter>())
+            if (filter.name.StartsWith("ClusterRock_"))
+                rockCenters.Add(new Vector2(filter.transform.position.x, filter.transform.position.z));
+        var eye = EyeAt(5f,-82f);
+        float RoadX(float z) => 3f*Mathf.Sin(Mathf.Clamp01((z+70f)/56.75f)*2f*Mathf.PI);
+        float Protect(float x,float z)
+        {
+            float path = z >= -94 && z <= -18 ? Mathf.Abs(x-RoadX(z)) : 100f;
+            float mask = Mathf.SmoothStep(0,1,Mathf.InverseLerp(4.2f,6.5f,path));
+            foreach(var r in rockCenters)
+                mask *= Mathf.SmoothStep(0,1,Mathf.InverseLerp(1.7f,3.1f,Vector2.Distance(r,new Vector2(x,z))));
+            return mask;
+        }
+        float Drift(float x,float z)
+        {
+            float d=Vector2.Distance(new Vector2(x,z),new Vector2(eye.x,eye.z));
+            float mask=Mathf.SmoothStep(0,1,Mathf.InverseLerp(8,12,d))
+                *(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(72,80,d)))
+                *(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(-30,-18,z))) * Protect(x,z);
+            // Wind +X: long axes -19 / +12 / +27 degrees. Phase warping
+            // and Perlin amplitude break the periodic crests (6/11/18 m).
+            float warp=1.8f*(Mathf.PerlinNoise(x/15+31,z/15+9)-.5f);
+            float waves=.50f*Mathf.Sin((-.208f*x+.978f*z+warp)*2*Mathf.PI/11)
+                +.30f*Mathf.Sin((.326f*x+.946f*z-warp)*2*Mathf.PI/18+1.7f)
+                +.20f*Mathf.Sin((-.454f*x+.891f*z+warp)*2*Mathf.PI/6+3.2f);
+            float amp=Mathf.Lerp(.15f,.5f,Mathf.PerlinNoise(x/19+11,z/23+37));
+            // A broad lee hollow and its windward bank give the foreground a
+            // readable profile, with the same +X wind axis as the smaller waves.
+            float lee=.48f*Mathf.Exp(-Mathf.Pow((x+7)/14f,2)-Mathf.Pow((z+64)/6.5f,2));
+            float bank=.22f*Mathf.Exp(-Mathf.Pow((x-17)/10f,2)-Mathf.Pow((z+54)/3.5f,2));
+            return mask*Mathf.Clamp(amp*(.8f*waves+.4f*(Mathf.PerlinNoise(x/9+4,z/7+8)-.5f))-lee+bank,-.5f,.5f);
+        }
+        // Sample the original mesh, preserving its exact triangulated surface
+        // under the existing path, props and character; only the snow moves.
+        float OldHeight(float x,float z) => terrain.Raycast(new Ray(new Vector3(x,500,z),Vector3.down),out var hit,1500)
+            ? hit.point.y : TerrainHeight(x,z);
+        var xs=new System.Collections.Generic.List<float>();
+        var zs=new System.Collections.Generic.List<float>();
+        for(float x=-150;x<=150; x+= x>=-76 && x<86 ? .5f : 2f) xs.Add(x);
+        for(float z=-160;z<=1200; z+=z>=-130 && z< -18 ? .5f : (z>=-100&&z<100?2:10)) zs.Add(z);
+        // Keep original rows at the entrance and far field.
+        for(int z=-100;z<=100;z+=2) if(!zs.Contains(z)) zs.Add(z);
+        for(int z=110;z<=1200;z+=10) if(!zs.Contains(z)) zs.Add(z);
+        zs.Sort();
+        int cols=xs.Count;
+        var vs=new Vector3[cols*zs.Count]; var uv=new Vector2[vs.Length]; var relief=new Vector2[vs.Length];
+        var tris=new int[(cols-1)*(zs.Count-1)*6];
+        int drifts=0;
+        for(int j=0;j<zs.Count;j++) for(int i=0;i<cols;i++)
+        {
+            float x=xs[i],z=zs[j],h=Drift(x,z); int v=j*cols+i;
+            vs[v]=new Vector3(x,OldHeight(x,z)+h,z); uv[v]=new Vector2(x,z); relief[v]=new Vector2(h,0);
+            if(h>.045f)
+            {
+                bool peak=true;
+                for(int dz=-1;dz<=1;dz++)for(int dx=-1;dx<=1;dx++)
+                    if((dx!=0||dz!=0)&&h<=Drift(x+dx*.5f,z+dz*.5f))peak=false;
+                if(peak)drifts++;
+            }
+            if(i==cols-1||j==zs.Count-1)continue;
+            int t=(j*(cols-1)+i)*6;
+            tris[t]=v;tris[t+1]=v+cols;tris[t+2]=v+1;
+            tris[t+3]=v+1;tris[t+4]=v+cols;tris[t+5]=v+cols+1;
+        }
+        // Preserve the original entrance subdivisions and every triangle behind
+        // z=-18 exactly; resampling that 6 cm clearing would move church seating.
+        var source=terrain.sharedMesh;
+        var mergedVertices=new System.Collections.Generic.List<Vector3>(vs);
+        var mergedUV=new System.Collections.Generic.List<Vector2>(uv);
+        var mergedRelief=new System.Collections.Generic.List<Vector2>(relief);
+        var mergedTriangles=new System.Collections.Generic.List<int>();
+        for(int t=0;t<tris.Length;t+=3)
+            if(vs[tris[t]].z<=-18 && vs[tris[t+1]].z<=-18 && vs[tris[t+2]].z<=-18)
+                mergedTriangles.AddRange(new[]{tris[t],tris[t+1],tris[t+2]});
+        int offset=mergedVertices.Count;var original=source.vertices;var originalTriangles=source.triangles;
+        mergedVertices.AddRange(original);mergedUV.AddRange(source.uv);
+        for(int v=0;v<original.Length;v++)mergedRelief.Add(Vector2.zero);
+        for(int t=0;t<originalTriangles.Length;t+=3)
+            if(original[originalTriangles[t]].z>=-18 && original[originalTriangles[t+1]].z>=-18 && original[originalTriangles[t+2]].z>=-18)
+                mergedTriangles.AddRange(new[]{offset+originalTriangles[t],offset+originalTriangles[t+1],offset+originalTriangles[t+2]});
+        var mesh=new Mesh {name="Snow2Terrain",indexFormat=IndexFormat.UInt32,vertices=mergedVertices.ToArray(),uv=mergedUV.ToArray(),uv2=mergedRelief.ToArray(),triangles=mergedTriangles.ToArray()};
+        mesh.RecalculateNormals();mesh.RecalculateTangents();mesh.RecalculateBounds();
+        const string meshPath="Assets/Settings/Snow2Terrain.asset";
+        AssetDatabase.DeleteAsset(meshPath);AssetDatabase.CreateAsset(mesh,meshPath);
+        terrain.GetComponent<MeshFilter>().sharedMesh=mesh;
+        terrain.sharedMesh=mesh;
+        var snow=new Material(terrain.GetComponent<MeshRenderer>().sharedMaterial){name="M_Snow2Terrain"};
+        snow.SetFloat("_SnowRelief",1); snow.SetColor("_SnowShadowColor",Hex("#B9CBDE"));
+        const string matPath="Assets/Settings/M_Snow2Terrain.mat";
+        AssetDatabase.DeleteAsset(matPath);AssetDatabase.CreateAsset(snow,matPath);
+        terrain.GetComponent<MeshRenderer>().sharedMaterial=snow;
+        Physics.SyncTransforms();
+        float Height(float x,float z) => terrain.Raycast(new Ray(new Vector3(x,500,z),Vector3.down),out var hit,1500)?hit.point.y:TerrainHeight(x,z);
+        var root=new GameObject("Snow2 Surface Details").transform;
+        var rnd=new System.Random(20261103);
+        float Range(float a,float b)=>Mathf.Lerp(a,b,(float)rnd.NextDouble());
+        var ridgeMat=new Material(snow){name="M_Snow2Sastrugi"};ridgeMat.SetFloat("_SnowRelief",2);
+        AssetDatabase.DeleteAsset("Assets/Settings/M_Snow2Sastrugi.mat");AssetDatabase.CreateAsset(ridgeMat,"Assets/Settings/M_Snow2Sastrugi.mat");
+        int sastrugi=0;
+        // Sparse groups, with gaps between groups and irregular parallel spacing.
+        for(int group=0;group<22;group++)
+        {
+            Vector2 center=new Vector2(Range(-29,37),Range(-112,-43));
+            float angle=Range(-30,30)*Mathf.Deg2Rad;
+            var along=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle));var across=new Vector2(-along.y,along.x);
+            for(int k=0;k<4;k++)
+            {
+                var p=center+across*(k*Range(1.1f,1.8f))+along*Range(-2,2);
+                float length=Range(3,8),width=Range(.3f,.8f),height=Range(.08f,.15f);
+                if(Vector2.Distance(p,new Vector2(eye.x,eye.z))+length*.5f>44.8f || Protect(p.x,p.y)<.99f)continue;
+                bool clear=true;
+                for(int a=0;a<=16;a++) {var q=p+along*((a/16f-.5f)*length);if(Protect(q.x,q.y)<.99f)clear=false;}
+                if(!clear)continue;
+                var rv=new Vector3[17*5];var ru=new Vector2[rv.Length];var rh=new Vector2[rv.Length];var rt=new int[16*4*6];
+                for(int a=0;a<=16;a++)for(int b=0;b<5;b++)
+                {
+                    float t=a/16f, cross=b/4f; int v=a*5+b;
+                    float taper=Mathf.Pow(Mathf.Sin(t*Mathf.PI),.6f);
+                    var q=p+along*((t-.5f)*length)+across*((cross-.5f)*width*taper + .07f*Mathf.Sin(t*6.2f));
+                    float h=height*(cross<=.5f?cross*2:(1-cross)*2)*taper;
+                    rv[v]=new Vector3(q.x,Height(q.x,q.y)+h+.002f,q.y);ru[v]=q;rh[v]=new Vector2(Drift(q.x,q.y)+h,h);
+                    if(a==16||b==4)continue; int ti=(a*4+b)*6;
+                    rt[ti]=v;rt[ti+1]=v+1;rt[ti+2]=v+5;rt[ti+3]=v+1;rt[ti+4]=v+6;rt[ti+5]=v+5;
+                }
+                var rm=new Mesh{name="Sastrugi_"+sastrugi,vertices=rv,uv=ru,uv2=rh,triangles=rt};rm.RecalculateNormals();rm.RecalculateBounds();
+                string rp="Assets/Settings/Snow2Ridge_"+sastrugi+".asset";AssetDatabase.DeleteAsset(rp);AssetDatabase.CreateAsset(rm,rp);
+                var go=new GameObject("Sastrugi_"+sastrugi++);go.transform.SetParent(root,false);go.AddComponent<MeshFilter>().sharedMesh=rm;go.AddComponent<MeshRenderer>().sharedMaterial=ridgeMat;
+            }
+        }
+        // Non-overlapping irregular gravel islands, constrained to 1–3 m from
+        // the path edge or an existing rock. Coverage is measured in world m².
+        var gravel=MakeLit("Assets/Settings/M_Snow2Gravel.mat",Hex("#59636D"),0,.02f);
+        var patches=new System.Collections.Generic.List<Vector3>();float area=0;
+        const float snowArea=88f*72f; // Detail work rectangle x=-40..48, z=-90..-18.
+        for(int attempt=0;attempt<40000 && area<snowArea*.035f;attempt++)
+        {
+            Vector2 p;
+            if(attempt%3==0)
+            {float z=Range(-88,-20);p=new Vector2(RoadX(z)+(rnd.Next(2)==0?-1:1)*Range(3.7f,6.3f),z);}
+            else {var r=rockCenters[rnd.Next(rockCenters.Count)];float a=Range(0,Mathf.PI*2);p=r+new Vector2(Mathf.Cos(a),Mathf.Sin(a))*Range(1.5f,3.5f);}
+            float radius=Range(.55f,1f);
+            if(p.x< -40+radius||p.x>48-radius||p.y< -90+radius||p.y> -18-radius)continue;
+            float roadDist=Mathf.Abs(p.x-RoadX(p.y))-1.6f;
+            float rockDist=100;
+            foreach(var r in rockCenters)rockDist=Mathf.Min(rockDist,Vector2.Distance(r,p)-.5f);
+            float dist=Mathf.Min(roadDist,rockDist);
+            if(dist<1+radius*.25f||dist>3-radius*.25f)continue;
+            bool overlap=false;
+            foreach(var prev in patches)if(Vector2.Distance(new Vector2(prev.x,prev.y),p)<prev.z+radius+.08f){overlap=true;break;}
+            if(overlap)continue;
+            var pv=new Vector3[1+24*3];var pu=new Vector2[pv.Length];var pt=new int[24*3+24*2*6];
+            pv[0]=new Vector3(p.x,Height(p.x,p.y)+.008f,p.y);pu[0]=p;
+            var edge=new float[24];for(int k=0;k<24;k++)edge[k]=Range(.58f,1);
+            for(int ring=0;ring<3;ring++) for(int k=0;k<24;k++)
+            {
+                float a=k*Mathf.PI*2/24,rad=radius*edge[k]*(ring+1)/3f;
+                var q=p+new Vector2(Mathf.Cos(a),Mathf.Sin(a))*rad;int v=1+ring*24+k;
+                pv[v]=new Vector3(q.x,Height(q.x,q.y)+.008f,q.y);pu[v]=q;
+                if(ring==0){int t=k*3;pt[t]=0;pt[t+1]=1+(k+1)%24;pt[t+2]=1+k;}
+                else {int t=72+((ring-1)*24+k)*6;int a0=1+(ring-1)*24+k,a1=1+(ring-1)*24+(k+1)%24,b0=1+ring*24+k,b1=1+ring*24+(k+1)%24;
+                    pt[t]=a0;pt[t+1]=a1;pt[t+2]=b0;pt[t+3]=a1;pt[t+4]=b1;pt[t+5]=b0;}
+            }
+            float patchArea=0;
+            for(int k=0;k<24;k++)patchArea+=.5f*radius*radius*edge[k]*edge[(k+1)%24]*Mathf.Sin(Mathf.PI*2/24);
+            var pm=new Mesh{name="SnowExposure_"+patches.Count,vertices=pv,uv=pu,triangles=pt};pm.RecalculateNormals();pm.RecalculateBounds();
+            string pp="Assets/Settings/Snow2Patch_"+patches.Count+".asset";AssetDatabase.DeleteAsset(pp);AssetDatabase.CreateAsset(pm,pp);
+            var go=new GameObject("SnowExposure_"+patches.Count);go.transform.SetParent(root,false);go.AddComponent<MeshFilter>().sharedMesh=pm;go.AddComponent<MeshRenderer>().sharedMaterial=gravel;
+            patches.Add(new Vector3(p.x,p.y,radius));area+=patchArea;
+        }
+        if(area/snowArea<.03f||area/snowArea>.06f)throw new System.InvalidOperationException("Snow2 exposure coverage failed: "+area/snowArea);
+        Debug.Log($"[SNOW2] drifts={drifts} sastrugi={sastrugi} exposure_patches={patches.Count} tiling_near=0.6 mid=1.6 far=3.0 shadow_tint=#B9CBDE");
+        Debug.Log($"[SNOW2] exposure_area_m2={area:F2} snow_work_area_m2={snowArea:F2} exposure_ratio={area/snowArea:F4} seed=20261103 wind=+x ridge_max_distance=45m");
+    }
+
     // 沿揭示机位视轴横向展开；指定色板与远距薄雾共同形成层次。
     static void BuildMountains()
     {
@@ -1308,7 +1488,7 @@ public static class SpikeScene
                     "[ROCK] id={0} actual_size_m={1:F4},{2:F4},{3:F4} faces={4} burial_height_ratio={5:F4} flat_normals=true",
                     rocks, size.x, size.y, size.z, faces, burial));
                 ContactMound(root, "RockContact_" + rocks, terrain, p,
-                    new Vector2(size.x * .9f * .5f, size.z * 1.3f * .5f), 0f,
+                    new Vector2(size.x * .55f * .5f, size.z * .8f * .5f), 0f,
                     RockContactMaterial(), .01f);
                 contactShadows++;
                 rocks++;

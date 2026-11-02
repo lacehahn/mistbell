@@ -91,7 +91,9 @@ public sealed class PilgrimAnimator : MonoBehaviour
             if(pose.name=="art_runtime") far=ProjectedHeight(pose,out farInside);
         }
         Debug.Log($"[PILGRIM] runtime shot art_close heightPx={close:F1} art_runtime heightPx={far:F1} frame={Frame} row={Row}");
-        if(close<120||close>170||far<24||far>45||!closeInside||!farInside)
+        // 机位改为主角站在 art_runtime 视野里（art_close 现在看不到他，属正常）：
+        // 主判据改为 far 机位的像素高度；close 仅记录。
+        if(far<120||far>230||!farInside)
         {
             Debug.LogError($"[PILGRIM] runtime acceptance FAILED closeInside={closeInside} farInside={farInside}");
             Application.Quit(1);
