@@ -283,3 +283,4 @@
 | 09:55 | 新增指标 hf_energy_lower | 自测基线 | 0.0115（画面下半高频能量＝颗粒感）；HD-2D 目标 ≥0.025；用于量化"平滑3D vs 像素"的语言分裂 |
 | 09:58 | 队列项⑩：像素纹理统一（第 34 轮） | 派发 | 程序化生成 Snow/Stone/Rock 三张像素贴图（Point 过滤）+ 5bit 量化 + 4×4 Bayer 抖动；门槛 hf_energy_lower ≥0.025；进行中 |
 | 09:59 | 待办：人物三视图 | 用户口头指定 | 用户称"用这个作为人物三视图"，但**附件未送达**（cache 无新图）；待重发后存入 art-ref/char-turnaround.png，**不改变当前优先级**，在纹理统一之后应用 |
+| 10:05 | 收入人物设定画两张 | 用户提供 | `art-ref/char-turnaround.jpg`（三视图+色板+细节+表情）、`art-ref/char-walk-sheet.jpg`（Walk 4方向×6帧=24帧）；规格 `art-ref/notes-character-v1.md`；**不改变当前优先级**，排在纹理统一之后 |
