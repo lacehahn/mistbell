@@ -355,4 +355,8 @@
 - 性能：1920×1080 下帧率与 draw call 实测（当前 1280×720 约 35 fps）
 - 存档/设置/本地化切换（中英）
 - 教堂外观复检：底座外扩后的挡土墙与雪裙重排
+| 17:47–18:06 | **外观收尾（Codex 自动派发）** | `[BASE] plinth=37.0x27.0 side=15.5 front=1.5`、`[MTN8] fill=1.32× top=0.20/0.16/0.12`、`[CAM] pilgrim_px=150`、`[CINEMA] top=0.043 bottom=0.808 once=true restore_error=0` | 四项用户要求全部达标；截 `cinema_lookup.png`（仰视教堂全貌，目前最像"圣地"的一帧） |
+| 18:06–18:46 | **教堂内部（Codex）** | `[INTERIOR] wall=0.6 clear=12.0 door_leaf window=6 柱4 椅6 坛1 烛4 吊灯1 圣像屏1 旗2 tris=90774`、`[INTERIOR_U] door=100° walk_in=true inside=true fov=32 lights=5 shafts=4 colliders=66 pois=3` | 门可开可进，室内 3 个 POI（p04 圣像屏/p05 烛台/p06 壁画） |
+| 18:46–19:05 | 室内修正 | `[INT_FIX] cam_min_y=3.0 wall_gap=0.60 below_floor=false`、`interior_luma 0.109→0.3415`、furniture 全 true | 室内可读；遗留：相机过高像玩偶屋、光柱是实心楔形、吊灯空环、圣像屏素箱 → 已写 `interior_framing.md` |
+| 19:16 | 派发台地/远山那轮 | `terrace_and_mountains.md` | 台地加雪堆/石墩/矮墙/石堆/墙根雪裙、墙顶 0.7m 外倾；远山雪帽按坡度、双层锯齿、三层亮度差≥0.18、山脚 12% 地雾 |
 
