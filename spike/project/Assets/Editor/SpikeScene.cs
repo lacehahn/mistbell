@@ -78,7 +78,7 @@ public static class SpikeScene
         AssetDatabase.CreateAsset(churchStone,"Assets/Settings/M_ChurchStone.mat");
         var church = ImportChurch(churchStone, roofMat);
         BuildWarmDetails();
-        var cameraPosition = EyeAt(28f, -100f);
+        var cameraPosition = EyeAt(7f, -96f);   // 对齐朝圣小道：原来 x=28 把小道推到画面最左
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
 
         // ---------- 像素角色（Billboard）----------
@@ -92,7 +92,7 @@ public static class SpikeScene
         }
 
         // 只移动角色：教堂门廊左前方，两固定机位共同可见；落点只查询地形碰撞体。
-        var pilgrimPos = new Vector3(-6f, 0f, -9.5f);
+        var pilgrimPos = new Vector3(2.7f, 0f, -60f);   // 站在朝圣道上（相机前约 36m），远景约 70px 可辨
         Physics.SyncTransforms();
         float terrainY = 0f;
         if (terrainCollider.Raycast(
@@ -820,15 +820,40 @@ public static class SpikeScene
                                 out RaycastHit hit, 200f))
                 points[i].y = hit.point.y + 0.035f;
         var root = new GameObject("Stone Path").transform;
+
+        // 独立路面材质：不叠雪覆盖，压暗到潮湿石板
+        var paving = new Material(stone) { name = "M_Paving" };
+        if (paving.HasProperty("_BaseColor")) paving.SetColor("_BaseColor", Hex("#8C8378"));
+        if (paving.HasProperty("_StoneSurface")) paving.SetFloat("_StoneSurface", 0f);
+        AssetDatabase.DeleteAsset("Assets/Settings/M_Paving.mat");
+        AssetDatabase.CreateAsset(paving, "Assets/Settings/M_Paving.mat");
+
+        var rnd = new System.Random(4242);
+        int tiles = 0;
         for (int i = 0; i < points.Length - 1; i++)
         {
-            var delta = points[i + 1] - points[i];
-            var segment = SpikeArt.Box(root, "Paving_" + (i + 1),
-                new Vector3(3.2f, 0.07f, delta.magnitude + 0.08f),
-                (points[i] + points[i + 1]) * 0.5f - Vector3.up * 0.035f, stone);
-            segment.transform.rotation = Quaternion.LookRotation(delta, terrainCollider.transform.up);
+            Vector3 a = points[i], b = points[i + 1];
+            Vector3 delta = b - a;
+            float len = delta.magnitude;
+            Vector3 fwd = delta.normalized;
+            Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
+            for (int row = 0; row < 2; row++)
+            for (int k = 0; k < 3; k++)
+            {
+                float along = (k + .5f) / 3f;
+                Vector3 center = a + fwd * (len * along) + right * ((row - .5f) * 1.58f);
+                if (terrainCollider.Raycast(new Ray(center + Vector3.up * 100f, Vector3.down),
+                        out RaycastHit hit, 200f))
+                    center.y = hit.point.y + 0.035f;
+                float w = 1.44f + (float)rnd.NextDouble() * .14f;
+                float d = (len / 3f) - .07f;               // 4–8 cm 缝
+                var tile = SpikeArt.Box(root, "Paving_" + (tiles++),
+                    new Vector3(w, .09f, d), center, paving);
+                tile.transform.rotation = Quaternion.LookRotation(fwd)
+                    * Quaternion.Euler(0f, (float)rnd.NextDouble() * 6f - 3f, 0f);
+            }
         }
-        Debug.Log($"[SPIKE] stone path segments={points.Length - 1} material=existing M_Stone (stone_ashlar; no Substance material available)");
+        Debug.Log($"[PATH2] tiles={tiles} gap_cm=4..8 rotated=true lift_cm=3.5 material=M_Paving #8C8378");
     }
 
     static bool ArgFlag(string name) =>
@@ -899,10 +924,10 @@ public static class SpikeScene
                 rock.transform.SetParent(root, false);
                 // yaw 已烘入网格，按实际世界轴包围盒规范化；绝不拿缩放参数冒充尺寸。
                 var size = mesh.bounds.size;
-                float burial = .70f;
+                float burial = Range(.28f, .52f);   // 埋 70% 只露平顶 → 读成地砖；改 28-52%
                 float bottomAtGround = p.y - mesh.bounds.min.y;
                 rock.transform.position = new Vector3(p.x, bottomAtGround - burial * size.y, p.z);
-                if (Mathf.Approximately(burial, .7f)) halfBuried++;
+                if (burial >= .28f && burial <= .52f) halfBuried++;
                 minSize = Vector3.Min(minSize, size); maxSize = Vector3.Max(maxSize, size);
                 minFaces = Mathf.Min(minFaces, faces); maxFaces = Mathf.Max(maxFaces, faces);
                 string path = "Assets/Settings/ClusterRock_" + (rocks + 1) + ".asset";
@@ -916,9 +941,9 @@ public static class SpikeScene
             }
         }
         float halfBuriedRatio = rocks == 0 ? 0f : halfBuried / (float)rocks;
-        if (rocks < 40 || rocks > 80 || halfBuried != rocks)
+        if (rocks < 40 || rocks > 80 || halfBuriedRatio < .95f)
             throw new System.InvalidOperationException("Winter rock specification violated");
-        Debug.Log($"[ROCKS] count={rocks} clusters={centers.Count} per_cluster=3..6 spacing=8..25m size=.3..1.2m burial=.70 body=#6B6157 shade=#4E463E snow=#E7EDF4 block=true");
+        Debug.Log($"[ROCKS] count={rocks} clusters={centers.Count} per_cluster=3..6 spacing=8..25m size=.3..1.2m burial=.28..52 body=#6B6157 shade=#4E463E snow=#E7EDF4 block=true");
         Vector3 RoadPoint(float t, float offset) => new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI) + offset, 0f,
             Mathf.Lerp(-70f, -13.25f, t));
         int posts = 0, rails = 0;
