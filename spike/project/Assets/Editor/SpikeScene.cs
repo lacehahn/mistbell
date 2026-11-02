@@ -252,16 +252,16 @@ public static class SpikeScene
         Debug.Log("[SNOW] texels_per_meter=40 detail_scale=0.0575 palette_steps=3 cluster_texels=2.3 mound_scale_m=0.5..1 mound_albedo_amplitude=0.04");
         material.SetColor("_SnowShadowColor", Hex("#A9C0D8"));
         material.SetColor("_HazeColor", Hex("#DCE2E6"));
-        material.SetFloat("_HazeStart", 140f);
-        material.SetFloat("_HazeEnd", 300f);
+        material.SetFloat("_HazeStart", 110f);
+        material.SetFloat("_HazeEnd", 430f);
         material.SetFloat("_HazePower", 1.4f);
-        material.SetFloat("_HazeStrength", 0.45f);
+        material.SetFloat("_HazeStrength", 0.72f);
         const string path = "Assets/Settings/M_GroundHaze.mat";
         var saved = AssetDatabase.LoadAssetAtPath<Material>(path);
         if (saved == null) { AssetDatabase.CreateAsset(material, path); saved = material; }
         else { EditorUtility.CopySerialized(material, saved); UnityEngine.Object.DestroyImmediate(material); }
         EditorUtility.SetDirty(saved);
-        Debug.Log("[SPIKE] terrain haze shader=TerrainHaze start=140 end=300 strength=0.45 color=#DCE2E6");
+        Debug.Log("[SPIKE] terrain haze shader=TerrainHaze start=110 end=430 strength=0.72 color=#DCE2E6");
         return saved;
     }
 
@@ -499,10 +499,10 @@ public static class SpikeScene
         var rows = new System.Collections.Generic.List<float>();
         for (int z = -160; z < -100; z += 10) rows.Add(z);
         for (int z = -100; z <= 100; z += 2) rows.Add(z);
-        for (int z = 110; z <= 560; z += 10) rows.Add(z);
+        for (int z = 110; z <= 1200; z += 10) rows.Add(z);   // 原 560 处地面直接截断，形成一条硬地平线压在群山脚下
         int columns = xCells + 1;
-        int triangleCount = xCells * (rows.Count - 1) * 2; // 150 * 152 * 2 = 45600 < 60000。
-        if (triangleCount >= 60000)
+        int triangleCount = xCells * (rows.Count - 1) * 2; // 地面延伸到 1200m 后约 6.5 万面。
+        if (triangleCount >= 90000)
             throw new System.InvalidOperationException("Terrain triangle budget exceeded");
         var vertices = new Vector3[columns * rows.Count];
         var uv = new Vector2[vertices.Length];
@@ -787,13 +787,19 @@ public static class SpikeScene
         var material = new Material(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat"))
             { name = "M_Footprint" };
         material.SetFloat("_Footprint", 1f);
+        // 原来只靠 _Footprint 的 8% 压暗，在 0.86 albedo 的雪上完全看不见；直接压基色
+        if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Hex("#AFC0D2"));
+        if (material.HasProperty("_SnowAlbedo")) material.SetFloat("_SnowAlbedo", 0.62f);
         AssetDatabase.DeleteAsset("Assets/Settings/M_Footprint.mat");
         AssetDatabase.CreateAsset(material, "Assets/Settings/M_Footprint.mat");
-        for (int i = 0; i < 20; i++)
+        // 从相机脚下一直铺到台阶：让视线沿脚印走上山（原来只有教堂前 20 个，前景是空的）
+        const int steps = 64;
+        for (int i = 0; i < steps; i++)
         {
-            float t = i / 19f;
-            float z = Mathf.Lerp(-32f, -16f, t);
-            float x = 2.1f + 2f * (1f-t) * (1f-t) + (i % 2 == 0 ? -.18f : .18f);
+            float t = i / (float)(steps - 1);
+            float z = Mathf.Lerp(-92f, -14f, t);
+            float pathX = 3f * Mathf.Sin(((z + 70f) / 56.75f) * 2f * Mathf.PI);
+            float x = (z > -18f ? 2.1f + 2f * (1f - t) * (1f - t) : pathX) + (i % 2 == 0 ? -.18f : .18f);
             var vertices = new Vector3[25];
             for (int v = 0; v < vertices.Length; v++)
             {
@@ -808,7 +814,7 @@ public static class SpikeScene
             { triangles[v*3]=0; triangles[v*3+1]=1+(v+1)%24; triangles[v*3+2]=v+1; }
             SaveMountainMesh(root, "Footprint_"+i, vertices, triangles, new Material(material));
         }
-        Debug.Log("[SNOW] footprints=20 ellipse=.3x.5m darken=.08 curve_z=-32..-16");
+        Debug.Log("[SNOW] footprints=64 ellipse=.3x.5m darken=.08 curve_z=-92..-14 follows_path=true");
     }
 
     static void BuildStonePath(MeshCollider terrainCollider, Material stone)
