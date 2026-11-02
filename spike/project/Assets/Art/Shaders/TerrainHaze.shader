@@ -143,14 +143,14 @@ Shader "Mistbell/TerrainHaze"
                 // Group the 40 texels/m world grid into hard 2.3-texel clusters (5.75 cm; about 3-4 screen pixels nearby).
                 // No interpolated noise in the fine palette: each cell has one flat value.
                 float2 snowXZ = input.positionWS.xz;
-                float grain = HashChunk(floor(snowXZ * (40.0 / 2.3)));
-                half detail = grain < .333333 ? .78h : (grain < .666667 ? 1.04h : 1.30h);
+                float grain = HashChunk(floor(snowXZ * (40.0 / 3.4)));
+                half detail = grain < .333333 ? .92h : (grain < .666667 ? .99h : 1.06h);
                 // Isotropic 0.5 / 0.75 / 1 m value fields, bounded albedo relief +/-4%.
                 float2 rotatedXZ = float2(.8*snowXZ.x-.6*snowXZ.y, .6*snowXZ.x+.8*snowXZ.y);
                 float mound = .5*SnowMound(snowXZ/.75+17.3)
                             + .3*SnowMound(rotatedXZ/.5+43.1)
                             + .2*SnowMound(snowXZ+91.7);
-                detail *= 1.0 + (mound*2.0-1.0)*.04;
+                detail *= 1.0 + (mound*2.0-1.0)*.07;
                 half3 texel = half3(.651, .744, .842) * detail;
                 if (_RockOnly > .5)
                     texel = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,p.zy).rgb*weights.x

@@ -646,7 +646,7 @@ public static class SpikeScene
             var normals = ridgeMesh.normals;
             for (int i = 0; i < normals.Length; i++)
             {
-                float blend = normals[i].y < .30f ? .92f : .88f;
+                float blend = normals[i].y < .30f ? .62f : .50f;
                 normals[i] = Vector3.Slerp(normals[i], smoothNormals[indices[i]], blend).normalized;
             }
             ridgeMesh.normals = normals;

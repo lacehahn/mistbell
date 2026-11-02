@@ -84,7 +84,8 @@ Shader "Mistbell/RidgeFog"
                     return half4(tint,alpha);
                 }
                 float3 n=normalize(input.normalWS);
-                float face=saturate(dot(n,GetMainLight().direction));
+                float micro=SAMPLE_TEXTURE2D(_NoiseTex,sampler_NoiseTex,input.positionWS.xz/11.0).r;
+                float face=saturate(dot(n,GetMainLight().direction))*(.95+.10*micro);
                 // Explicit warm/cool face colours in linear light, independent of exposure.
                 float lightFace=smoothstep(.62,.94,face);
                 float breakup=sin(input.positionWS.x*.22+sin(input.positionWS.z*.11)*2)*.012;
@@ -94,29 +95,30 @@ Shader "Mistbell/RidgeFog"
                 float snowWidth = min(lerp(_SnowSoftness, .003, farRidge), .004);
                 float heightGate=smoothstep(snowHeight-snowWidth, snowHeight+snowWidth, input.ridge.x+breakup);
                 // Low saddles share a climatic snow floor; local crest UV still controls higher peaks.
+                float wobble=6.0*sin(input.positionWS.x*.0043)+4.0*sin(input.positionWS.x*.0117+2.1);
                 float altitudeGate=smoothstep(_SnowWorldFloor-.4,_SnowWorldFloor+.4,
-                    input.positionWS.y+breakup*8);
+                    input.positionWS.y+wobble+breakup*8);
                 heightGate=min(heightGate,altitudeGate);
-                float slopeGate=smoothstep(.30,.62,n.y);
+                float slopeGate=smoothstep(.42,.74,n.y);
                 float snow=heightGate*slopeGate;
                 // A narrow exposed strip immediately below the snowline reads as cornice shadow.
                 float edgeLocal=step(snowHeight-.022,input.ridge.x+breakup)*altitudeGate;
                 float edgeAltitude=step(_SnowWorldFloor-2,input.positionWS.y)*step(_SnowWorldFloor,input.positionWS.y+2);
                 float underEdge=(1-heightGate)*max(edgeLocal,edgeAltitude)*slopeGate;
                 // Bedding carries the large-scale albedo; directional light only modulates it.
-                float rockFace=.2+.4*lightFace;
+                float rockFace=.30+.45*lightFace;
                 half3 rock=lerp(_RockShade.rgb,_ColorBottom.rgb,rockFace);
                 rock = lerp(rock, lerp(half3(.156,.195,.246),half3(.34,.40,.48),rockFace),farRidge);
                 // Snow receives broad sky light on shelves; rock retains directional cliff shadows.
                 float snowLight=.72+.28*smoothstep(.1,.65,face);
                 half3 ice=lerp(_SnowShade.rgb,_SnowColor.rgb,snowLight);
                 // Quantize the strata phase to a screen pixel footprint; three hard albedo levels.
-                float strataPhase=input.positionWS.y*.9+sin(input.positionWS.x*.018)*.7;
+                float strataPhase=input.positionWS.y*.9+sin(input.positionWS.x*.018)*.7+sin(input.positionWS.x*.0071)*3.2+sin(input.positionWS.z*.0043)*1.6;
                 float phasePixel=max(fwidth(strataPhase),.001);
                 strataPhase=floor(strataPhase/phasePixel)*phasePixel;
                 // Three beds, each 28 phase units (~31.1m), survive distance and the macro filter.
                 float stratum=floor(frac(strataPhase/84.0)*3);
-                rock *= (stratum < 1 ? .18 : (stratum < 2 ? .52 : 1.0));
+                rock *= (stratum < 1 ? .72 : (stratum < 2 ? .86 : 1.0));
                 rock *= lerp(1,.38,farRidge);
                 rock *= lerp(1,.78,underEdge);
                 float2 pixelUV = input.positionWS.xy / 6.0;
@@ -128,8 +130,8 @@ Shader "Mistbell/RidgeFog"
                     snowTex=SRGBToLinear(snowTex); rockTex=SRGBToLinear(rockTex);
                 #endif
                 // Retain the existing face lighting and aerial perspective, replacing only albedo detail.
-                half3 color=lerp(rock * lerp(1, rockTex / half3(.153,.125,.101), .20),
-                    ice * lerp(1, snowTex / half3(.651,.744,.842), .20),snow);
+                half3 color=lerp(rock * lerp(1, rockTex / half3(.153,.125,.101), .35),
+                    ice * lerp(1, snowTex / half3(.651,.744,.842), .38),snow);
                 float foot=(1-smoothstep(0,15,input.positionWS.y))*step(0,input.positionWS.y)*.18;
                 color=lerp(color,_AirColor.rgb,saturate(lerp(_Aerial,.24,farRidge)+_FogFloor+foot));
                 return half4(color, 1);

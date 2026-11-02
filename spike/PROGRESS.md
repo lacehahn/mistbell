@@ -305,4 +305,8 @@
 | 10:50 | 已知最新帧指标 | 933c864 自报 | 近景 corrX 8.3→2.6、aniso 5.69→1.58、PATTERN=0、snow 0.6003、shadow 0.0707（待我复量） |
 | 10:52 | **cron 会话撞车后自停** | `git log` + `ps` + 文件 mtime | 我 10:35 派 Codex 做山体第 1 轮；10:49:54 另一（手动）会话提交 `35462d0`「暂停 30 分钟 cron 推进」，把我这一轮的 `RidgeFog.shader`/`SpikeScene.cs`/`macro.py`/`brief-mountain.md` 一起卷进它的提交。PROGRESS mtime 10:49 证明它在活动 → **本轮不派发、不改源码**，只留 handoff。第 1 轮结论（我的独立复跑数字）：几何过关（`macroStd 23.8→64.4`、四块中三块 ROCK、尖峰+崖壁+沟壑，`meshHash=7448A17B`、`heightPct 44.8` 未动），**但着色坏**：`rock *= (stratum<1?.18:…)` 造出近纯黑岩带；`rock *= lerp(1,.38,farRidge)` 把远层压黑（空气透视方向反了）；`rockUV=/8.0` 在 400 m 处退化成均匀灰浆糊；雪掩码过窄 → 雪线成硬剪影。修法与硬门槛已写进 `spike/brief-mountain2.md`（未提交，留给手动会话直接用） |
 | 10:53 | **Codex 配额耗尽** | `codex.sh` exit=1 | `ERROR: You've hit your usage limit ... try again at 12:45 PM` → 记：**Codex 额度用尽，等待 12:45 窗口重置**；不空等，改由本会话手写实现 + 自己跑构建/截图/量测 |
+| 11:15 | 用户指示：改为单线，Codex 为按量计费、预算 10 以内 → **此后全部手写实现，不派 Codex** | — | — |
+| 11:20 | 队列⑬（手写）：RidgeFog 法线锐化 + 坡度门收紧 + 岩层带对比减弱 + 贴图混合提升 | 改 shader + 重建 | 山体从"毛绒布料"变为可辨的崖壁与雪帽；副作用：地面 hf 0.053 过噪 |
+| 11:28 | 队列⑬b：地面雪颗粒减半（三级 grain .78/1.04/1.30 → .92/.99/1.06，簇 2.3→3.4 texel） | 改 TerrainHaze.shader | **hf 0.0503 → 0.0298**、dark 0.0459、snow 0.6506、shadow 0.0826 全部进区间 |
+| 11:34 | 队列⑬c：打散山体"灯芯绒横条纹"（strataPhase 加 x/z 低频项 + 带对比 .55/.75→.72/.86） | 改 shader + 重建 | 条纹基本消失，岩面残留"沥青麻点"；final hf 0.0315 / dark 0.0311 |
 
