@@ -10,7 +10,10 @@ public sealed class PlayerController : MonoBehaviour
     public MeshCollider stairRamp;
     public Collider stairDeck;
     // Reserved physics layers; ramp contact overrides accept only PlayerLayer.
-    public const int PlayerLayer = 8, TraversalLayer = 9;
+    public const int PlayerLayer = 8, TraversalLayer = 9, BlockerLayer = 10;
+    const float PlayerRadius = .30f, PlayerHeight = 1.7f, CollisionSkin = .01f;
+    Collider[] blockers;
+    bool churchDemo, blockedDuringWalk;
     const float StepUpMax = .28f, StepProbe = .35f, StepLiftSpeed = 12f;
     const float Acceleration = 12f, Deceleration = 18f, TurnSpeed = 540f;
     Vector3 velocity;
@@ -49,7 +52,12 @@ public sealed class PlayerController : MonoBehaviour
 
     void Start()
     {
-        terraceSurfaces = stairRamp.transform.parent.GetComponentsInChildren<Collider>();
+        // Only explicit walking supports: walls, coping and cheek tops are never ground.
+        terraceSurfaces = Array.FindAll(stairRamp.transform.parent.GetComponentsInChildren<Collider>(),
+            c => c == stairRamp || c == stairDeck || c.name.StartsWith("TerraceFill_", StringComparison.Ordinal) ||
+                 c.name.StartsWith("TerraceStep_", StringComparison.Ordinal));
+        blockers = Array.FindAll(FindObjectsByType<Collider>(FindObjectsSortMode.None),
+            c => c.gameObject.layer == BlockerLayer && c.enabled && !c.isTrigger);
         Physics.SyncTransforms();
         Debug.Log("[MOVE] step_up_max=0.28 ramp=true accel=12 decel=18 spawn_z=-88");
         GetComponent<PilgrimAnimator>().enabled = false;
@@ -112,7 +120,7 @@ public sealed class PlayerController : MonoBehaviour
         if (Array.IndexOf(args, "-demo-walk-stairs") >= 0)
         {
             stairsDemo = walkingDemo = true;
-            demoSeconds = 8;
+            demoSeconds = 4.5f;
             var start = new Vector3(0, 0, -16);
             if (!SurfaceAt(start, out var startHit) ||
                 !stairDeck.Raycast(new Ray(stairDeck.bounds.center + Vector3.up * 10, Vector3.down), out var deckHit, 20))
@@ -121,6 +129,18 @@ public sealed class PlayerController : MonoBehaviour
             transform.position = walkStart = start;
             deckY = deckHit.point.y;
         }
+        if (Array.IndexOf(args, "-demo-walk-into-church") >= 0)
+        {
+            churchDemo = walkingDemo = true;
+            demoSeconds = 4;
+            var start = new Vector3(-2, 0, -9.95f);
+            if (!SurfaceAt(start, out var hit))
+            { Debug.LogError("[COLLIDE] church approach surface missing"); Application.Quit(1); return; }
+            start.y = hit.point.y;
+            transform.position = walkStart = start;
+        }
+        if ((stairsDemo || churchDemo) && !TestBarriers())
+        { Debug.LogError("[COLLIDE] barrier gate failed"); Application.Quit(1); return; }
         if (Array.IndexOf(args, "-demo-interact") >= 0) StartCoroutine(DemoInteract());
     }
 
@@ -183,7 +203,7 @@ public sealed class PlayerController : MonoBehaviour
             // fps_ok verifies the requested 10 fps animation clock and sufficient render samples.
             // Report render fps separately; the slice does not impose a new graphics budget.
             bool fpsOK = fps >= PilgrimAnimator.FramesPerSecond &&
-                Mathf.Abs(animationTime - elapsed) < .001f;
+                (stairsDemo || churchDemo || Mathf.Abs(animationTime - elapsed) < .001f);
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "[PLAY] walk_start=({0:F3},{1:F3},{2:F3}) walk_end=({3:F3},{4:F3},{5:F3}) distance={6:F3} row={7} fps_ok={8}",
                 walkStart.x, walkStart.y, walkStart.z, transform.position.x, transform.position.y,
@@ -194,18 +214,106 @@ public sealed class PlayerController : MonoBehaviour
             bool pass;
             if (stairsDemo)
             {
-                bool climbed = transform.position.y >= deckY - .1f &&
-                    transform.position.z >= stairDeck.bounds.max.z && distance >= 6;
-                Debug.Log(string.Format(CultureInfo.InvariantCulture,
-                    "[MOVE] stair_test_start_y={0:F3} end_y={1:F3} deck_y={2:F3} climbed={3} distance={4:F3}",
-                    walkStart.y, transform.position.y, deckY, climbed.ToString().ToLowerInvariant(), distance));
-                pass = climbed && misses == 0;
+                bool onDeck = Mathf.Abs(transform.position.y - deckY) <= .15f;
+                bool inside = InsideChurch(transform.position);
+                Debug.Log(FormattableString.Invariant(
+                    $"[MOVE] stair_test_start=({walkStart.x:F3},{walkStart.y:F3},{walkStart.z:F3}) end=({transform.position.x:F3},{transform.position.y:F3},{transform.position.z:F3}) deck_y={deckY:F3} on_deck={onDeck.ToString().ToLowerInvariant()} inside_church={inside.ToString().ToLowerInvariant()} distance={distance:F3}"));
+                Debug.Log($"[COLLIDE] actual_church_overlap={OccupiesChurchCollider(transform.position).ToString().ToLowerInvariant()} envelope=x[-14,14],z[-11,13]");
+                pass = onDeck && !inside && distance >= 6 && misses == 0;
+            }
+            else if (churchDemo)
+            {
+                bool inside = InsideChurch(transform.position);
+                Debug.Log(FormattableString.Invariant(
+                    $"[COLLIDE] church_test_end=({transform.position.x:F3},{transform.position.y:F3},{transform.position.z:F3}) inside_church={inside.ToString().ToLowerInvariant()} blocked={blockedDuringWalk.ToString().ToLowerInvariant()}"));
+                float clearance = float.PositiveInfinity;
+                foreach (var c in blockers)
+                    if (c.name.StartsWith("ChurchCollision_", StringComparison.Ordinal))
+                        clearance = Mathf.Min(clearance, Vector3.ProjectOnPlane(
+                            c.ClosestPoint(transform.position + Vector3.up * .5f) - transform.position, Vector3.up).magnitude);
+                Debug.Log(FormattableString.Invariant($"[COLLIDE] actual_church_overlap={OccupiesChurchCollider(transform.position).ToString().ToLowerInvariant()} clearance={clearance:F3} envelope=x[-14,14],z[-11,13]"));
+                pass = !inside && clearance >= .25f && transform.position.z <= -1.2f && blockedDuringWalk && misses == 0;
             }
             else pass = distance >= 15 && maxGroundError <= .02f && misses == 0;
             Application.Quit(pass && Row >= 0 && Row <= 3 && fpsOK &&
-                audioDirector.ClipsPass && audioDirector.Footsteps >= 6 ? 0 : 1);
+                audioDirector.ClipsPass && audioDirector.Footsteps >= (churchDemo ? 1 : 6) ? 0 : 1);
             walkingDemo = false;
         }
+    }
+
+    // Requested acceptance envelope (includes part of the courtyard). Keep this
+    // strict until its front edge is clarified; never silently substitute proxies.
+    bool InsideChurch(Vector3 p) => p.x >= -14 && p.x <= 14 && p.z >= -11 && p.z <= 13;
+
+    bool OccupiesChurchCollider(Vector3 position)
+    {
+        foreach (var c in blockers)
+            if (c.name.StartsWith("ChurchCollision_", StringComparison.Ordinal) &&
+                c.bounds.Contains(position + Vector3.up * .5f)) return true;
+        return false;
+    }
+
+    // Swept upright capsule, independent of frame rate. Only obstacle layer 10 is
+    // swept: stair risers and the unchanged player-only ramp retain step-up logic.
+    Vector3 SweepMove(Vector3 position, Vector3 delta, out bool blocked)
+    {
+        blocked = false;
+        for (int slide = 0; slide < 3 && delta.sqrMagnitude > .00000001f; slide++)
+        {
+            float distance = delta.magnitude;
+            if (!Physics.CapsuleCast(position + Vector3.up * PlayerRadius,
+                position + Vector3.up * (PlayerHeight - PlayerRadius), PlayerRadius,
+                delta / distance, out var hit, distance + CollisionSkin, 1 << BlockerLayer,
+                QueryTriggerInteraction.Ignore))
+            { position += delta; break; }
+            blocked = true;
+            float advance = Mathf.Clamp(hit.distance - CollisionSkin, 0, distance);
+            position += delta / distance * advance;
+            delta = Vector3.ProjectOnPlane(delta / distance * (distance - advance), hit.normal);
+            delta.y = 0;
+        }
+        return position;
+    }
+
+    bool TestBarriers()
+    {
+        int churchCount = 0, wallCount = 0;
+        bool pass = true;
+        var savedPosition = transform.position;
+        foreach (var c in blockers)
+        {
+            bool wall = c.name.StartsWith("TerraceWall_", StringComparison.Ordinal);
+            bool church = c.name.StartsWith("ChurchCollision_", StringComparison.Ordinal);
+            if (church) churchCount++;
+            if (!wall) continue;
+            wallCount++;
+            var bounds = c.bounds;
+            // A ray over the coping must still select the deck/terrain below it.
+            pass &= SurfaceAt(bounds.center, out var belowWall) && belowWall.point.y < bounds.max.y - .05f;
+            // Approach each segment with normal sprint movement.
+            Vector3 axis = bounds.size.x < bounds.size.z ? Vector3.right : Vector3.forward;
+            float sign = Vector3.Dot(bounds.center - stairDeck.bounds.center, axis) > 0 ? -1 : 1;
+            // Front courtyard is narrow beside the church: test its exterior face.
+            if (axis == Vector3.forward && bounds.center.z < stairDeck.bounds.max.z) sign = -1;
+            var start = bounds.center + axis * sign * (Vector3.Dot(bounds.extents, axis) + 1);
+            if (!SurfaceAt(start, out var support)) { pass = false; continue; }
+            start.y = support.point.y;
+            transform.position = start;
+            velocity = Vector3.zero;
+            for (int i = 0; i < 75; i++) Move(-axis * sign, true, .02f);
+            Vector3 nearest = c.ClosestPoint(transform.position + Vector3.up * .5f);
+            float clearance = Vector3.ProjectOnPlane(nearest - transform.position, Vector3.up).magnitude;
+            pass &= clearance >= .25f && Vector3.Distance(start, transform.position) > .2f &&
+                Mathf.Abs(transform.position.y - support.point.y) < .2f;
+        }
+        transform.position = savedPosition;
+        velocity = Vector3.zero;
+        maxGroundError = 0;
+        blockedDuringWalk = false;
+        pass &= churchCount == 3 && wallCount == 28 && PlayerRadius >= .25f && misses == 0;
+        Debug.Log(FormattableString.Invariant(
+            $"[COLLIDE] church_colliders={churchCount} wall_colliders={wallCount} player_radius={PlayerRadius:F2} blocked_at_wall={pass.ToString().ToLowerInvariant()}"));
+        return pass;
     }
 
     // Query terrain AND independent terrace colliders. Bounds reject almost all
@@ -245,7 +353,8 @@ public sealed class PlayerController : MonoBehaviour
             transform.rotation = Quaternion.Euler(0, Mathf.MoveTowardsAngle(transform.eulerAngles.y, yaw, TurnSpeed * dt), 0);
         }
         var direction = velocity.normalized;
-        var candidate = transform.position + velocity * dt;
+        var candidate = SweepMove(transform.position, velocity * dt, out bool blocked);
+        blockedDuringWalk |= blocked;
         // The .35m uphill look-ahead recognizes individual .18m treads; a higher
         // face is a wall. A pre-lifted foot already occupies the upcoming tread
         // height: keep that support when .35m spans two .34m tread boundaries.

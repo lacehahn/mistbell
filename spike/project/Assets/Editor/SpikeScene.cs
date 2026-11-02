@@ -362,6 +362,21 @@ public static class SpikeScene
         churchSeatY = entry.y - .02f - bounds.min.y;
         church.position += Vector3.up * churchSeatY;
         Debug.Log($"[CONTACT_SEAT] church_y={churchSeatY:F4} first_tread_ground={entry.y:F4}");
+        // Solid proxies deliberately close the open FBX portal for this exterior slice.
+        // Root-local metres; no renderer, mesh, material or imported asset changes.
+        void Block(string name, Vector3 center, Vector3 size)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(church, false);
+            go.layer = PlayerController.BlockerLayer;
+            go.isStatic = true;
+            var box = go.AddComponent<BoxCollider>();
+            box.center = center;
+            box.size = size;
+        }
+        Block("ChurchCollision_Main", new Vector3(-2, 5.5f, 1.3f), new Vector3(14.6f, 11, 21.4f));
+        Block("ChurchCollision_Annex", new Vector3(-12.25f, 3.1f, 2.5f), new Vector3(6.5f, 6.2f, 6));
+        Block("ChurchCollision_BellTower", new Vector3(10.5f, 8.5f, -2), new Vector3(6, 17, 6));
         return church;
     }
 
@@ -448,7 +463,14 @@ public static class SpikeScene
                 float xb=alongX?Mathf.Lerp(x0,x1,b)-gap/2:x1;
                 float za=alongX?z0:Mathf.Lerp(z0,z1,a)+gap/2;
                 float zb=alongX?z1:Mathf.Lerp(z0,z1,b)-gap/2;
-                Prism("TerraceWall_"+segments,xa,xb,za,zb,Base,WallTop,stone,true);
+                var wall = Prism("TerraceWall_"+segments,xa,xb,za,zb,Base,WallTop,stone,true);
+                // Preserve the visible sloped prism; use its enclosing static box as a barrier.
+                Object.DestroyImmediate(wall.GetComponent<MeshCollider>());
+                wall.gameObject.layer = PlayerController.BlockerLayer;
+                wall.gameObject.isStatic = true;
+                var box = wall.gameObject.AddComponent<BoxCollider>();
+                box.center = wall.sharedMesh.bounds.center;
+                box.size = wall.sharedMesh.bounds.size;
                 caps.Add(Prism("TerraceCap_"+segments,xa,xb,za,zb,WallTop,
                     (x,z)=>WallTop(x,z)+capHeight,snow,false));
                 segments++;
@@ -509,8 +531,9 @@ public static class SpikeScene
         {
             float xa=side<0?-width/2-.5f:width/2;
             float top=footY+(i+1)*rise+.9f;
-            Prism("TerraceCheek_"+side+"_"+i,xa,xa+.5f,startZ+i*run,startZ+(i+1)*run,
+            var cheek = Prism("TerraceCheek_"+side+"_"+i,xa,xa+.5f,startZ+i*run,startZ+(i+1)*run,
                 Base,(x,z)=>top,stone,true);
+            cheek.gameObject.layer = PlayerController.BlockerLayer;
         }
         // Raise only the imported church with the new site fill. Its Blender scale,
         // original entry steps and window offsets remain intact.
