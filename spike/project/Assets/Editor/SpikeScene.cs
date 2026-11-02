@@ -864,8 +864,8 @@ public static class SpikeScene
         var root = new GameObject("Props").transform;
         var roadside = new GameObject("Roadside Props").transform;
         roadside.SetParent(root, false);
-        var rockMat = SpikePixelArt.RockMaterial("Assets/Settings/M_WinterRock.mat", 1f);
-        var rockShade = SpikePixelArt.RockMaterial("Assets/Settings/M_WinterRockShade.mat", .72f);
+        var rockMat = MakeLit("Assets/Settings/M_WinterRock.mat", Hex("#6B6157"), 0f, .02f);
+        var rockShade = MakeLit("Assets/Settings/M_WinterRockShade.mat", Hex("#4E463E"), 0f, .02f);
         var snowMat = new Material(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat"))
             { name = "M_RockSnow" };
         snowMat.SetColor("_BaseColor", Hex("#E7EDF4"));
@@ -909,7 +909,7 @@ public static class SpikeScene
         foreach (var center in centers)
         {
             float radius = Range(.65f, 1.1f);
-            int count = rnd.Next(3, 6);
+            int count = rnd.Next(3, 7);
             for (int j = 0; j < count && rocks < 80; j++)
             {
                 float angle = Range(0f, Mathf.PI * 2f), offset = radius * Mathf.Sqrt(Range(0f, 1f));
@@ -918,16 +918,20 @@ public static class SpikeScene
                 // 散布半径也不可侵入基座保护区。
                 if (Mathf.Abs(location.x) < 18f && location.z > -18f) continue;
                 var p = Snap(location);
-                int faces = 32; // irregular block: broad top, vertical broken sides; no apex.
-                var mesh = BuildWinterRock(rnd, 6);
+                const int faces = 80;
+                var mesh = BuildWinterRock(rnd);
                 var rock = new GameObject("ClusterRock_" + rocks);
                 rock.transform.SetParent(root, false);
-                // yaw 已烘入网格，按实际世界轴包围盒规范化；绝不拿缩放参数冒充尺寸。
+                // 三轴旋转已烘入网格；以实际世界轴包围盒检查厚度与尺寸。
                 var size = mesh.bounds.size;
-                float burial = Range(.28f, .52f);   // 埋 70% 只露平顶 → 读成地砖；改 28-52%
+                if (size.y / Mathf.Max(size.x, size.z) < .45f ||
+                    Mathf.Min(size.x, Mathf.Min(size.y, size.z)) < .45f - .00001f ||
+                    Mathf.Max(size.x, Mathf.Max(size.y, size.z)) > 1.5f + .00001f)
+                    throw new System.InvalidOperationException("Winter boulder bounds violated: " + size);
+                float burial = Range(.30f, .45f);
                 float bottomAtGround = p.y - mesh.bounds.min.y;
                 rock.transform.position = new Vector3(p.x, bottomAtGround - burial * size.y, p.z);
-                if (burial >= .28f && burial <= .52f) halfBuried++;
+                if (burial >= .30f && burial <= .45f) halfBuried++;
                 minSize = Vector3.Min(minSize, size); maxSize = Vector3.Max(maxSize, size);
                 minFaces = Mathf.Min(minFaces, faces); maxFaces = Mathf.Max(maxFaces, faces);
                 string path = "Assets/Settings/ClusterRock_" + (rocks + 1) + ".asset";
@@ -943,7 +947,7 @@ public static class SpikeScene
         float halfBuriedRatio = rocks == 0 ? 0f : halfBuried / (float)rocks;
         if (rocks < 40 || rocks > 80 || halfBuriedRatio < .95f)
             throw new System.InvalidOperationException("Winter rock specification violated");
-        Debug.Log($"[ROCKS] count={rocks} clusters={centers.Count} per_cluster=3..6 spacing=8..25m size=.3..1.2m burial=.28..52 body=#6B6157 shade=#4E463E snow=#E7EDF4 block=true");
+        Debug.Log($"[ROCK2] count={rocks} faces_per_rock=80 radial_jitter=0.18 burial=0.30..0.45 size=0.45..1.5 flat_top=false");
         Vector3 RoadPoint(float t, float offset) => new Vector3(3f * Mathf.Sin(t * 2f * Mathf.PI) + offset, 0f,
             Mathf.Lerp(-70f, -13.25f, t));
         int posts = 0, rails = 0;
@@ -977,47 +981,97 @@ public static class SpikeScene
         Debug.Log($"[SPIKE] fence posts={posts} rails={rails}");
     }
 
-    // Broad irregular prism with a thin snow layer on its horizontal top only.
-    static Mesh BuildWinterRock(System.Random random, int sides)
+    // Subdiv-1 icosphere: 42 unique positions / 80 triangles. Split render
+    // vertices per triangle so the boulder keeps crisp, low-poly face normals.
+    static Mesh BuildWinterRock(System.Random random)
     {
         float Range(float a, float b) => Mathf.Lerp(a, b, (float)random.NextDouble());
-        var yaw = Quaternion.Euler(Range(-4,4), Range(0,360), Range(-4,4));
-        var points = new Vector3[sides*2];
-        for (int i=0; i<sides; i++)
+        float t = (1f + Mathf.Sqrt(5f)) * .5f;
+        var points = new System.Collections.Generic.List<Vector3> {
+            new Vector3(-1,t,0), new Vector3(1,t,0), new Vector3(-1,-t,0), new Vector3(1,-t,0),
+            new Vector3(0,-1,t), new Vector3(0,1,t), new Vector3(0,-1,-t), new Vector3(0,1,-t),
+            new Vector3(t,0,-1), new Vector3(t,0,1), new Vector3(-t,0,-1), new Vector3(-t,0,1)
+        };
+        for (int i = 0; i < points.Count; i++) points[i] = points[i].normalized;
+        int[] ico = {
+            0,11,5, 0,5,1, 0,1,7, 0,7,10, 0,10,11,
+            1,5,9, 5,11,4, 11,10,2, 10,7,6, 7,1,8,
+            3,9,4, 3,4,2, 3,2,6, 3,6,8, 3,8,9,
+            4,9,5, 2,4,11, 6,2,10, 8,6,7, 9,8,1
+        };
+        var midpoints = new System.Collections.Generic.Dictionary<long, int>();
+        int Midpoint(int a, int b)
         {
-            float angle = Mathf.PI*2*i/sides;
-            float radius = Range(.44f,.55f);
-            var p = new Vector3(Mathf.Cos(angle)*radius, 0, Mathf.Sin(angle)*radius);
-            points[i] = yaw * (p + Vector3.down*.5f);
-            points[i+sides] = yaw * (p*Range(.78f,.94f) + Vector3.up*.5f);
+            long key = ((long)Mathf.Min(a, b) << 32) | (uint)Mathf.Max(a, b);
+            if (midpoints.TryGetValue(key, out int index)) return index;
+            index = points.Count;
+            points.Add((points[a] + points[b]).normalized);
+            midpoints.Add(key, index);
+            return index;
         }
-        var bounds = new Bounds(points[0],Vector3.zero);
-        foreach(var p in points) bounds.Encapsulate(p);
-        var target = new Vector3(Range(.3f,1.2f),Range(.3f,.8f),Range(.3f,1.2f));
-        for(int i=0;i<points.Length;i++) points[i]=Vector3.Scale(points[i]-bounds.center,
-            new Vector3(target.x/bounds.size.x,target.y/bounds.size.y,target.z/bounds.size.z));
+        var triangles = new System.Collections.Generic.List<int>();
+        for (int i = 0; i < ico.Length; i += 3)
+        {
+            int a = ico[i], b = ico[i+1], c = ico[i+2];
+            int ab = Midpoint(a,b), bc = Midpoint(b,c), ca = Midpoint(c,a);
+            triangles.AddRange(new[] {a,ab,ca, b,bc,ab, c,ca,bc, ab,bc,ca});
+        }
+        if (points.Count != 42 || triangles.Count != 240)
+            throw new System.InvalidOperationException("Icosphere topology violated");
+        for (int i = 0; i < points.Count; i++) points[i] *= Range(.82f, 1.18f);
+
+        Vector3[] shaped = new Vector3[points.Count];
+        Bounds bounds = default;
+        bool valid = false;
+        for (int attempt = 0; attempt < 128 && !valid; attempt++)
+        {
+            var scale = new Vector3(Range(.55f,1.25f), Range(.60f,1.05f), Range(.55f,1.25f));
+            var rotation = Quaternion.Euler(Range(-12f,12f), Range(0f,360f), Range(-12f,12f));
+            for (int i = 0; i < points.Count; i++) shaped[i] = rotation * Vector3.Scale(points[i], scale);
+            bounds = new Bounds(shaped[0], Vector3.zero);
+            foreach (var point in shaped) bounds.Encapsulate(point);
+            var size = bounds.size;
+            valid = size.y / Mathf.Max(size.x,size.z) >= .45f &&
+                Mathf.Min(size.x,Mathf.Min(size.y,size.z)) / Mathf.Max(size.x,Mathf.Max(size.y,size.z)) > .31f;
+            // Reject near-horizontal faces as well as slab-like bounding boxes.
+            for (int i = 0; i < triangles.Count && valid; i += 3)
+            {
+                var n = Vector3.Cross(shaped[triangles[i+1]] - shaped[triangles[i]],
+                    shaped[triangles[i+2]] - shaped[triangles[i]]).normalized;
+                if (Mathf.Abs(n.y) > .9999f) valid = false;
+            }
+        }
+        if (!valid) throw new System.InvalidOperationException("Cannot shape winter boulder");
+        // Uniform metre scaling preserves the jitter and proportions; all AABB
+        // dimensions stay in .45..1.5 m, without flattening the vertical axis.
+        float smallest = Mathf.Min(bounds.size.x, Mathf.Min(bounds.size.y,bounds.size.z));
+        float largest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y,bounds.size.z));
+        float minMetres = .45f / smallest, maxMetres = 1.5f / largest;
+        // Favour substantial boulders within the same size bounds, preserving
+        // their readable mass and cast shadows after 30–45% burial.
+        float metres = Range(Mathf.Lerp(minMetres, maxMetres, .5f), maxMetres);
+        for (int i = 0; i < shaped.Length; i++) shaped[i] = (shaped[i] - bounds.center) * metres;
         var vertices = new System.Collections.Generic.List<Vector3>();
         var groups = new System.Collections.Generic.List<int>[] {
-            new System.Collections.Generic.List<int>(),new System.Collections.Generic.List<int>(),new System.Collections.Generic.List<int>() };
-        void Face(Vector3 a,Vector3 b,Vector3 c,int material)
+            new System.Collections.Generic.List<int>(), new System.Collections.Generic.List<int>(),
+            new System.Collections.Generic.List<int>() };
+        for (int i = 0; i < triangles.Count; i += 3)
         {
-            if(Vector3.Dot(Vector3.Cross(b-a,c-a),(a+b+c)/3)<0) { var swap=b;b=c;c=swap; }
-            int start=vertices.Count; vertices.Add(a);vertices.Add(b);vertices.Add(c);
-            groups[material].AddRange(new[]{start,start+1,start+2});
+            var a = shaped[triangles[i]];
+            var b = shaped[triangles[i+1]];
+            var c = shaped[triangles[i+2]];
+            if (Vector3.Dot(Vector3.Cross(b-a,c-a), (a+b+c)/3f) < 0f)
+            { var swap = b; b = c; c = swap; }
+            var normal = Vector3.Cross(b-a,c-a).normalized;
+            int material = normal.y > .62f ? 1 :
+                (Vector3.Dot(normal,new Vector3(-.6f,.34f,-.72f)) > 0f ? 0 : 2);
+            int start = vertices.Count;
+            vertices.Add(a); vertices.Add(b); vertices.Add(c);
+            groups[material].AddRange(new[] {start,start+1,start+2});
         }
-        for(int i=0;i<sides;i++)
-        {
-            int j=(i+1)%sides;
-            var a=points[i];var b=points[j];var c=points[i+sides];var d=points[j+sides];
-            int material=Vector3.Dot(Vector3.Cross(c-a,b-a).normalized,new Vector3(-.6f,.34f,-.72f))>0 ? 0:2;
-            Face(a,b,c,material);Face(b,d,c,material);
-            // Only the horizontal top gets snow, preserving the exposed .3-height stone rim.
-            Face(Vector3.up*(target.y*.5f+.012f),c+Vector3.up*.012f,d+Vector3.up*.012f,1);
-            Face(Vector3.down*target.y*.5f,b,a,0);
-        }
-        var mesh=new Mesh {name="WinterRock_Block",vertices=vertices.ToArray(),subMeshCount=3};
-        for(int i=0;i<3;i++) mesh.SetTriangles(groups[i],i);
-        mesh.RecalculateNormals();mesh.RecalculateBounds();
+        var mesh = new Mesh {name="WinterRock_Icosphere", vertices=vertices.ToArray(), subMeshCount=3};
+        for (int i = 0; i < 3; i++) mesh.SetTriangles(groups[i],i);
+        mesh.RecalculateNormals(); mesh.RecalculateBounds();
         return mesh;
     }
 
