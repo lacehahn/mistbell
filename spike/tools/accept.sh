@@ -29,16 +29,21 @@ if ! cmp -s spike/editor/MaterialForge.cs "$PROJ/Assets/Editor/MaterialForge.cs"
   cp spike/editor/MaterialForge.cs "$PROJ/Assets/Editor/MaterialForge.cs"
 fi
 step "1/5 生成场景"
-python3 spike/tools/forge_style10.py
-check $? "STYLE10 生成（冻结四张参考贴图）"
+python3 -c "import sys; sys.path.insert(0,'spike/tools'); from forge_style10 import freeze,ROOT,sha; assert all(sha(ROOT/(n+'_Albedo.png'))==s for n,s in freeze().items())"
+check $? "STYLE11 冻结四张参考贴图检查；场景阶段按墙生成图集"
 "$UNITY" -batchmode -quit -projectPath "$PROJ" -executeMethod SpikeScene.Run -logFile "$LOGDIR/accept_scene.log" >/dev/null 2>&1
 check $? "SpikeScene.Run"
+[ "$FAIL" -eq 0 ] || exit "$FAIL"
+"$UNITY" -batchmode -quit -projectPath "$PROJ" -executeMethod Style11Atlas.CalibrateAndVerify -logFile "$LOGDIR/style11_uv_verify.log" >/dev/null 2>&1
+check $? "STYLE11 实际网格 UV / 图集绑定检查"
+[ "$FAIL" -eq 0 ] || exit "$FAIL"
 grep -aoE "\[SNOW\][^\"]{0,80}" "$LOGDIR/accept_scene.log" | tail -1
 grep -aoE "\[FGD_LAYOUT\][^\"]{0,120}" "$LOGDIR/accept_scene.log" | tail -1
 
 step "2/5 出包（macOS + Windows Mono）"
 "$UNITY" -batchmode -quit -projectPath "$PROJ" -executeMethod SpikeBuild.Run -logFile "$LOGDIR/accept_build.log" >/dev/null 2>&1
 check $? "SpikeBuild.Run"
+[ "$FAIL" -eq 0 ] || exit "$FAIL"
 grep -c "Build Finished, Result: Success" "$LOGDIR/accept_build.log" | xargs -I{} echo "  build success × {}"
 
 step "3/5 演示（11 项）"
@@ -52,10 +57,10 @@ grep -ahoE "\[(REVEAL|JOURNAL_CHECK|SAVE)\] [^\"]{0,110}" "$LOGDIR"/run_*_"$STAM
 
 step "4/5 截图 + 量测"
 CAPTURE_START=$(date +%s)
-bash spike/tools/capture_style10.sh > "$LOGDIR/accept_capture_$STAMP.log" 2>&1
-check $? "capture_style10.sh（本轮外景、室内与480放大图）"
-python3 spike/tools/measure_style10.py
-check $? "STYLE10 布局 / 渲染色调 / SHA / 整帧门槛"
+bash spike/tools/capture_style11.sh > "$LOGDIR/accept_capture_$STAMP.log" 2>&1
+check $? "capture_style11.sh（本轮外景、室内与480放大图）"
+python3 spike/tools/measure_style11.py
+check $? "STYLE11 非平铺 / 雪带 / 渲染色调 / SHA / 整帧门槛"
 
 if [ "$FAST" -eq 0 ]; then
   step "5/5 满分辨率性能（1920×1080）"

@@ -4,6 +4,9 @@ Shader "Mistbell/TerrainHaze"
     {
         [MainTexture] _BaseMap ("Grass", 2D) = "white" {}
         [MainColor] _BaseColor ("Tint", Color) = (1,1,1,1)
+        _Style11Atlas1 ("Nonrepeat atlas 1", 2D) = "white" {}
+        _Style11Atlas2 ("Nonrepeat atlas 2", 2D) = "white" {}
+        _Style11UV ("Nonrepeat atlas mesh UV", Float) = 0
         _ForgeSurface ("Forge sample: 0 off / 1 snow / 2 stone / 3 wood", Float) = 0
         _ForgeEmission ("Preserved interior stone emission", Color) = (0,0,0,0)
         _ForgeTopGain ("Secondary step top polish", Float) = 1
@@ -51,6 +54,7 @@ Shader "Mistbell/TerrainHaze"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_Style11Atlas1); TEXTURE2D(_Style11Atlas2);
             TEXTURE2D(_ForgeRoughness); SAMPLER(sampler_ForgeRoughness);
             TEXTURE2D(_SnowMedium); SAMPLER(sampler_SnowMedium);
             TEXTURE2D(_SnowLow); SAMPLER(sampler_SnowLow);
@@ -60,7 +64,7 @@ Shader "Mistbell/TerrainHaze"
                 float4 _ForgeEmission;
                 float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor, _FarHazeColor;
                 float _FarHazeStrength;
-                float _SnowRelief, _ForgeSurface, _ForgeTopGain;
+                float _SnowRelief, _ForgeSurface, _ForgeTopGain, _Style11UV;
                 float _StoneSurface, _SnowAlbedo, _RockSnowCap, _Footprint, _RockOnly;
                 float _NormalScale, _Metallic, _Smoothness;
                 float _HazeStart, _HazeEnd, _HazePower, _HazeStrength;
@@ -72,6 +76,7 @@ Shader "Mistbell/TerrainHaze"
                 float4 tangentOS : TANGENT;
                 float2 uv : TEXCOORD0;
                 float2 relief : TEXCOORD1;
+                float2 atlasIndex : TEXCOORD2;
             };
             struct Varyings
             {
@@ -83,6 +88,7 @@ Shader "Mistbell/TerrainHaze"
                 half3 vertexLighting : TEXCOORD4;
                 float capHeight : TEXCOORD5;
                 float2 relief : TEXCOORD6;
+                float atlasIndex : TEXCOORD7;
             };
             Varyings Vert(Attributes input)
             {
@@ -93,6 +99,7 @@ Shader "Mistbell/TerrainHaze"
                 output.normalWS = normals.normalWS;
                 output.tangentWS = half4(normals.tangentWS, input.tangentOS.w * GetOddNegativeScale());
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+                output.atlasIndex = input.atlasIndex.x;
                 output.capHeight = input.uv.y;
                 output.relief = input.relief;
                 output.vertexLighting = VertexLighting(output.positionWS, normals.normalWS);
@@ -157,7 +164,11 @@ Shader "Mistbell/TerrainHaze"
                     // A shared world origin and exact texel centres keep terrace/wall faces
                     // on one metre grid, independent of their mesh UVs and object scales.
                     uv = (floor((uv * _BaseMap_ST.xy + _BaseMap_ST.zw) * _BaseMap_TexelSize.zw) + .5) / _BaseMap_TexelSize.zw;
-                    half3 albedo = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb * _BaseColor.rgb;
+                    if (_Style11UV > .5) uv = input.uv;
+                    half3 authored = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb;
+                    if (_Style11UV > .5 && input.atlasIndex > 1.5) authored = SAMPLE_TEXTURE2D(_Style11Atlas2,sampler_BaseMap,uv).rgb;
+                    else if (_Style11UV > .5 && input.atlasIndex > .5) authored = SAMPLE_TEXTURE2D(_Style11Atlas1,sampler_BaseMap,uv).rgb;
+                    half3 albedo = authored * _BaseColor.rgb;
                     if (_ForgeSurface > 1.5 && _ForgeSurface < 2.5)
                     {
                         float capDepth=-dot(float4(input.positionWS,1),_ForgeCopingPlane);

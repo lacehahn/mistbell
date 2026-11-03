@@ -563,3 +563,30 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - `python3 spike/tools/measure_style10.py --bench spike/logs/style10_bench.json` 随性能脚本执行，打印全部指定标签；最终 `[STYLE10_GATE] ... tone_ok=True ... performance_ok=True pass=True`。机器可读报告：`project/Assets/Art/MaterialForge/measurement_style10.json`。
 - 已核对四材质实际 PNG GUID 绑定；Python 编译、三个 shell 脚本 `bash -n`、权威 / Unity 源码 `cmp`、`git diff --check` 均通过。另独立逐字节验证 480 图确为本轮 art_close 的 LANCZOS 缩图，放大图确为其 NEAREST ×4。
 - 已目视检查最终近景、全景、480 放大图及室内墙面；挡土墙为深色、逐块白边与厚倒角已去掉。交付：`project/Shots/art_close.png`、`art_runtime.png`、`style_480.png`、`style_480_upscaled.png`、`interior_entry.png`、`interior_inside.png`、`interior_lookup.png`。全套源图 SHA 留在 `project/Shots/style10_capture.json`。
+
+
+## 2026-11-03 材质风格 v11：墙面 UV 重投影与非平铺图集
+
+执行 `tasks/material_style_v11_nonrepeat.md` 的主方案。未安装包、未 commit；AGENTS.md、玩法、相机、关卡几何与 UI 均未修改。Snow / Wood / Rock / Grass Albedo SHA 与 `tools/style10_frozen.json` 全部一致。
+
+实现：
+
+- `project/Assets/Editor/Style11Atlas.cs` 在既有场景材质绑定后执行。按焊接位置识别连通结构，再按主方向投影；倒角跟随所属面。同方向、同平面的建筑岛和挡土墙分段共享完整立面画面，避免每段重复一张纹理。47 个完整立面使用 1024×1024 / 1024×512 / 512×1024 图块，细小装饰另用较小图块；共 3969 个图块打入 **3 张 4096×4096** 图集，每图占用高度 3888。内容 texel/m 为 27.586–407.282，石块按各面的世界尺寸生成。
+- UV0 保存图集内坐标，UV2 保存图集编号；TerrainHaze 的 `_Style11UV` 开关选择网格 UV，三张图集通过同一材质采样。原有材质槽保持不变，没有按墙新增材质。屋顶、挡土墙、室内同步；室内切换使用的裁切备用网格也重新投影。备用网格复用图块时检查原投影边界包含关系，修复首次 UV 审计找到的越界匹配。
+- `tools/forge_style11.py` 按世界尺寸画独立砌块：上小下大、1 px 暖上缘、随机省缝、崩角、9% 边缘隅石、底部 8% 接触压暗；室外完整墙顶仅一条约 3% 高的雪带，4 处不规则下垂。没有复制平铺样本，也没有加随机像素噪声。
+- `tools/measure_style11.py` 量测真实 PNG 与原有固定截图 ROI，色调阈值严格使用 v11 的 church L*=38–42 / b*=12–18；没有移动 ROI。`tools/capture_style11.sh` 拒绝旧截图，并保存三张图集、布局、所有生成网格和截图 SHA。480 图逐步使用 LANCZOS 480×270 → NEAREST ×4。
+- Unity `Style11Atlas.Verify` 对实际场景及室内备用网格审计：357 份网格 / 357 个材质槽 / 143399 个三角形，确认材质无 tiling/offset、图集绑定正确、三角形不跨图块、图集编号不在三角形内插值。证据：`project/Assets/Art/MaterialForge/style11_uv_proof.json`，包含布局 SHA。新规格以 `style11_layout.json` / `style11_uv_proof.json` / `measurement_style11.json` 为准，旧 `manifest.json` 为旧版规格字段，不用于 v11 门禁。
+
+**重复度口径及限制（不能省略）**：任务没有规定平移方向和距离。本轮 `max_autocorr` 定义为整墙图像（不裁剪、不按颜色过滤，固定最多 256px 最近邻采样）沿宽高的 1/3、2/3 做两次循环二维平移后，分别计算全图 Pearson 相关，并取全部 47 面墙的最大值。最终为 **0.074311**。报告同时保留水平、垂直单轴诊断；水平单轴最大 **0.933699**，垂直单轴最大 **0.348374**，连续墙顶雪带造成明显水平不变性。因此本轮 pass=True 只表示上述两次二维平移口径通过，**不表示“所有方向/距离的最大相关均 ≤0.5”**。已向用户询问是否要求包含单轴最坏值，尚无答复；若要求该更严口径，本项仍未达标，不可将本轮改称严格全方向通过。
+
+最终结果：
+
+- `bash spike/tools/accept.sh --fast` **exit=0**：`logs/style11_accept_final.log` / `logs/accept_222758.log`。场景、UV 审计、macOS / Windows 构建、11 项演示、独立入堂三图、运行时截图与 STYLE11 二维口径全部通过。首次色调和室内亮度失败后仅调材质，最终 ChurchExposure=1.65、SubExposure=1.75、室内墙壳 gain=1.02；未修改灯光或阈值。
+- 真实固定区域色调：church_L=40.041918、church_b=15.771179、roof_L=30.291082、sub_L=13.002166、interior_L=10.154140。
+- 雪带：snow_band_pct=0.029873；所有室外墙面的最低 snow_centroid_v=0.983914；逐墙比例/质心均通过。完整墙图块边长为 512–1024（内容含 2px 内缩保护边）。
+- 整帧：snow_ratio=0.6450、white_clip_ratio=0.0093、magenta_px=0、mountain_luma=0.485178。
+- `bash spike/tools/bench_style11.sh` **exit=0**：`logs/style11_validation_final.log`；开发构建 `logs/style11_perf_build.log`，原始数据 `logs/style11_bench.log` / `logs/style11_bench.json`。全部播放器以 `open -n -a` + caffeinate 启动，实际分辨率 1920×1080。z01 平均 FPS=229.66 / 1% low=173.14 / drawcall=263；terrace=238.20 / 172.42 / 252；interior=230.68 / 163.11 / 250。drawcall 与 v10 的 263 / 252 / 250 一致；平均 FPS ≥200，未将 1% low 声称为 ≥200。记录显存约 430–446 MB。
+- 最终测量包含 `uv_ok=True perf_ok=True tone_ok=True frame_ok=True capture_ok=True bench_fresh_ok=True pass=True`，上述 pass 的自相关口径限制见前文。报告 `project/Assets/Art/MaterialForge/measurement_style11.json`。
+- 已目视检查最终近景、全景、480 放大图、室内入门 / 中殿 / 抬头三图；Python 编译、shell 语法、两份 MaterialForge 的 cmp、git diff --check 通过。47 面墙的实际图集像素与当前生成器逐字节一致。
+
+交付截图：`project/Shots/art_close.png`、`art_runtime.png`、`style_480.png`、`style_480_upscaled.png`、`interior_entry.png`、`interior_inside.png`、`interior_lookup.png`；证据清单 `project/Shots/style11_capture.json`。

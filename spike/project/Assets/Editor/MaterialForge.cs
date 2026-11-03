@@ -11,7 +11,7 @@ public static class MaterialForge
     public const float SnowTexelsPerMeter = 20, StoneTexelsPerMeter = 28, WoodTexelsPerMeter = 24, SubTexelsPerMeter = 22;
     // Material-only exposure calibration for the dark photo-derived ramps under the existing ACES stack.
     // Tone acceptance is measured on rendered fixed ROIs, never on source-texture Lab.
-    public const float ChurchExposure = 1.5f, SubExposure = 1.5f;
+    public const float ChurchExposure = 1.65f, SubExposure = 1.75f;
     const string Root = "Assets/Art/MaterialForge/";
     static readonly string[] Names = { "Snow", "Stone", "Wood", "Stone_Sub" };
     static Color32 C(string hex) { ColorUtility.TryParseHtmlString(hex, out var c); return c; }
@@ -291,6 +291,7 @@ public static class MaterialForge
         }
         var indoor=church.GetComponent<ChurchInterior>();
         ApplyRollout(indoor);
+        Style11Atlas.Apply(indoor);
         AssetDatabase.SaveAssets();
         ExportManifest(doorWidth);
     }
