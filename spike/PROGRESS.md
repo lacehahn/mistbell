@@ -590,3 +590,21 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - 已目视检查最终近景、全景、480 放大图、室内入门 / 中殿 / 抬头三图；Python 编译、shell 语法、两份 MaterialForge 的 cmp、git diff --check 通过。47 面墙的实际图集像素与当前生成器逐字节一致。
 
 交付截图：`project/Shots/art_close.png`、`art_runtime.png`、`style_480.png`、`style_480_upscaled.png`、`interior_entry.png`、`interior_inside.png`、`interior_lookup.png`；证据清单 `project/Shots/style11_capture.json`。
+
+## 2026-11-03 教堂比例 v12：室内净高优先的受限调整
+
+执行 `tasks/church_proportions_v12.md`。只修改教堂比例及随动的鼓座窗饰、钟楼碰撞体。没有修改材质生成器、调色、玩法、相机、UI、台地或台阶，没有安装依赖、commit 或修改 AGENTS.md。
+
+- 构建入口 `tools/build_church_proportions_v12.py` 复用原构建器，在优化后按部件变形，保留三角面与材质分批。独立校验入口 `tools/verify_church_proportions_v12.py` 验证保存的 BLEND / FBX 尺寸、面数、室内、门洞和钟楼十二个拱洞。运行方式：Blender `-b --python-exit-code 1 --python <脚本>`。FBX 已同步到 Unity。
+- BEFORE（W×H×D）：28.1655×24.6793×23.0430m；body_h=12.600000，roof_h=6.495190，body_roof_ratio=1.939897，tower_d=5.199910，tower_h=17.599268，tower_gap=2.711483，interior_clear=11.999999。屋顶高度按实际檐口到十字架底计算，钟楼直径为水平凸包最远点对距离。
+- AFTER：29.0000×25.9381×23.0430m；body_h=12.099999，roof_h=7.924290，body_roof_ratio=1.526951，tower_d=6.239893，tower_h=17.599269，tower_gap=3.010000，interior_clear=11.999999。两座锥顶均加高 22%；钟楼最大直径增加 20%，总高在浮点误差内不变。钟楼水平两轴缩放为 1.123640 / 1.224410，向外平移 0.566522m，以保持宽度 ≤29m。三角面仍为 90,774（增量 0）。
+- **严格几何门槛未全部通过**：`[PROP_GATE] body_ok=False roof_ok=False tower_ok=True gap_ok=True interior_ok=True footprint_ok=False triangles_ok=True pass=False`。原壳体净高 12m，压墙 12–16% 会侵入室内；依任务“室内净高不变优先”条款，保留 0.10m 顶部石壳后压至 12.10m，只降低 3.97%。墙顶比因此为 1.527，未达到 1.15–1.35。原有进深 23.043m 已超出 23m 上限，本轮没有改占地。没有放宽门槛或把上述失败称为通过。
+
+验收与证据：
+
+- `bash spike/tools/accept.sh --fast` exit=0：`logs/prop_v12_accept_final.log` / `logs/accept_230942.log`。场景、实际图集 UV 审计、macOS / Windows 构建、11 项演示、截图与 STYLE11 门槛通过；不代表 PROP 几何门槛通过。
+- 钟楼演示 `logs/run_231143_-demo-walk-to-tower.log`、入堂三图 `logs/run_231157_-demo-enter-church.log` 均 rc=0、bad=0，室内碰撞与 INT_PASS 通过；截图阶段另行重跑入堂演示。独立 BLEND / FBX 校验 exit=0：`logs/prop_v12_verify.log`。比例打印：`logs/prop_v12_build_final.log`，原始数据：`logs/proportions_v12.json`。
+- 8 张基础 Albedo SHA 与任务开始前逐字节一致。图集按新几何沿用 v11 算法重新生成，没有改变配色和曝光参数。整帧 snow_ratio=0.6922、white_clip=0.0160、magenta_px=0、mountain_luma=0.485674，全部通过。
+- 独立开发构建后以 `open -n -a` + caffeinate 运行 `-bench -bench-foreground -screen-width 1920 -screen-height 1080 -screen-fullscreen 0`：`logs/prop_v12_perf_build.log` / `logs/prop_v12_bench.log` / `logs/prop_v12_bench.json`。z01 平均 FPS=230.26 / 1% low=175.10 / drawcall=263；terrace=237.33 / 171.39 / 252；interior=230.42 / 163.21 / 250。BENCH_GATE pass=True；平均 FPS ≥200、drawcall ≤330，未将 1% low 声称为 ≥200。
+- 已重新生成并目视检查 `project/Shots/art_close.png`、`art_runtime.png`、`style_480_upscaled.png` 和室内三图；逐像素验证 480×270 LANCZOS → NEAREST ×4。清单 `project/Shots/style11_capture.json`。
+- 汇总报告 `logs/prop_v12_final.json`：快速验收、性能、整帧通过，`final_pass=false` 保留严格几何失败。Python 编译、`git diff --check` 通过。
