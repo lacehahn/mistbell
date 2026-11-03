@@ -1,4 +1,9 @@
 #!/bin/bash
+# 自保护：macOS 显示器休眠时播放器主循环会停，截图静默失败（表现为 124 超时）。
+# 若不在 caffeinate 下，就自我重启一次。
+if [ -z "${MISTBELL_CAFFEINATED:-}" ] && command -v caffeinate >/dev/null 2>&1; then
+  MISTBELL_CAFFEINATED=1 exec caffeinate -dimu bash "$0" "$@"
+fi
 # 运行已构建的播放器，遍历场景 ShotRig 的机位表逐张截图，带看门狗（90 秒后强杀）
 set -u
 # --single captures the current scene camera without the multi-pose pilgrim regression gate.
@@ -23,7 +28,7 @@ if [ "${MISTBELL_GFX_DIRECT:-0}" = "1" ]; then CMD+=(-force-gfx-direct); fi
 CMD+=("${SHOT_ARGS[@]}")
 "${CMD[@]}" -screen-width 1920 -screen-height 1080 -screen-fullscreen 0 -logFile "$LOG" &
 PID=$!
-for _ in $(seq 1 90); do
+for _ in $(seq 1 240); do   # 合批 2671 个源对象后启动变慢，原 90s 会误杀
   kill -0 "$PID" 2>/dev/null || break
   sleep 1
 done

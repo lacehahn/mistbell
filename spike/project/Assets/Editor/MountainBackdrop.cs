@@ -151,8 +151,8 @@ public static class MountainBackdrop
     static Texture2D Paint(int layer,float[] ridge,float visibleFoot,Vector2 pixelScale)
     {
         var pixels=new Color32[W*H];
-        Color[] rock={Hex("#5A6878"),Hex("#6B7888"),Hex("#7C8896")};
-        Color snow=Hex("#F2F7FB"), transition=Hex("#C9D7E5");
+        Color[] rock={Hex("#66717F"),Hex("#77828F"),Hex("#88939F")};   // 原色在阴天光下读成近黑
+        Color snow=Hex("#E4EEF7"), transition=Hex("#C9D7E5");   // 纯白 #F2F7FB 让山变成剪纸
         Color haze=Hex("#EDF3F8"), air=layer==3?Hex("#D6E2EC"):Hex("#DAE5EF");
         float mix=layer==0?0:layer==1?.38f:layer==2?.68f:.75f;
         int seed=Seeds[layer]; float crest=0;
@@ -309,7 +309,7 @@ public static class MountainBackdrop
                 Color edgeColor=Color.Lerp(transition,air,mix);
                 const int edgeWidth=1;
                 if(depth<caps[x])
-                    c=Color.Lerp(c,snowColor,Mathf.Clamp01(.76f+Noise2(x/8f,y/10f,seed+301)*.35f));
+                    c=Color.Lerp(c,snowColor,Mathf.Clamp01(.55f+Noise2(x/8f,y/10f,seed+301)*.30f));
                 else if(depth<caps[x]+edgeWidth)
                     c=Color.Lerp(c,Hex("#D5E2EE"),.5f); // Alpha-composite the 1 px snow edge over solid rock.
                 for(int i=0;i<gullies.Length;i++)
@@ -582,6 +582,11 @@ public static class MountainBackdrop
             AssetDatabase.DeleteAsset(meshPath); AssetDatabase.CreateAsset(mesh,meshPath);
             quad.GetComponent<MeshFilter>().sharedMesh=mesh;
             var mat=new Material(Shader.Find("Mistbell/PaintedMountain")); mat.SetTexture("_MainTex",texture);
+            // 大气透视：L1 0.06 → L4 0.72，越远越融进天空；底部再叠 0.25 地雾。
+            float[] haze={.06f,.26f,.48f,.72f};
+            mat.SetColor("_HazeColor",Hex("#C9D7E4"));
+            mat.SetFloat("_Haze",haze[Mathf.Clamp(layer,0,3)]);
+            mat.SetFloat("_HazeBottom",.25f);
             // L3/L4 share the far-depth clamp: explicitly paint farther cards first.
             mat.renderQueue=2450-layer;
             string matPath=$"Assets/Settings/M_MtnLayer_{layer+1}.mat";

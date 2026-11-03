@@ -380,4 +380,6 @@
 | 11:37 | 室内鼓座内壁/穹顶（run_tasks 串行） | `[DOME] drum 12/12窗/12肋/cone 2.4/aperture 0.5`、`[LOOKUP] ceiling_pct=0.8080 dome_visible=true` | 抬头可见 12 边鼓座+拱窗冷光+锥顶透天；骨架成立，打光偏灰 |
 | 11:37 | 远山支脊/沟谷（同批） | `[MTN12] spurs=23/26/27 spur_contrast=0.082 gully_contrast=0.082` | 平感下降，但 1024×512 贴图在近处放大后出现**像素台阶/块状边**，需提分辨率或远层双线性 |
 | 11:37 | 串行执行器 | `spike/tools/run_tasks.sh` | 一轮结束自动接下一轮；遇 `usage limit` 自动停，不空转 |
+| 12:15 | 远山调色+大气透视 | 岩石 #66717F 系 / 雪 #E4EEF7 / 雪覆盖 .55；`PaintedMountain` 加 `_Haze/_HazeColor/_HazeBottom`，L1 .06→L4 .72 | 山不再像纯白剪纸，远近层次出来了；仍有大块三角面硬边与中景深蓝阴影墙 |
+| 12:20 | 截图链路修复（重要） | 脚本未在 caffeinate 下 → 播放器主循环停 → `cap=124`、0 张 | `capture_runtime.sh` 现在**自我重启进 caffeinate**；`-shots` 下跳过合批（合批会禁用机位依赖的 MeshRenderer） |
 

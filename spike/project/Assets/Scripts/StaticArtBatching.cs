@@ -78,6 +78,9 @@ public static class StaticArtBatching
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Initialize()
     {
+        // 截图模式跳过合批：合并会禁用原始 MeshRenderer，Screenshotter 的机位/包围盒日志依赖它们，
+        // 实测在 -shots 下会卡死（截图链路 124 超时）。玩法帧不受影响。
+        if(PlayerController.CaptureMode) return;
         if(Array.IndexOf(Environment.GetCommandLineArgs(),"-bench-no-batching")>=0) return;
         var interior=UnityEngine.Object.FindFirstObjectByType<ChurchInterior>();
         var sources=UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsInactive.Include,FindObjectsSortMode.None);
