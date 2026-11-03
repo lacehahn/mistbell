@@ -13,7 +13,7 @@
   - 面积 < SMALL_AREA 的小图表不平涂贴图，改用"所属大图的平均色"填充（避免碎图糊成噪点）
   - 冻结族（Snow/Wood/Rock/Grass）不碰
 """
-import json, sys
+import json, sys, shutil
 from pathlib import Path
 from collections import defaultdict
 from PIL import Image, ImageStat
@@ -57,7 +57,22 @@ def pick_slot(family, chart, counters, slots):
     return min(cands, key=score)
 
 
+def ingest_altar():
+    source = IN / 'altar_stone.png'
+    image = Image.open(source)
+    if image.size != (1024, 1024):
+        raise ValueError('altar_stone.png must be 1024x1024')
+    target = ROOT / 'Altar_Painted.png'
+    shutil.copyfile(source, target)
+    print('[HAND_ALTAR] source=%s target=%s size=1024x1024 exterior_untouched=True' % (source, target))
+    return 0
+
+
 def main():
+    if '--altar-only' in sys.argv:
+        return ingest_altar()
+    if (IN / 'altar_stone.png').is_file():
+        ingest_altar()
     layout = json.loads((ROOT / 'style11_layout.json').read_text())
     charts = layout['charts']
     slots = load_slots()

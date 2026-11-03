@@ -76,9 +76,9 @@ public sealed class ChurchInterior : MonoBehaviour
         int ribs=Array.FindAll(domeRenderers,r=>r.name.StartsWith("Interior_DrumRib_")).Length;
         Debug.Log($"[DOME] drum_sides=12 drum_h=3.6 windows={windows} ribs={ribs} cone_h=2.4 aperture=0.8 look_target=10.2");
         if(windows!=12 || ribs!=12) throw new InvalidOperationException("Incomplete interior drum");
-        var altarTop=Array.Find(domeRenderers,r=>r.name=="Interior_V2AltarTop");
+        var altarTop=Array.Find(domeRenderers,r=>r.name=="Interior_Altar_Model");
         int pewRows=Array.FindAll(domeRenderers,r=>r.name.StartsWith("Interior_V2Pew_0_") && r.name.EndsWith("_Seat")).Length;
-        Debug.Log(FormattableString.Invariant($"[INTERIOR] shafts={shafts.Length} pools={Array.FindAll(domeRenderers,r=>r.name.StartsWith("Interior_WindowPool_")).Length} dust={detailRoot.GetComponentsInChildren<ParticleSystem>(true).Length} altar_h={altarTop.bounds.max.y-FloorY:F2} pew_rows={pewRows}"));
+        Debug.Log(FormattableString.Invariant($"[INTERIOR] shafts={shafts.Length} pools={Array.FindAll(domeRenderers,r=>r.name.StartsWith("Interior_WindowPool_")).Length} dust={detailRoot.GetComponentsInChildren<ParticleSystem>(true).Length} altar_total_h={altarTop.bounds.max.y-FloorY:F2} pew_rows={pewRows}"));
         if(shell!=null) outdoorStone=shell.sharedMaterials;
         foreach(var lamp in lamps) if((lamp.name.StartsWith("Interior_NaveFill") || lamp.name.StartsWith("Interior_WindowKey")) || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=false;
         if(chandelierLamp!=null) chandelierLamp.transform.position=outdoorChandelierPosition;

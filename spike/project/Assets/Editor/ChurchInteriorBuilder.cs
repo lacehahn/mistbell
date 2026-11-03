@@ -763,10 +763,7 @@ public static class ChurchInteriorBuilder
         var flame=Additive("M_InteriorV2Flame",new Color(1,201/255f,122/255f,.8f));
         float fy=interior.FloorY;
         Vector3 altar=new Vector3(-2,fy,8.6f);
-        Primitive(detail,"Interior_V2AltarBody",PrimitiveType.Cube,altar+Vector3.up*.495f,new Vector3(2.08f,.99f,.85f),stone);
-        Primitive(detail,"Interior_V2AltarTop",PrimitiveType.Cube,altar+Vector3.up*1.02f,new Vector3(2.2f,.06f,1),stone);
-        Primitive(detail,"Interior_V2AltarCloth",PrimitiveType.Cube,altar+Vector3.up*1.056f,new Vector3(2.22f,.012f,1.02f),cloth);
-        Primitive(detail,"Interior_V2AltarDrape",PrimitiveType.Cube,altar+new Vector3(0,.925f,-.51f),new Vector3(2.22f,.25f,.012f),cloth);
+        InstallAltar(church,detail,fy);
         for(int i=0;i<3;i++)
         {
             Vector3 center=new Vector3(-2+(i-1)*1.02f,fy+2.05f,7.55f);
@@ -788,17 +785,61 @@ public static class ChurchInteriorBuilder
             }
             Surface(detail,"Interior_ArchFrame_"+i,v.ToArray(),tris.ToArray(),gold);
         }
-        Vector3 cross=new Vector3(-2,fy+2.05f,7.48f);
-        Primitive(detail,"Interior_V2CrossGoldV",PrimitiveType.Cube,cross,new Vector3(.13f,1.1f,.065f),gold);
-        Primitive(detail,"Interior_V2CrossGoldH",PrimitiveType.Cube,cross+Vector3.up*.20f,new Vector3(.63f,.13f,.065f),gold);
-        Primitive(detail,"Interior_V2CrossWoodV",PrimitiveType.Cube,cross+Vector3.back*.04f,new Vector3(.09f,1.06f,.035f),wood);
-        Primitive(detail,"Interior_V2CrossWoodH",PrimitiveType.Cube,cross+new Vector3(0,.20f,-.04f),new Vector3(.59f,.09f,.035f),wood);
-        for(int i=0;i<5;i++)
+
+    }
+    // Shared by full scene builds and the isolated altar update. Other furnishings stay intact.
+    public static void InstallAltar(Transform church,Transform detail,float floorY)
+    {
+        foreach(var r in detail.GetComponentsInChildren<MeshRenderer>(true))
+            if(r.name=="Interior_V2AltarBody" || r.name=="Interior_V2AltarTop" ||
+               r.name=="Interior_V2AltarCloth" || r.name=="Interior_V2AltarDrape" || r.name=="Interior_Altar_Model" ||
+               r.name.StartsWith("Interior_V2Cross") || r.name.StartsWith("Interior_V2Candle_") || r.name.StartsWith("Interior_V2Flame_"))
+                Object.DestroyImmediate(r.gameObject);
+        var texture=AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/MaterialForge/Altar_Painted.png");
+        if(texture==null) throw new System.InvalidOperationException("Run ingest_handpaint.py --altar-only first");
+        var importer=(TextureImporter)AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(texture));
+        importer.maxTextureSize=1024; importer.textureCompression=TextureImporterCompression.Uncompressed;
+        importer.filterMode=FilterMode.Point; importer.wrapMode=TextureWrapMode.Clamp; importer.mipmapEnabled=true;
+        importer.SaveAndReimport();
+        var materials=new Material[2];
+        for(int i=0;i<2;i++)
         {
-            float h=.12f+i*.02f; var foot=altar+new Vector3((i-2)*.35f,1.065f,-.44f);
-            Primitive(detail,"Interior_V2Candle_"+i,PrimitiveType.Cylinder,foot+Vector3.up*(h/2),new Vector3(.045f,h/2,.045f),wax);
-            Primitive(detail,"Interior_V2Flame_"+i,PrimitiveType.Quad,foot+Vector3.up*(h+.035f),new Vector3(.045f,.075f,1),flame);
+            string path="Assets/Settings/M_AltarPainted"+(i==0?"":"Recess")+".mat";
+            var mat=AssetDatabase.LoadAssetAtPath<Material>(path);
+            if(mat==null) {mat=new Material(Shader.Find("Universal Render Pipeline/Lit"));AssetDatabase.CreateAsset(mat,path);}
+            mat.shader=Shader.Find("Universal Render Pipeline/Lit");
+            mat.SetTexture("_BaseMap",texture); mat.SetColor("_BaseColor",Color.white*(i==0?1f:.82f));
+            mat.SetTextureScale("_BaseMap",Vector2.one); mat.SetTextureOffset("_BaseMap",Vector2.zero);
+            mat.SetFloat("_Smoothness",.08f);mat.SetFloat("_Metallic",0);
+            // Low textured bounce retains readability without flattening the stone/cloth pattern.
+            mat.EnableKeyword("_EMISSION");mat.SetTexture("_EmissionMap",texture);
+            mat.SetColor("_EmissionColor",Color.white*(i==0?.13f:.1066f));
+            EditorUtility.SetDirty(mat);materials[i]=mat;
         }
+        const string modelPath="Assets/Art/Church/gergeti_altar.fbx";
+        var mi=(ModelImporter)AssetImporter.GetAtPath(modelPath);mi.isReadable=true;mi.importCameras=false;mi.importLights=false;
+        mi.materialImportMode=ModelImporterMaterialImportMode.None;mi.SaveAndReimport();
+        var prefab=AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+        var model=(GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        PrefabUtility.UnpackPrefabInstance(model,PrefabUnpackMode.Completely,InteractionMode.AutomatedAction);
+        model.name="Interior_Altar_Model";model.transform.SetParent(detail,true);
+        model.transform.SetPositionAndRotation(new Vector3(-2,floorY,8.6f),Quaternion.identity);
+        foreach(var r in model.GetComponentsInChildren<MeshRenderer>())
+        {r.sharedMaterials=materials;r.gameObject.name="Interior_Altar_Model";GameObjectUtility.SetStaticEditorFlags(r.gameObject,0);}
+        // Preserve the legacy obstacle's exact world bounds and its test-visible name.
+        var legacy=System.Array.Find(church.GetComponentsInChildren<MeshRenderer>(true),r=>r.name=="Interior_Altar");
+        var old=legacy.GetComponent<Collider>();
+        if(!(old is BoxCollider))
+        {
+            var bounds=old.bounds;Object.DestroyImmediate(old);
+            var box=legacy.gameObject.AddComponent<BoxCollider>();
+            box.center=legacy.transform.InverseTransformPoint(bounds.center);
+            var scale=legacy.transform.lossyScale;
+            box.size=new Vector3(bounds.size.x/Mathf.Abs(scale.x),bounds.size.y/Mathf.Abs(scale.y),bounds.size.z/Mathf.Abs(scale.z));
+        }
+        legacy.enabled=false;
+        var renderer=model.GetComponentInChildren<MeshRenderer>();
+        Debug.Log($"[ALTAR_IMPORT] bbox={renderer.bounds.size} position={model.transform.position} materials={renderer.sharedMaterials.Length} collider={legacy.GetComponent<BoxCollider>().bounds.size}");
     }
     // Called after the exterior atlas pass. Only indoor meshes/materials are touched.
     public static void FinishInterior(ChurchInterior interior)

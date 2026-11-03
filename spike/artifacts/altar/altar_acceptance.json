@@ -1,0 +1,50 @@
+{
+  "tris": 8468,
+  "materials": 2,
+  "bbox": [
+    2.240000009536743,
+    1.0499999523162842,
+    1.010215938091278
+  ],
+  "texel_px_per_m": 127.7408032054951,
+  "surface_m2": 35.69642331278118,
+  "uv_area": 0.555500015004311,
+  "niche_depth_m": 0.05,
+  "cloth_drop_m": 0.34,
+  "performance": {
+    "pos": "interior",
+    "fps_avg": 233.29489135742188,
+    "fps_p1": 166.40658569335938,
+    "vram_mb": 428.5085144042969,
+    "drawcalls": 236,
+    "tris": 6505726
+  },
+  "image_mode": "built-in image_gen; reference style; single 1024x1024 four-quadrant atlas",
+  "inspection": "1.2m from front masonry; isolated model; scene lights and tone mapping retained; inspection-only depth of field and tilt shift disabled",
+  "evidence": [
+    "spike/logs/altar_model.log",
+    "spike/logs/altar_unity_build.log",
+    "spike/logs/altar_interior_runtime.log",
+    "spike/logs/altar_bench_runtime.log",
+    "spike/logs/altar_closeup_runtime.log"
+  ],
+  "texture_sha256": "1a14c8ab744ed4e03414fad3fd98acb3dd3060b878b7c9697ea706843a05e126",
+  "shots": {
+    "altar_closeup": {
+      "path": "spike/project/Shots/altar_closeup.png",
+      "sha256": "ae68656ebee7e98b717c582625f0fc523db27e33f91436cb250e59e0fe7ff81b",
+      "size": [
+        1920,
+        1080
+      ]
+    },
+    "interior_inside": {
+      "path": "spike/project/Shots/interior_inside.png",
+      "sha256": "21515cef90400d3e2b178c4eab400be439eb5194fb73a53873548ee32ccafa9d",
+      "size": [
+        1920,
+        1080
+      ]
+    }
+  }
+}

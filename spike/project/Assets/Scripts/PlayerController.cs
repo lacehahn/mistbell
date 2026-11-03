@@ -151,6 +151,8 @@ public sealed partial class PlayerController : MonoBehaviour
         var args = Environment.GetCommandLineArgs();
         InitializePersistence(args);
         if (StartPersistenceDemo(args)) return;
+        if (Array.IndexOf(args, "-demo-altar") >= 0)
+        { suppressCinema=true; StartCoroutine(DemoAltar()); return; }
         if (Array.IndexOf(args, "-bench") >= 0)
         { suppressCinema = true; interiorAuto = true; StartCoroutine(Benchmark(args)); return; }
         cinemaDemo = Array.IndexOf(args,"-demo-cinema")>=0;
