@@ -42,7 +42,7 @@ public static class MountainBackdrop
     static readonly float[] SpurContrast = new float[4], GullyContrast = new float[4];
     struct Branch
     {
-        public float x, top, length, lean, width, snowWidth, snowLength;
+        public float x, top, length, lean, width;
         public float bendA,bendB,bendC, knotA,knotB,knotC;
         public float Bend(float t)
         {
@@ -65,6 +65,17 @@ public static class MountainBackdrop
             return edge*tip;
         }
     }
+    // Snow is independent of the multi-bend rock relief. Screen-space widths
+    // include a one-pixel feather on each side; the centerline turns only once.
+    struct SnowGully
+    {
+        public int summit;
+        public float x, top, length, width, bend;
+        public float Center(float t) => x + (t < .55f
+            ? Mathf.Lerp(0,bend,t/.55f) : Mathf.Lerp(bend,bend*.4f,(t-.55f)/.45f));
+    }
+    static float maxSnowDepth, minSnowWidth, maxSnowWidth;
+    static int maxSnowReversals;
     static int minCap, maxCap;
     static float minFaceDelta;
     const int RockLevels = 3;
@@ -217,6 +228,7 @@ public static class MountainBackdrop
     {
         var pixels=new Color32[W*H];
         Color[] rock={Hex("#66717F"),Hex("#77828F"),Hex("#88939F")};   // 原色在阴天光下读成近黑
+        Color gullySnow=Hex("#DCE8F2");
         Color snow=Hex("#E4EEF7"), transition=Hex("#C9D7E5");   // 纯白 #F2F7FB 让山变成剪纸
         Color haze=Hex("#EDF3F8"), air=layer==3?Hex("#D6E2EC"):Hex("#DAE5EF");
         float mix=layer==0?0:layer==1?.38f:layer==2?.68f:.75f;
@@ -273,10 +285,9 @@ public static class MountainBackdrop
             if(layer<3) { minCap=Math.Min(minCap,Mathf.RoundToInt(caps[x]/2)); maxCap=Math.Max(maxCap,Mathf.RoundToInt(caps[x]/2)); }
         }
         int streakCount=layer==0?12:layer==1?14:10;
-        int gullyCount=12;
         var streaks=new Stroke[layer==3?0:streakCount];
-        var gullies=new Stroke[layer==3?0:gullyCount];
-        var streakDrawn=new bool[streaks.Length]; var gullyDrawn=new bool[gullies.Length];
+        var gullies=new System.Collections.Generic.List<SnowGully>();
+        var streakDrawn=new bool[streaks.Length];
         for(int i=0;i<streaks.Length;i++)
         {
             int x=Mathf.RoundToInt((i+.25f+.5f*Hash(seed+i*53))*W/streaks.Length);
@@ -286,13 +297,35 @@ public static class MountainBackdrop
                 width=Mathf.Max(4,Mathf.CeilToInt(Mathf.Lerp(4,8,Hash(seed+i*97))/pixelScale.x)),lean=side*Mathf.Tan(Mathf.Lerp(2,8,Hash(seed+i*113))*Mathf.Deg2Rad),
                 contrast=Mathf.Lerp(.94f,1f,Hash(seed+i*149)) };
         }
-        for(int i=0;i<gullies.Length;i++)
-        {
-            int x=Mathf.RoundToInt((i+.2f+.6f*Hash(seed+i*131))*W/gullies.Length);
-            gullies[i]=new Stroke {x=x,top=ridge[x]-caps[x]+4,
-                length=40+Mathf.RoundToInt(100*Hash(seed+i*173)),width=2*(2+(int)(Hash(seed+i*197)*2.999f)),
-                lean=(x<apex[x]?-1:1)*Mathf.Tan(6*Mathf.Deg2Rad)};
-        }
+        if(layer<3)
+            foreach(int summit in summits)
+            {
+                int end=summit;
+                while(end+1<W && apex[end+1]==summit) end++;
+                for(int i=0;i<2;i++)
+                {
+                    int x=Mathf.RoundToInt(Mathf.Lerp(summit,end,i==0?.23f:.53f));
+                    if(faceLight[x]>.05f || (end-x)*pixelScale.x<10) continue;
+                    float top=ridge[x]-caps[x]+2;
+                    float length=Mathf.Min((ridge[x]-visibleFoot)*.32f,top-fadeTop);
+                    if(length*pixelScale.y<8) continue;
+                    float width=3+Mathf.Floor(Hash(seed+summit*389+i*97)*4.999f);
+                    var g=new SnowGully {summit=summit,x=x*pixelScale.x,top=top,
+                        length=length,width=width,bend=Mathf.Lerp(12,24,Hash(seed+summit*397+i*113))};
+                    int reversals=0, previous=0;
+                    float last=g.Center(0);
+                    for(int k=1;k<=100;k++)
+                    {
+                        float next=g.Center(k/100f); int sign=Math.Sign(next-last);
+                        if(sign!=0) { if(previous!=0 && previous!=sign) reversals++; previous=sign; }
+                        last=next;
+                    }
+                    maxSnowReversals=Math.Max(maxSnowReversals,reversals);
+                    minSnowWidth=Mathf.Min(minSnowWidth,width); maxSnowWidth=Mathf.Max(maxSnowWidth,width);
+                    gullies.Add(g);
+                }
+            }
+        var gullyDrawn=new bool[gullies.Count];
         // Two or three subsidiary ridges per summit; paired valleys share their
         // endpoints, so snow forks around exposed rock instead of filling gullies.
         var spurs=new System.Collections.Generic.List<Branch>();
@@ -315,9 +348,7 @@ public static class MountainBackdrop
                     knotA=.25f+Mathf.Lerp(-8,8,Hash(seed+summit+i*193))/180f,
                     knotB=.5f+Mathf.Lerp(-8,8,Hash(seed+summit+i*197))/180f,
                     knotC=.75f+Mathf.Lerp(-8,8,Hash(seed+summit+i*199))/180f,
-                    lean=sign/Mathf.Tan(angle), width=Mathf.Lerp(8,18,Hash(seed+summit*373+i*89)),
-                    snowWidth=Mathf.Lerp(3,8,Hash(seed+summit*389+i*97)),
-                    snowLength=Mathf.Lerp(20,60,Hash(seed+summit*397+i*113))});
+                    lean=sign/Mathf.Tan(angle), width=Mathf.Lerp(8,18,Hash(seed+summit*373+i*89))});
             }
             for(int i=first;i<spurs.Count-1;i++)
             {
@@ -389,32 +420,18 @@ public static class MountainBackdrop
                 }
                 Color bareRock=c;
                 Color snowColor=Color.Lerp(snow,air,mix);
-                Color edgeColor=Color.Lerp(transition,air,mix);
                 const int edgeWidth=1;
                 if(y>=fadeTop && depth<caps[x])
                     c=Color.Lerp(c,snowColor,Mathf.Clamp01(.55f+Noise2(x/8f,y/10f,seed+301)*.30f));
                 else if(y>=fadeTop && depth<caps[x]+edgeWidth)
                     c=Color.Lerp(c,Hex("#D5E2EE"),.5f); // Alpha-composite the 1 px snow edge over solid rock.
-                for(int i=0;i<gullies.Length;i++)
-                {
-                    var g=gullies[i]; float dy=g.top-y;
-                    int left=Mathf.RoundToInt(g.Center(y)+Noise(y/18f,seed+i*307)*.7f)-g.width/2;
-                    if(y<fadeTop || dy<0 || dy>=g.length || x<left || x>=left+g.width) continue;
-                    float fade=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.65f,1,dy/(float)g.length));
-                    c=Color.Lerp(c,Color.Lerp(edgeColor,snowColor,.6f),fade*Mathf.Lerp(.6f,.9f,Hash(seed+i*13+y/3))); gullyDrawn[i]=true;
-                }
-                float spurMask=0, valleyMask=0, branchSnow=0;
+                float spurMask=0, valleyMask=0;
                 for(int i=0;i<spurs.Count;i++)
                 {
                     var b=spurs[i]; float along;
                     float mask=b.Mask(x,y,pixelScale,out along);
                     if(mask>0) spurDrawn[i]=true;
                     spurMask=Mathf.Max(spurMask,mask);
-                    if(y>=fadeTop && layer<2 && along<b.snowLength)
-                    {
-                        b.width=b.snowWidth; b.length=b.snowLength;
-                        branchSnow=Mathf.Max(branchSnow,b.Mask(x,y,pixelScale,out along));
-                    }
                 }
                 foreach(var b in valleys)
                 {
@@ -429,7 +446,6 @@ public static class MountainBackdrop
                 float delta=Luma((Color32)c)-Luma((Color32)beforeRelief);
                 SpurContrast[layer]=Mathf.Max(SpurContrast[layer],delta);
                 GullyContrast[layer]=Mathf.Max(GullyContrast[layer],-delta);
-                c=Color.Lerp(c,snowColor,branchSnow*(1-valleyMask)*.78f);
                 float footHaze=.35f*(1-Mathf.Clamp01((y-visibleFoot)/Mathf.Max(1,(crest-visibleFoot)*.10f)));
                 float fog=1-Mathf.SmoothStep(0,1,Mathf.Clamp01((y-visibleFoot)/hazeHeight));
                 c=Color.Lerp(c,haze,1-(1-fog)*(1-footHaze));
@@ -454,6 +470,62 @@ public static class MountainBackdrop
                 Color32 pixel=c; pixels[y*W+x]=pixel;
                 if(y>=visibleFoot) { visibleLuma+=Luma(pixel); visibleArea++; }
             }
+        // The overscanned card stretches one original texel over ~5 screen
+        // pixels. Resolve ONLY snow at 4x horizontal precision, replicating the
+        // existing rock texels exactly so 3px channels do not become dotted lines.
+        int snowResolve=layer<3?4:1, outputWidth=W*snowResolve;
+        var resolved=new Color32[outputWidth*H];
+        for(int y=0;y<H;y++)
+            for(int x=0;x<outputWidth;x++)
+            {
+                if(layer!=2) resolved[y*outputWidth+x]=pixels[y*W+x/snowResolve];
+                else
+                {
+                    // Preserve L3's existing bilinear rock sampling as well.
+                    float sample=(x+.5f)/snowResolve-.5f;
+                    int left=Mathf.FloorToInt(sample);
+                    resolved[y*outputWidth+x]=Color.Lerp(pixels[y*W+Mathf.Clamp(left,0,W-1)],
+                        pixels[y*W+Mathf.Clamp(left+1,0,W-1)],sample-left);
+                }
+            }
+        for(int i=0;i<gullies.Count;i++)
+        {
+            var g=gullies[i];
+            int x0=Mathf.Max(0,Mathf.FloorToInt((g.x-g.width*.5f)/pixelScale.x*snowResolve));
+            int x1=Mathf.Min(outputWidth-1,Mathf.CeilToInt((g.x+g.bend+g.width*.5f)/pixelScale.x*snowResolve));
+            for(int y=Mathf.Max(0,Mathf.CeilToInt(g.top-g.length));y<=Mathf.FloorToInt(g.top);y++)
+            {
+                if(y<fadeTop) continue;
+                float t=(g.top-y)/g.length;
+                float fade=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.55f,1,t));
+                float footHaze=.35f*(1-Mathf.Clamp01((y-visibleFoot)/Mathf.Max(1,(crest-visibleFoot)*.10f)));
+                float fog=1-Mathf.SmoothStep(0,1,Mathf.Clamp01((y-visibleFoot)/hazeHeight));
+                Color target=Color.Lerp(gullySnow,haze,1-(1-fog)*(1-footHaze));
+                for(int x=x0;x<=x1;x++)
+                {
+                    float sample=(x+.5f)/snowResolve-.5f;
+                    int ix=Mathf.Clamp(Mathf.RoundToInt(sample),0,W-1);
+                    float height=Mathf.Lerp(ridge[Mathf.Clamp(Mathf.FloorToInt(sample),0,W-1)],
+                        ridge[Mathf.Clamp(Mathf.CeilToInt(sample),0,W-1)],sample-Mathf.Floor(sample));
+                    float down=(height-y)/Mathf.Max(1,height-visibleFoot);
+                    if(down<0 || down>=.35f || apex[ix]!=g.summit || faceLight[ix]>.05f) continue;
+                    float distance=Mathf.Abs(sample*pixelScale.x-g.Center(t));
+                    float edge=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(g.width*.5f-1,g.width*.5f,distance));
+                    float mask=edge*fade*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.25f,.35f,down)));
+                    if(mask<=0) continue;
+                    int index=y*outputWidth+x;
+                    Color c=resolved[index]; float alpha=c.a;
+                    c=Color.Lerp(c,target,mask*.78f); c.a=alpha;
+                    resolved[index]=c;
+                    maxSnowDepth=Mathf.Max(maxSnowDepth,down*100); gullyDrawn[i]=true;
+                }
+            }
+        }
+        visibleLuma=0; visibleArea=0;
+        for(int y=Mathf.CeilToInt(visibleFoot);y<H;y++)
+            for(int x=0;x<outputWidth;x++)
+                if(y<=Mathf.CeilToInt(ridge[x/snowResolve]+.5f))
+                    { visibleLuma+=Luma(resolved[y*outputWidth+x]); visibleArea++; }
         SpurCounts[layer]=Array.FindAll(spurDrawn,v=>v).Length;
         if(SpurCounts[layer]<8) throw new InvalidOperationException("MTN12 visible branch count gate");
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
@@ -475,7 +547,7 @@ public static class MountainBackdrop
                 minFaceDelta=Mathf.Min(minFaceDelta,Luma(Rock(basis,true,mix,air))-Luma(Rock(basis,false,mix,air)));
             }
             maxFaceGap=Mathf.Max(maxFaceGap,brightest-darkest+.04f); // Include both facet transition extremes.
-            if(RockStreaks[layer]<8 || RockStreaks[layer]>14 || SnowGullies[layer]<6 || SnowGullies[layer]>12)
+            if(RockStreaks[layer]<8 || RockStreaks[layer]>14 || SnowGullies[layer]>summits.Count*2)
                 throw new InvalidOperationException("MTN10 painted streak/gully count gate");
         }
         int footRow=Mathf.CeilToInt(visibleFoot);
@@ -489,9 +561,9 @@ public static class MountainBackdrop
         if(jump>.04f) throw new InvalidOperationException("MTN10 foot continuity gate");
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN10_PAINT] L{0} rock_streaks={1} snow_gullies={2} luma={3:F4} foot_jump={4:F6}",
-            layer+1,streaks.Length,gullies.Length,LayerLuma[layer],jump));
+            layer+1,streaks.Length,gullies.Count,LayerLuma[layer],jump));
         string path=$"Assets/Art/Textures/MtnLayer_{layer+1}.png";
-        var tex=new Texture2D(W,H,TextureFormat.RGBA32,false); tex.SetPixels32(pixels); tex.Apply();
+        var tex=new Texture2D(outputWidth,H,TextureFormat.RGBA32,false); tex.SetPixels32(resolved); tex.Apply();
         File.WriteAllBytes(path,tex.EncodeToPNG()); UnityEngine.Object.DestroyImmediate(tex);
         AssetDatabase.ImportAsset(path,ImportAssetOptions.ForceSynchronousImport);
         var importer=(TextureImporter)AssetImporter.GetAtPath(path);
@@ -500,7 +572,7 @@ public static class MountainBackdrop
         importer.mipmapEnabled=false; importer.mipmapFilter=TextureImporterMipFilter.BoxFilter;
         importer.mipMapsPreserveCoverage=false; importer.borderMipmap=false; importer.anisoLevel=0; importer.alphaSource=TextureImporterAlphaSource.FromInput;
         importer.alphaIsTransparency=false; importer.wrapMode=TextureWrapMode.Clamp;
-        importer.maxTextureSize=2048; importer.npotScale=TextureImporterNPOTScale.None;
+        importer.maxTextureSize=outputWidth; importer.npotScale=TextureImporterNPOTScale.None;
         importer.SaveAndReimport();
         return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
     }
@@ -638,6 +710,7 @@ public static class MountainBackdrop
                 player+Vector3.up*PlayerController.LookHeight,runtimeFov));
         }
         Array.Clear(SpurContrast,0,4); Array.Clear(GullyContrast,0,4);
+        maxSnowDepth=0; minSnowWidth=float.PositiveInfinity; maxSnowWidth=0; maxSnowReversals=0;
         ridgeBreaks=0; straightSegments=0; maxFacePixels=0;
         minShadowRatio=1; minShadeLuma=1; maxFaceGap=0;
         maxPeakStdPct=0; maxFootJump=0; minCap=int.MaxValue; maxCap=0; minFaceDelta=1;
@@ -737,11 +810,17 @@ public static class MountainBackdrop
                 layer+1,peaks,std,d,width,measured[layer],1-bottom,foot.y));
         }
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
+            "[GULLY] count_l1={0} count_l2={1} max_len_pct={2:F4} max_reversals={3} width_px={4:F0}-{5:F0} side=shadow_only",
+            SnowGullies[0],SnowGullies[1],maxSnowDepth,maxSnowReversals,minSnowWidth,maxSnowWidth));
+        if(maxSnowDepth>35 || maxSnowReversals>1 || minSnowWidth<3 || maxSnowWidth>7
+            || SnowGullies[0]==0 || SnowGullies[1]==0)
+            throw new InvalidOperationException("GULLY short shadow snow gate");
+        Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN14] shadow_ratio={0:F6} shade_luma={1:F6} face_luma_gap={2:F6} ridge_breaks={3} max_face_px={4} straight_segments={5}",
             minShadowRatio,minShadeLuma,maxFaceGap,ridgeBreaks,maxFacePixels,straightSegments));
         if(minShadowRatio<.66f || maxFaceGap>.26f || ridgeBreaks<6*42 || maxFacePixels>200 || straightSegments!=0)
             throw new InvalidOperationException("MTN14 face/ridge gate");
-        Debug.Log("[MTN13] tex=2048x1024 filter=L1:Point/L2:Point/L3:Bilinear/L4:Bilinear snow_edge_alpha=0.5 supersample=2x foot_haze_pct=10");
+        Debug.Log("[MTN13] rock_grid=2048x1024 snow_resolve=L1..L3:8192x1024/L4:2048x1024 filter=L1:Point/L2:Point/L3:Bilinear/L4:Bilinear snow_edge_alpha=0.5 supersample=2x foot_haze_pct=10");
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN8] layer_width_m={0:F2}/{1:F2}/{2:F2} screen_fill_pct={3:F4}/{4:F4}/{5:F4} top_y={6:F4}/{7:F4}/{8:F4}",
             widths[0],widths[1],widths[2],fills[0],fills[1],fills[2],measured[0],measured[1],measured[2]));
