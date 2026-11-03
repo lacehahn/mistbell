@@ -135,6 +135,8 @@ public sealed partial class PlayerController : MonoBehaviour
         if(ClimbRoute.Length<200 || climb<24 || outdoorCount!=5 || outdoorSlots!=5)
         { Debug.LogError("[ROUTE] gate failed"); Application.Quit(1); return; }
         var args = Environment.GetCommandLineArgs();
+        InitializePersistence(args);
+        if (StartPersistenceDemo(args)) return;
         if (Array.IndexOf(args, "-bench") >= 0)
         { suppressCinema = true; interiorAuto = true; StartCoroutine(Benchmark(args)); return; }
         cinemaDemo = Array.IndexOf(args,"-demo-cinema")>=0;
@@ -203,6 +205,7 @@ public sealed partial class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if (PersistenceBlocksInput()) { Moving=false; return; }
         if(cinemaActive) { Moving=false; return; }
         if(cinemaDemo && cinemaDone) return;
         Vector3 direction = Vector3.zero;
@@ -651,6 +654,7 @@ public sealed partial class PlayerController : MonoBehaviour
         if(cinemaActive) return;
         bool inside=interior!=null && interior.Contains(transform.position);
         if(interior!=null) interior.SetInside(inside);
+        CheckAutosave(inside);
         follow.fieldOfView=Mathf.MoveTowards(follow.fieldOfView,inside?50:followFov,Time.deltaTime*30);   // 38 装不下"地板+吊灯+天花板"，室内用 50 广角
         // 室内人眼机位只比脚高 1.75 m：看向 +3.2 会把角色和长椅全部推出画面，改看 +2.0（微仰但保人可见）。
         float look=inside?2.0f:LookHeight;

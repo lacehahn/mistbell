@@ -11,6 +11,18 @@ public sealed class AudioDirector : MonoBehaviour
     AudioSource bellSource, windSource, stepSource;
     AudioListener ownedListener;
     float bellRms, windRms, stepRms;
+    float windScale = 1;
+    public float MasterVolume { get; private set; } = .8f;
+    public bool MasterVolumeApplied => Mathf.Approximately(bellSource.volume, MasterVolume) &&
+        Mathf.Approximately(stepSource.volume, .25f * MasterVolume) &&
+        Mathf.Approximately(windSource.volume, Mathf.Clamp(.18f * windScale, .02f, .32f) * MasterVolume);
+    public void SetMasterVolume(float volume)
+    {
+        MasterVolume = Mathf.Clamp01(volume);
+        if (bellSource != null) bellSource.volume = MasterVolume;
+        if (stepSource != null) stepSource.volume = .25f * MasterVolume;
+        SetWindScale(windScale);
+    }
     public float BellPlayedAtDistance { get; private set; } = -1;
     public int BellCount { get; private set; }
     public int Footsteps { get; private set; }
@@ -27,6 +39,7 @@ public sealed class AudioDirector : MonoBehaviour
         stepSource = Source(step, .25f, false);
         if (FindFirstObjectByType<AudioListener>() == null)
             ownedListener = gameObject.AddComponent<AudioListener>();
+        SetMasterVolume(MasterVolume);
         windSource.Play();
     }
 
@@ -45,7 +58,8 @@ public sealed class AudioDirector : MonoBehaviour
     /// <summary>风声随与教堂的距离缩放（1.0 = 默认 0.18 音量）。</summary>
     public void SetWindScale(float scale)
     {
-        if (windSource != null) windSource.volume = Mathf.Clamp(.18f * scale, .02f, .32f);
+        windScale = scale;
+        if (windSource != null) windSource.volume = Mathf.Clamp(.18f * scale, .02f, .32f) * MasterVolume;
     }
 
     AudioClip MakeBell()

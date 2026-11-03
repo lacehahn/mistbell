@@ -11,6 +11,10 @@ public sealed class InfoPanel : MonoBehaviour
     Text title;
     Text[] paragraphs;
     Font font;
+    public Font UiFont => font;
+    public string BodyLanguage { get; private set; } = "both";
+    public System.Func<string, bool> IsVisited;
+    public System.Action<PoiData> OnClosed;
     int openedFrame;
 
     void Awake()
@@ -59,22 +63,52 @@ public sealed class InfoPanel : MonoBehaviour
     void Update()
     {
         if (IsOpen && Time.frameCount > openedFrame && (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Escape)))
-        { overlay.SetActive(false); ClosedFrame = Time.frameCount; }
+        Close();
+    }
+    void LateUpdate()
+    {
+        if (!IsOpen) return;
+        font.RequestCharactersInTexture(Current.titleCn + Current.titleEn + Current.bodyCn + Current.bodyEn + " / · 已读按 E / Esc 关闭按 E 查看", 24, FontStyle.Normal);
+        // Dynamic OS fonts can repack their atlas when a previously hidden paragraph returns.
+        // Invalidate the generator as well as the canvas mesh so cached UVs cannot survive it.
+        foreach (var label in GetComponentsInChildren<Text>())
+        {
+            label.cachedTextGenerator.Invalidate();
+            label.SetVerticesDirty();
+        }
     }
     public void Show(PoiData data)
     {
         Current = data;
         string heading = data.titleCn + " / " + data.titleEn;
         font.RequestCharactersInTexture(heading + data.bodyCn + data.bodyEn + "按 E / Esc 关闭按 E 查看", 24, FontStyle.Normal);
-        title.text = heading;
-        paragraphs[0].text = data.bodyCn;
-        paragraphs[1].text = data.bodyEn;
+        title.text = heading + (IsVisited != null && IsVisited(data.id) ? " · 已读" : "");
+        ApplyLanguage(BodyLanguage);
         overlay.SetActive(true); prompt.SetActive(false); openedFrame = Time.frameCount;
     }
     public void SetPrompt(bool visible) { prompt.SetActive(visible); }
+    public void Close()
+    {
+        if (!IsOpen) return;
+        overlay.SetActive(false); ClosedFrame = Time.frameCount;
+        OnClosed?.Invoke(Current);
+    }
+    public void ApplyLanguage(string language)
+    {
+        BodyLanguage = language;
+        if (Current == null) return;
+        font.RequestCharactersInTexture(Current.titleCn + Current.titleEn + Current.bodyCn + Current.bodyEn + " / · 已读按 E / Esc 关闭按 E 查看", 24, FontStyle.Normal);
+        paragraphs[0].text = language == "en" ? "" : Current.bodyCn;
+        paragraphs[1].text = language == "cn" ? "" : Current.bodyEn;
+        // A dynamic atlas rebuild must refresh unchanged title/footer meshes too.
+        foreach (var label in GetComponentsInChildren<Text>(true)) label.SetAllDirty();
+        Canvas.ForceUpdateCanvases();
+        Debug.Log("[POI] body_lang=" + language);
+    }
     public bool ValidateContent() => Current != null &&
-        title.text == Current.titleCn + " / " + Current.titleEn && paragraphs.Length == 2 &&
-        paragraphs[0].text == Current.bodyCn && paragraphs[1].text == Current.bodyEn;
+        title.text.StartsWith(Current.titleCn + " / " + Current.titleEn, System.StringComparison.Ordinal) && paragraphs.Length == 2 &&
+        paragraphs[0].text == (BodyLanguage == "en" ? "" : Current.bodyCn) &&
+        paragraphs[1].text == (BodyLanguage == "cn" ? "" : Current.bodyEn);
     GameObject Box(string name, Transform parent, Color color, Vector2 size, Vector2 position)
     {
         var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));

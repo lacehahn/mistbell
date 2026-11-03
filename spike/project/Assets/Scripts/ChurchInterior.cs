@@ -51,6 +51,14 @@ public sealed class ChurchInterior : MonoBehaviour
         ambientGround = RenderSettings.ambientGroundColor;
         ambientIntensity = RenderSettings.ambientIntensity; fogDensity = RenderSettings.fogDensity;
     }
+    public void RestoreDoor(bool open)
+    {
+        opening = false; openingTime = 0;
+        OpenDegrees = open ? 100 : 0;
+        doorLeaf.localRotation = closedRotation * Quaternion.AngleAxis(-OpenDegrees, Vector3.up);
+        doorCollider.enabled = !open;
+        Physics.SyncTransforms();
+    }
     public bool DoorInRange(Vector3 p) => Vector2.Distance(new Vector2(p.x,p.z),new Vector2(-2,-8.08f)) <= 2.5f &&
         Mathf.Abs(p.y-FloorY)<2;
     public bool TryOpen(Vector3 p)
