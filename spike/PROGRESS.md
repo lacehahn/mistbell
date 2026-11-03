@@ -392,4 +392,8 @@
 | 14:07 | 远山中景硬边（Codex MTN14） | `shadow_ratio=0.68`、`face_luma_gap=0.256`、`ridge_breaks=252`、`straight_segments=0`、`max_face_px=128` | 深蓝三角墙消失；阴面提亮到 0.70、明暗差压到 0.254，山体读成层叠雪脊 |
 | 14:07 | 山脚硬切线 + 竖向杂线（Codex MTN15） | `foot_fade_pct=18`、`stray_strokes=0`、`foot_edge_grad=0.007277`、`mountain_luma=0.570971`、`seam_max_grad=0.007151` | 山脚 18% 渐隐，山与雪原接上；`min_streak_px=4`、`max_streak_contrast=1.0` 去掉 1–2 px 黑竖线 |
 | 14:07 | 十一项演示全绿 | walk/stairs/tower/church/cinema/reveal/journal/settings/save/load/trail 全 `rc=0 bad=0` | 试玩包就绪，入口见 `docs/08-playtest.md` |
+| 14:50 | 雪沟去 Z 字（Codex GULLY） | `max_len_pct=34.9963`、`max_reversals=1`、`width_px=3-7`、`side=shadow_only` | 白色折线没了；成本 +72 MiB 贴图 |
+| 14:50 | 尖峰化（Codex PEAK） | `flat_top_px_max=9`、峰数 12/13/14/15、`snow_cap_offset_max=2.83px` | 平顶台面消失 |
+| 14:50 | 雾中远脉（Codex MIST + 我回调） | Codex 给 `haze=0.34/0.54/0.70/0.84`→ 我降到 **0.20/0.40/0.58/0.74** | 全雾化时山完全没形体；回调后山脉既有轮廓又不剪纸 |
+| 14:50 | 天空球 UV 接缝（我定位并修） | 穹顶 `rotation.y=37°` | 画面左侧那条竖直暗带消失；探针 `ProbeTallProps` 证明场景里没有高瘦物体，排除 3D 物件 |
 

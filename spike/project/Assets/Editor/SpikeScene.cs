@@ -1685,6 +1685,8 @@ public static class SpikeScene
         UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
         go.transform.position = new Vector3(0f, 0f, -100f);
         go.transform.localScale = Vector3.one * 1300f;   // 半径 650m，必须小于相机 far(1500)
+        // 天空球 UV 接缝会显示成一条竖直暗带（画面左 1/10 处）；转 37° 让接缝落到镜头外。
+        go.transform.rotation = Quaternion.Euler(0f, 37f, 0f);
         var mr = go.GetComponent<MeshRenderer>();
         mr.sharedMaterial = mat;
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;

@@ -86,6 +86,46 @@ public static class MountainBackdrop
     static int ridgeBreaks, straightSegments, maxFacePixels;
     static float minShadowRatio, minShadeLuma, maxFaceGap;
     static float Luma(Color c) => .2126f*c.r+.7152f*c.g+.0722f*c.b;
+    static readonly float[] MistHaze = { .20f, .40f, .58f, .74f };   // 0.34/0.54/0.70/0.84 雾太重，山完全没形体
+    const float MistContrast = .18f, MistBrightness = .84f;
+
+    static void ConfigureMist(Material material, int layer, Color horizon)
+    {
+        material.SetColor("_HazeColor", horizon);
+        material.SetFloat("_Haze", MistHaze[layer]);
+        material.SetFloat("_HazeBottom", .45f);
+        material.SetFloat("_MistContrast", MistContrast);
+        material.SetFloat("_MistBrightness", MistBrightness);
+        material.SetColor("_HorizonFogColor", horizon);
+        material.SetFloat("_HorizonFog", 1f);
+        var sky=GameObject.Find("Sky Dome").GetComponent<MeshRenderer>().sharedMaterial;
+        material.SetColor("_SkyTopColor", sky.GetColor("_TopColor"));
+        material.SetColor("_SkyMidColor", sky.GetColor("_MidColor"));
+        material.SetColor("_SkyCloudColor", sky.GetColor("_CloudColor"));
+        material.SetColor("_SkyCloudShadow", sky.GetColor("_CloudShadow"));
+        material.SetFloat("_SkyCloudAmount", sky.GetFloat("_CloudAmount"));
+        material.SetFloat("_SkyCloudScale", sky.GetFloat("_CloudScale"));
+        EditorUtility.SetDirty(material);
+    }
+
+    // Update only existing backdrop materials; leave scene geometry and all
+    // authored sky/camera/gameplay settings intact. Repaint uses the same setup.
+    public static void ApplyMistAndBuild()
+    {
+        EditorSceneManager.OpenScene("Assets/Scenes/ArtSpike.unity");
+        var horizon = GameObject.Find("Sky Dome").GetComponent<MeshRenderer>().sharedMaterial.GetColor("_HorizonColor");
+        for(int layer=0;layer<4;layer++)
+            ConfigureMist(AssetDatabase.LoadAssetAtPath<Material>($"Assets/Settings/M_MtnLayer_{layer+1}.mat"),layer,horizon);
+        AssetDatabase.SaveAssets();
+        var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions {
+            scenes=new[]{"Assets/Scenes/ArtSpike.unity"},
+            locationPathName="Builds/Mac/Mistbell.app",
+            target=BuildTarget.StandaloneOSX, options=BuildOptions.None
+        });
+        Debug.Log($"[MIST_MTN_BUILD] result={report.summary.result} errors={report.summary.totalErrors}");
+        if(report.summary.result!=UnityEditor.Build.Reporting.BuildResult.Succeeded)
+            throw new InvalidOperationException("Mist mountain build failed");
+    }
     // Monotone cubic interpolation keeps the original peak count while rounding
     // every secondary bend. Coordinates are continuous until the 2x resolve.
     static float Flank(float x, float[] xs, float[] ys)
@@ -601,108 +641,149 @@ public static class MountainBackdrop
         importer.SaveAndReimport();
         return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
     }
-    // Run AFTER capture_runtime.sh: measure the encoded screenshot, not texture estimates.
+    // Run AFTER capture_runtime.sh. Luma/ridge/seam come from the encoded frame;
+    // face_gap is a conservative shader RGB-range bound over every opaque texel.
     public static void MeasureScreenshot()
     {
-        string path="Shots/art_runtime.png";
+        EditorSceneManager.OpenScene("Assets/Scenes/ArtSpike.unity");
+        UnityEngine.Object.FindFirstObjectByType<ShotRig>().Apply(0);
+        var cam=Camera.main;
         var frame=new Texture2D(2,2,TextureFormat.RGBA32,false,true);
-        if(!frame.LoadImage(File.ReadAllBytes(path))) throw new InvalidOperationException("MTN11 screenshot decode");
+        if(!frame.LoadImage(File.ReadAllBytes("Shots/art_runtime.png")))
+            throw new InvalidOperationException("Mist screenshot decode failed");
         int w=frame.width,h=frame.height;
+        cam.aspect=w/(float)h;
         var pixels=frame.GetPixels32();
-        int x0=(int)(w*.05),x1=(int)(w*.95),y0=(int)(h*.10),y1=(int)(h*.45);
-        var columns=new double[x1-x0];
-        double sum=0;
-        for(int x=x0;x<x1;x++)
+        var cards=new Transform[4];
+        var textures=new Texture2D[4];
+        var texels=new Color32[4][];
+        var materials=new Material[4];
+        float faceGap=0;
+        for(int layer=0;layer<4;layer++)
         {
-            for(int y=y0;y<y1;y++) columns[x-x0]+=Luma(pixels[(h-1-y)*w+x]);
-            columns[x-x0]/=y1-y0; sum+=columns[x-x0];
+            cards[layer]=GameObject.Find($"MtnLayer_{layer+1}").transform;
+            materials[layer]=cards[layer].GetComponent<MeshRenderer>().sharedMaterial;
+            string path=AssetDatabase.GetAssetPath(materials[layer].GetTexture("_MainTex"));
+            textures[layer]=new Texture2D(2,2,TextureFormat.RGBA32,false,true);
+            textures[layer].LoadImage(File.ReadAllBytes(path));
+            texels[layer]=textures[layer].GetPixels32();
+            Color min=Color.white,max=Color.black;
+            foreach(var p in texels[layer])
+            {
+                if(p.a<128) continue;
+                Color c=p;
+                min.r=Mathf.Min(min.r,c.r); min.g=Mathf.Min(min.g,c.g); min.b=Mathf.Min(min.b,c.b);
+                max.r=Mathf.Max(max.r,c.r); max.g=Mathf.Max(max.g,c.g); max.b=Mathf.Max(max.b,c.b);
+            }
+            // Subsequent foot/vertical fog and local sky minimum can only
+            // reduce a face's range at the same direction/altitude.
+            float range=Luma(max-min)*(1-materials[layer].GetFloat("_Haze"))*materials[layer].GetFloat("_MistContrast");
+            faceGap=Mathf.Max(faceGap,range);
         }
-        var differences=new double[columns.Length-1];
-        for(int x=0;x<differences.Length;x++) differences[x]=Math.Abs(columns[x+1]-columns[x]);
-        Array.Sort(differences);
-        double index=(differences.Length-1)*.99;
-        int lower=(int)Math.Floor(index),upper=(int)Math.Ceiling(index);
-        double seam=differences[lower]+(differences[upper]-differences[lower])*(index-lower);
-        double luma=sum/columns.Length;
-        float delta=1;
-        foreach(float mix in new[]{0f,.38f,.68f})
-            foreach(string tint in new[]{"#5A6878","#6B7888","#7C8896"})
-                delta=Mathf.Min(delta,Luma(Rock(Hex(tint),true,mix,Hex("#DAE5EF")))-Luma(Rock(Hex(tint),false,mix,Hex("#DAE5EF"))));
-        // Screenshot-only skyline locator. First sustained sky-to-snow rise,
-        // averaged over 5 columns to reject isolated snowflakes. A 0.020 rise
-        // locates the new <=3 px cap after screenshot quantization. Measure horizontal
-        // 3px differences around that silhouette, not the snow/rock face contrast.
-        int stair=0, magenta=0;
-        for(int i=0;i<pixels.Length;i++)
-            if(pixels[i].r>150 && pixels[i].b>150 && pixels[i].g<100) magenta++;
-        var samples=new System.Text.StringBuilder("x,y,delta_luma_3px\n");
+        Func<int,int,float> lum=(x,y)=>Luma(pixels[(h-1-Mathf.Clamp(y,0,h-1))*w+Mathf.Clamp(x,0,w-1)]);
+        // Side bands exclude the church/tower. Count the entire visible mountain,
+        // including its hazed foot, with actual alpha coverage and foreground
+        // collider occlusion; do not include sky or foreground snow in its luma.
+        double mountainSum=0; int mountainCount=0;
+        for(int y=0;y<h;y+=2)
+        for(int x=(int)(w*.05f);x<(int)(w*.95f);x+=2)
+        {
+            if(x>=w*.30f && x<w*.76f) continue;
+            var ray=cam.ViewportPointToRay(new Vector3((x+.5f)/w,1-(y+.5f)/h,0));
+            if(Physics.Raycast(ray,out var hit,cam.farClipPlane)) continue;
+            float opacity=0;
+            for(int layer=0;layer<4;layer++)
+            {
+                var plane=new Plane(cards[layer].forward,cards[layer].position);
+                if(!plane.Raycast(ray,out float distance)) continue;
+                var uv=cards[layer].InverseTransformPoint(ray.GetPoint(distance))+new Vector3(.5f,.5f,0);
+                if(uv.x<0 || uv.x>=1 || uv.y<0 || uv.y>=1) continue;
+                int tx=(int)(uv.x*textures[layer].width),ty=(int)(uv.y*textures[layer].height);
+                float alpha=texels[layer][ty*textures[layer].width+tx].a/255f;
+                opacity=1-(1-opacity)*(1-alpha);
+            }
+            if(opacity<.9f) continue;
+            mountainSum+=lum(x,y); mountainCount++;
+        }
+        if(mountainCount<1000) throw new InvalidOperationException("Mist mountain mask empty");
+        double mountainLuma=mountainSum/mountainCount;
+        // Locate the skyline from the unchanged card alpha and transforms,
+        // rather than requiring the former bright snowcap edge to still exist.
+        float ridgeContrast=0; int ridgeSamples=0;
+        var samples=new System.Text.StringBuilder("x,y,delta_luma_6px_5col\n");
         for(int i=0;i<200;i++)
         {
             int x=Mathf.RoundToInt(w*(.05f+.90f*i/199f));
-            int edge=-1;
-            for(int y=(int)(h*.14f);y<(int)(h*.42f);y++)
-            {
-                float rise=0;
-                for(int dx=-2;dx<=2;dx++)
-                    rise+=Luma(pixels[(h-2-y)*w+x+dx])-Luma(pixels[(h-1-y)*w+x+dx]);
-                if(rise/5>.020f) { edge=y; break; }
-            }
-            if(edge<0) throw new InvalidOperationException("MTN13 missing screenshot ridge at x="+x);
-            float jump=0;
-            for(int dy=-1;dy<=1;dy++)
-            {
-                int row=(h-1-edge-dy)*w;
-                jump=Mathf.Max(jump,Mathf.Abs(Luma(pixels[row+x+3])-Luma(pixels[row+x])));
-            }
-            samples.AppendFormat(CultureInfo.InvariantCulture,"{0},{1},{2:F6}\n",x,edge,jump);
-            if(jump>.25f) stair++;
-        }
-        File.WriteAllText("Shots/mtn13_ridge_samples.csv",samples.ToString());
-        double ridgeStair=stair/200.0;
-        Debug.Log(string.Format(CultureInfo.InvariantCulture,
-            "[MTN13_MEASURE] ridge_stair_px={0:F6} exceed={1}/200 magenta_px={2} sample_x=0.05..0.95 ridge_search_y=0.14..0.42 locator=first_5col_rise_gt_0.020 radius=1 axis=x delta_px=3 threshold=0.25",ridgeStair,stair,magenta));
-        if(ridgeStair>.05 || magenta!=0) throw new InvalidOperationException("MTN13 screenshot gate");
-        // Horizontal adjacent-pixel luma differences at screen y=0.63. The
-        // side bands exclude church/tower geometry and measure the mountain foot.
-        var footGrad=new System.Collections.Generic.List<float>();
-        int footY=Mathf.RoundToInt(h*.63f);
-        for(int x=(int)(w*.02f);x<(int)(w*.98f)-1;x++)
-        {
             if(x>=w*.30f && x<w*.76f) continue;
-            int row=(h-1-footY)*w;
-            footGrad.Add(Mathf.Abs(Luma(pixels[row+x+1])-Luma(pixels[row+x])));
-        }
-        footGrad.Sort();
-        float footEdge=footGrad[Mathf.FloorToInt((footGrad.Count-1)*.95f)];
-        // Detect persistent dark 1-2 px strokes against their immediate sides.
-        // Runs must span >=24 output rows; individual snow particles are rejected.
-        int stray=0;
-        for(int x=(int)(w*.02f);x<(int)(w*.98f)-3;x++)
-        {
-            if(x>=w*.30f && x<w*.76f) continue;
-            for(int width=1;width<=2;width++)
+            float top=h;
+            for(int layer=0;layer<4;layer++)
             {
-                int run=0;
-                for(int y=(int)(h*.35f);y<(int)(h*.65f);y++)
-                {
-                    int row=(h-1-y)*w;
-                    float sides=Mathf.Min(Luma(pixels[row+x-1]),Luma(pixels[row+x+width]));
-                    float center=0;
-                    for(int dx=0;dx<width;dx++) center=Mathf.Max(center,Luma(pixels[row+x+dx]));
-                    run=sides-center>.035f?run+1:0;
-                    if(run==24) stray++;
-                }
+                var ray=cam.ViewportPointToRay(new Vector3((x+.5f)/w,.5f,0));
+                var plane=new Plane(cards[layer].forward,cards[layer].position);
+                if(!plane.Raycast(ray,out float distance)) continue;
+                var local=cards[layer].InverseTransformPoint(ray.GetPoint(distance));
+                int tx=Mathf.FloorToInt((local.x+.5f)*textures[layer].width);
+                if(tx<0 || tx>=textures[layer].width) continue;
+                int ty=textures[layer].height-1;
+                while(ty>=0 && texels[layer][ty*textures[layer].width+tx].a<128) ty--;
+                if(ty<0) continue;
+                var world=cards[layer].TransformPoint(new Vector3(local.x,(ty+.5f)/textures[layer].height-.5f,0));
+                top=Mathf.Min(top,(1-cam.WorldToViewportPoint(world).y)*h);
             }
+            int edge=Mathf.RoundToInt(top);
+            if(edge<3 || edge>=h-3) throw new InvalidOperationException("Mist ridge outside frame");
+            float above=0,below=0;
+            for(int dx=-2;dx<=2;dx++) { above+=lum(x+dx,edge-3); below+=lum(x+dx,edge+3); }
+            float contrast=Mathf.Abs(below-above)/5;
+            ridgeContrast=Mathf.Max(ridgeContrast,contrast); ridgeSamples++;
+            samples.AppendFormat(CultureInfo.InvariantCulture,"{0},{1},{2:F6}\n",x,edge,contrast);
         }
+        File.WriteAllText("Shots/mist_mtn_ridge_samples.csv",samples.ToString());
+        // Preserve the established .05.. .95 X / .10.. .45 Y seam ROI,
+        // reporting its true maximum adjacent column-mean gradient (no percentile).
+        double seam=0,previous=0;
+        for(int x=(int)(w*.05f);x<(int)(w*.95f);x++)
+        {
+            double column=0;
+            int y0=(int)(h*.10f),y1=(int)(h*.45f);
+            for(int y=y0;y<y1;y++) column+=lum(x,y);
+            column/=y1-y0;
+            if(x>(int)(w*.05f)) seam=Math.Max(seam,Math.Abs(column-previous));
+            previous=column;
+        }
+        int magenta=0;
+        foreach(var p in pixels) if(p.r>150 && p.b>150 && p.g<100) magenta++;
+        int snow=0,lower=0;
+        for(int y=0;y<h;y+=2)
+        for(int x=0;x<w;x+=2)
+        {
+            if(y<=h*.5f) continue;
+            var p=pixels[(h-1-y)*w+x];
+            int max=Math.Max(p.r,Math.Max(p.g,p.b)),min=Math.Min(p.r,Math.Min(p.g,p.b));
+            lower++;
+            if(max/255f>.72f && (max==0?0:(max-min)/(float)max)<.18f) snow++;
+        }
+        float snowRatio=snow/(float)lower;
+        var horizon=materials[0].GetColor("_HazeColor");
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
-            "[MTN15] foot_fade_pct=18 min_streak_px=4 max_streak_contrast=1.0 stray_strokes={0} foot_edge_grad={1:F6}",stray,footEdge));
+            "[MIST_MTN] haze={0:F2}/{1:F2}/{2:F2}/{3:F2} haze_color=#{4} face_gap={5:F6} mountain_luma={6:F6} ridge_contrast={7:F6} foot_haze={8:F2}",
+            materials[0].GetFloat("_Haze"),materials[1].GetFloat("_Haze"),materials[2].GetFloat("_Haze"),materials[3].GetFloat("_Haze"),
+            ColorUtility.ToHtmlStringRGB(horizon),faceGap,mountainLuma,ridgeContrast,materials[0].GetFloat("_HazeBottom")));
+        Debug.Log(string.Format(CultureInfo.InvariantCulture,
+            "[MIST_MTN_MEASURE] seam_max_grad={0:F6} magenta_px={1} snow_ratio={2:F6} mountain_pixels={3} ridge_samples={4} face_gap=opaque_texel_rgb_range_bound_after_haze mountain_roi=alpha_ge_0.9_sides_full_height_foreground_occluded ridge=6px_vertical_5col_mean",
+            seam,magenta,snowRatio,mountainCount,ridgeSamples));
+        for(int layer=0;layer<4;layer++)
+        {
+            if(Mathf.Abs(materials[layer].GetFloat("_Haze")-MistHaze[layer])>1e-5f
+                || Mathf.Abs(materials[layer].GetFloat("_HazeBottom")-.45f)>1e-5f)
+                throw new InvalidOperationException("Mist material parameter gate");
+            UnityEngine.Object.DestroyImmediate(textures[layer]);
+        }
         UnityEngine.Object.DestroyImmediate(frame);
-        Debug.Log(string.Format(CultureInfo.InvariantCulture,
-            "[MTN11] rock_tints=#5A6878/#6B7888/#7C8896 lit_shadow_delta={0:F6} treeline_pct=0.07 treeline_alpha=0.45 overscan=0.12 feather=0.08 seam_max_grad={1:F6} height_scale={2:F6}",delta,seam,HeightScale));
-        Debug.Log(string.Format(CultureInfo.InvariantCulture,"[MTN11] mountain_luma={0:F6}",luma));
-        if(stray!=0 || footEdge>.02f) throw new InvalidOperationException("MTN15 screenshot gate");
-        if(luma<.42 || luma>.60 || seam>.035 || delta<.05f || delta>.26f)
-            throw new InvalidOperationException("MTN11 screenshot gate");
+        if(faceGap>.12f || mountainLuma<.58 || mountainLuma>.66 || ridgeContrast>.12f
+            || seam>.035 || magenta!=0 || snowRatio<.55f || ridgeSamples<80)
+            throw new InvalidOperationException("Mist mountain screenshot gate failed");
+        Debug.Log("[MIST_MTN_GATE] pass");
     }
     // Repaint the existing scene in isolation; do not regenerate church, interior or cameras.
     public static void Repaint()
@@ -815,11 +896,7 @@ public static class MountainBackdrop
             AssetDatabase.DeleteAsset(meshPath); AssetDatabase.CreateAsset(mesh,meshPath);
             quad.GetComponent<MeshFilter>().sharedMesh=mesh;
             var mat=new Material(Shader.Find("Mistbell/PaintedMountain")); mat.SetTexture("_MainTex",texture);
-            // 大气透视：L1 0.06 → L4 0.72，越远越融进天空；底部再叠 0.25 地雾。
-            float[] haze={.06f,.26f,.48f,.72f};
-            mat.SetColor("_HazeColor",Hex("#C9D7E4"));
-            mat.SetFloat("_Haze",haze[Mathf.Clamp(layer,0,3)]);
-            mat.SetFloat("_HazeBottom",.25f);
+            ConfigureMist(mat,layer,GameObject.Find("Sky Dome").GetComponent<MeshRenderer>().sharedMaterial.GetColor("_HorizonColor"));
             // L3/L4 share the far-depth clamp: explicitly paint farther cards first.
             mat.renderQueue=2450-layer;
             string matPath=$"Assets/Settings/M_MtnLayer_{layer+1}.mat";
