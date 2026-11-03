@@ -248,6 +248,10 @@ public static class MaterialForge
         var terrace=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_TerraceAshlar.mat");
         var sub=new Material(terrace) {name="Stone_Sub"};
         Apply(sub,3);
+        // 台地墙原本用"世界投影"模式（_Style11UV=0），不吃图集贴图 → 渲染成近黑砖块。
+        // 切到和教堂墙一样的图集 UV 模式，才能用上回贴的手绘矮墙图。
+        sub.SetFloat("_Style11UV",1f); sub.SetFloat("_StoneSurface",2f); sub.SetFloat("_ForgeSurface",2f);
+        sub.SetFloat("_Smoothness",0f);
         const string subPath="Assets/Settings/Stone_Sub.mat";
         AssetDatabase.DeleteAsset(subPath); AssetDatabase.CreateAsset(sub,subPath);
         // Only existing step renderers receive the top-face polish; all geometry is retained.
@@ -292,6 +296,17 @@ public static class MaterialForge
         var indoor=church.GetComponent<ChurchInterior>();
         ApplyRollout(indoor);
         Style11Atlas.Apply(indoor);
+        // Style11Atlas 只认它认识的材质族；台地墙（Stone_Sub_Coping / Stone_Sub_Steps）没被认出来，
+        // 于是仍走世界投影着色（_Style11UV=0）→ 渲染成黑砖。这里强制切到图集 UV 模式。
+        foreach(var r in UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+        {
+            if(r.sharedMaterial==null) continue;
+            string n=r.sharedMaterial.name;
+            if(!n.StartsWith("Stone_Sub")) continue;
+            // 决定性测试：直接把台地墙/台阶换成教堂石材材质（它已经被验证走图集 UV、渲染正确）
+            var churchMat=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_ChurchStone.mat");
+            if(churchMat!=null) r.sharedMaterial=churchMat;
+        }
         AssetDatabase.SaveAssets();
         ExportManifest(doorWidth);
     }
