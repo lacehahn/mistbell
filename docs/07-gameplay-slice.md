@@ -20,6 +20,12 @@ open spike/project/Builds/Mac/Mistbell.app
 
 带 `-shot` / `-shots` 参数启动时**完全走截图模式**，不会启用玩家控制（保证美术验收链路可复现）。
 
+### 札记与脚印
+
+- **已读标记**：打开过的 POI 在正文顶部显示「已读 · 第 N 次打开」，标题右侧带「· 已读」
+- **札记列表**：`Esc` → 设置菜单「札记 Notes」，列出全部 8 个 POI；未读显示「未读 · ？？？」且不可点，已读可回看
+- **脚印**：按累计位移每 0.75 m 落一片（0.26×0.44 m，左右脚偏移 ±0.18 m），120 片环形复用；石板与室内地面不落，台阶边缘（0.5 m 内地面高差 >0.12 m）不落；场景原有的 64 个静态脚印保留
+
 ### 存档
 
 - 路径：`~/Library/Application Support/Lot/Mistbell/mistbell_save.json`（设置同名 `mistbell_settings.json`）
