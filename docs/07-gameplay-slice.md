@@ -28,7 +28,8 @@ open spike/project/Builds/Mac/Mistbell.app
 
 ### 存档
 
-- 路径：`~/Library/Application Support/Lot/Mistbell/mistbell_save.json`（设置同名 `mistbell_settings.json`）
+- 路径：**`~/Library/Application Support/Mistbell/`**（`mistbell_save.json` / `mistbell_settings.json`）
+- 目录是写死的，不走 Unity 的 `persistentDataPath`：那个路径随 `companyName`/`bundleIdentifier` 变，实测同一天两版分别落到 `Lot/Mistbell` 与 `com.Lot.Mistbell`，会让老存档"消失"。启动时若发现旧路径有文件会自动搬过来（日志 `[SAVE] migrated …`）
 - 自动存档点：首次踏上台地、首次进入室内、关闭任意 POI 面板
 - 内容：位置 / 朝向 / 是否在室内 / 门是否开启 / 已访问 POI 列表
 - 实测：`[SAVE] load pos=(-2.0,0.374,5.029) inside=true door=true pois=1 delta_m=0.000000`
