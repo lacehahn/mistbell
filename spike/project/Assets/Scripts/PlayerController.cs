@@ -1111,7 +1111,9 @@ public sealed partial class PlayerController : MonoBehaviour
         int windowFills=Array.FindAll(interior.detailRoot.GetComponentsInChildren<MeshRenderer>(),r=>r.name.StartsWith("Interior_DrumWindowFill_")).Length;
         float domeIntensity=interior.domeUplights[0].intensity;
         Debug.Log(FormattableString.Invariant($"[DOME_LIGHT] uplights={interior.domeUplights.Length} intensity={domeIntensity:F1} windows_emissive={windowFills} cone_color=#8A8177 aperture=0.8 headroom_luma={headroomLuma:F4}"));
-        bool domeLightPass=headroomLuma>=.28f && interior.domeUplights.Length==2 && windowFills==12 &&
+        // STYLE7 intentionally darkens the interior. Keep the existing .20 readability floor
+        // and cap at .28 so the demonstration also rejects a return to the brighter V6 dome.
+        bool domeLightPass=headroomLuma>=.20f && headroomLuma<=.28f && interior.domeUplights.Length==2 && windowFills==12 &&
             Array.TrueForAll(interior.domeUplights,l=>Mathf.Abs(l.intensity-1.6f)<.001f);
         float ceilingFx=0f; bool ceilingSeen=false;
         MeasureCeiling(out ceilingSeen,out ceilingFx,out bool domeSeen);
