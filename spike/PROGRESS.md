@@ -399,4 +399,5 @@
 | 15:21 | 室内打光（Codex INT_LIGHT + 我两轮回调） | 最终 `nave_luma=0.0488`（linear）、`wall=0.0114`、`bench=0.0117`、`headroom=0.359`、`interior_luma=0.164` | Codex 首版把 key 提到 1.9 + 墙/地/木自发光 0.32 → 白墙现代厅；我降到 key .95 / fill .60 / 自发光 .13 与石板 #786E62 后，才像昏暗石造教堂 |
 | 15:21 | 修三个连带问题 | ①室内落蓝色脚印（改用几何区域判断，不再靠材质名）②`[INTERIOR_COLLIDE]` 里硬编码的 key=1.9 断言 ③`luma>=.18` 门限与新暗调冲突 | 三处都是"参数改了但判据没跟着改"，属自检脚本滞后，不是画面 bug |
 | 15:21 | 十一项演示 + 截图全绿 | `rc=0 bad=0` ×11、`cap=0` | `[INT_PASS] light=True … obstacles=True walked=True` |
+| 15:21 | 性能复测（1920×1080 满分辨率） | `z01 242.7fps/239dc`、`terrace 237.0fps/233dc`、`interior 260.6fps/231dc`，tris 3.10–3.45M，`[BENCH_GATE] pass=True` | drawcall 从 174 涨到 ~235（远山多层 + 室内 16 盏灯），仍远低于预算；帧率 237–260 |
 
