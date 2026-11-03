@@ -1759,13 +1759,17 @@ public static class SpikeScene
         var material = new Material(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat"))
             { name = "M_Footprint" };
         material.SetFloat("_Footprint", 1f);
+        material.SetFloat("_TrailSrcBlend", (float)BlendMode.SrcAlpha);
+        material.SetFloat("_TrailDstBlend", (float)BlendMode.OneMinusSrcAlpha);
+        material.SetFloat("_TrailZWrite", 0);
+        material.renderQueue = 3000;
         // 原来只靠 _Footprint 的 8% 压暗，在 0.86 albedo 的雪上完全看不见；直接压基色
-        if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Hex("#AFC0D2"));
+        if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", new Color(Hex("#AFC0D2").r, Hex("#AFC0D2").g, Hex("#AFC0D2").b, .55f));
         if (material.HasProperty("_SnowAlbedo")) material.SetFloat("_SnowAlbedo", 0.62f);
         AssetDatabase.DeleteAsset("Assets/Settings/M_Footprint.mat");
         AssetDatabase.CreateAsset(material, "Assets/Settings/M_Footprint.mat");
         // 从相机脚下一直铺到台阶：让视线沿脚印走上山（原来只有教堂前 20 个，前景是空的）
-        const int steps = 176;
+        const int steps = 64;
         for (int i = 0; i < steps; i++)
         {
             float t = i / (float)(steps - 1);
@@ -1786,7 +1790,7 @@ public static class SpikeScene
             { triangles[v*3]=0; triangles[v*3+1]=1+(v+1)%24; triangles[v*3+2]=v+1; }
             SaveMountainMesh(root, "Footprint_"+i, vertices, triangles, new Material(material));
         }
-        Debug.Log("[SNOW] footprints=176 ellipse=.3x.5m darken=.08 curve_z=-208..-14 follows_path=true");
+        Debug.Log("[SNOW] footprints=64 ellipse=.3x.5m darken=.08 curve_z=-208..-14 follows_path=true");
     }
 
     static void BuildStonePath(MeshCollider terrainCollider, Material stone)

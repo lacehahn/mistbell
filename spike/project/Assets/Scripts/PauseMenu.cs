@@ -6,7 +6,10 @@ using UnityEngine.EventSystems;
 /// <summary>Runtime UGUI controls; no authored scene, camera or art changes.</summary>
 public sealed class PauseMenu : MonoBehaviour
 {
-    GameObject menu, resume;
+    GameObject menu, resume, journal;
+    Button notesEntry;
+    public bool JournalOpen => journal != null && journal.activeSelf;
+    public bool HasNotesEntry => notesEntry != null && notesEntry.GetComponentInChildren<Text>().text == "札记 Notes";
     Slider volume;
     Text volumeLabel;
     readonly Button[] languages = new Button[3];
@@ -25,8 +28,8 @@ public sealed class PauseMenu : MonoBehaviour
             new GameObject("Mistbell UI Events",typeof(EventSystem),typeof(StandaloneInputModule));
         font.RequestCharactersInTexture("检测到上次进度 · 按 C 继续 / 按 N 重新开始（3 秒后自动继续）设置 / Settings音量 Volume 0123456789%中文English双语返回游戏退出游戏",24,FontStyle.Normal);
         resume=Label(transform,"检测到上次进度 · 按 C 继续 / 按 N 重新开始（3 秒后自动继续）",new Vector2(1600,70),new Vector2(0,460)).gameObject;
-        menu=Box(transform,new Vector2(640,440),Vector2.zero,new Color(.09f,.12f,.16f,.98f));
-        Label(menu.transform,"设置 / Settings",new Vector2(560,48),new Vector2(0,170));
+        menu=Box(transform,new Vector2(640,520),Vector2.zero,new Color(.09f,.12f,.16f,.98f));
+        Label(menu.transform,"设置 / Settings",new Vector2(560,48),new Vector2(0,210));
         volumeLabel=Label(menu.transform,"",new Vector2(560,48),new Vector2(0,110));
         var sliderGo=Box(menu.transform,new Vector2(500,32),new Vector2(0,55),new Color(.3f,.3f,.3f));
         volume=sliderGo.AddComponent<Slider>(); volume.minValue=0; volume.maxValue=1;
@@ -44,12 +47,13 @@ public sealed class PauseMenu : MonoBehaviour
         }
         HighlightLanguage(initialLanguage);
         MakeButton(menu.transform,"返回游戏",new Vector2(0,-95),new Vector2(520,55),back);
-        MakeButton(menu.transform,"退出游戏",new Vector2(0,-165),new Vector2(520,55),()=>Application.Quit(0));
+        MakeButton(menu.transform,"退出游戏",new Vector2(0,-225),new Vector2(520,55),()=>Application.Quit(0));
+        notesEntry=MakeButton(menu.transform,"札记 Notes",new Vector2(0,-160),new Vector2(520,55),()=>ShowJournal());
         SetVisible(false,false);
     }
     void LateUpdate()
     {
-        if (!resume.activeSelf && !menu.activeSelf) return;
+        if (!resume.activeSelf && !menu.activeSelf && !JournalOpen) return;
         var labels=GetComponentsInChildren<Text>();
         var content=new System.Text.StringBuilder();
         foreach(var label in labels) content.Append(label.text);
@@ -58,7 +62,33 @@ public sealed class PauseMenu : MonoBehaviour
     }
     public void SetVisible(bool choosing, bool settings)
     {
-        resume.SetActive(choosing); menu.SetActive(settings);
+        resume.SetActive(choosing); menu.SetActive(settings && !JournalOpen);
+    }
+    PoiData[] notePois;
+    Func<string,bool> wasVisited;
+    Func<string> noteLanguage;
+    Action<PoiData> openNote;
+    public void ConfigureJournal(PoiData[] data, Func<string,bool> read, Func<string> language, Action<PoiData> open)
+    { notePois=data; wasVisited=read; noteLanguage=language; openNote=open; }
+    public void ClickNotes() => notesEntry.onClick.Invoke();
+    public void CloseJournal()
+    { if(journal!=null) { journal.SetActive(false); journal.name="Closed Journal"; Destroy(journal); journal=null; } }
+    public void ShowJournal()
+    {
+        CloseJournal(); menu.SetActive(false);
+        journal=Box(transform,new Vector2(850,700),Vector2.zero,new Color(.09f,.12f,.16f,.98f));
+        journal.name="Journal";
+        Label(journal.transform,"札记 Notes",new Vector2(790,48),new Vector2(0,310));
+        for(int i=0;i<notePois.Length;i++)
+        {
+            var data=notePois[i]; bool read=wasVisited(data.id); string lang=noteLanguage();
+            string title=lang=="cn" ? data.titleCn : lang=="en" ? data.titleEn : data.titleCn+" / "+data.titleEn;
+            var button=MakeButton(journal.transform,(read ? "已读 · "+title : "未读 · ？？？"),
+                new Vector2(0,240-i*60),new Vector2(790,54),()=> { CloseJournal(); openNote(data); });
+            button.name="Note_"+data.id; button.interactable=read;
+            if(!read) button.GetComponentInChildren<Text>().color=new Color(.45f,.47f,.49f);
+        }
+        MakeButton(journal.transform,"返回设置",new Vector2(0,-290),new Vector2(790,54),()=> { CloseJournal(); menu.SetActive(true); });
     }
     void SetVolumeLabel(float value) => volumeLabel.text="音量 / Volume " + Mathf.RoundToInt(value*100) + "%";
     void HighlightLanguage(string language)

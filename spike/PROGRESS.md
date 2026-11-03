@@ -382,4 +382,9 @@
 | 11:37 | 串行执行器 | `spike/tools/run_tasks.sh` | 一轮结束自动接下一轮；遇 `usage limit` 自动停，不空转 |
 | 12:15 | 远山调色+大气透视 | 岩石 #66717F 系 / 雪 #E4EEF7 / 雪覆盖 .55；`PaintedMountain` 加 `_Haze/_HazeColor/_HazeBottom`，L1 .06→L4 .72 | 山不再像纯白剪纸，远近层次出来了；仍有大块三角面硬边与中景深蓝阴影墙 |
 | 12:20 | 截图链路修复（重要） | 脚本未在 caffeinate 下 → 播放器主循环停 → `cap=124`、0 张 | `capture_runtime.sh` 现在**自我重启进 caffeinate**；`-shots` 下跳过合批（合批会禁用机位依赖的 MeshRenderer） |
+| 13:39 | POI 已读 + 札记列表 | `[JOURNAL] total=8 visited=1 unread=7 menu_entry=true`、`[JOURNAL_CHECK] read_ugui=true p04_count=3 pass=true` | 设置菜单「札记 Notes」列出 8 条，未读显示「未读 · ？？？」且不可点；已读面板标题带「· 已读」+「已读 · 第 N 次打开」 |
+| 13:39 | 十项演示全绿 | walk/stairs/tower/church/cinema/reveal/journal/settings/save/load 全部 `rc=0 bad=0` | `[REVEAL] gate=pass`、`[SAVE] delta_m=0.000000`、`[PLAY] fps_ok=true` |
+| 13:39 | 自动化链路两个隐形坑（已修） | ①`open` 启动的播放器脱离 caffeinate → 显示器一睡主循环停，日志停在 43 行；②残留实例占窗口 | `run_demos.sh` 全程 `caffeinate -dimu -t 1200 sleep`；`capture_runtime.sh` 启动前 `pkill -x Mistbell`；演示统一用 `open -n -a` 启动 |
+| 13:39 | `Application.runInBackground = true` | 失焦不再暂停 | 后台/无人值守跑演示必需 |
+| 13:39 | Codex 配额耗尽（12:39） | `You've hit your usage limit` | 按规则转 DeepSeek harness 接手：修复足迹系统未完成部分、补齐札记验收、修自动化链路 |
 

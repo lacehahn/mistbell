@@ -61,6 +61,10 @@ public sealed partial class PlayerController : MonoBehaviour
 
     void Awake()
     {
+        // 自动化（-demo-* / -shots）常在没有焦点的情况下启动：Unity 默认失焦即暂停，
+        // 表现为日志停在启动尾部、进程 0% CPU、演示永不推进。后台也继续跑。
+        Application.runInBackground = true;
+        Debug.Log("[BOOT] PlayerController.Awake begin");
         if (CaptureMode) { enabled = false; return; }
         gameObject.layer = PlayerLayer;
         // Runtime spawn only: screenshot pilgrim and the ShotRig table are untouched.
@@ -73,6 +77,7 @@ public sealed partial class PlayerController : MonoBehaviour
 
     void Start()
     {
+        Debug.Log("[BOOT] PlayerController.Start begin");
         // Only explicit walking supports: walls, coping and cheek tops are never ground.
         terraceSurfaces = Array.FindAll(stairRamp.transform.parent.GetComponentsInChildren<Collider>(),
             c => c == stairRamp || c == stairDeck || c.name.StartsWith("TerraceFill_", StringComparison.Ordinal) ||
@@ -156,6 +161,7 @@ public sealed partial class PlayerController : MonoBehaviour
         }
         if(Array.IndexOf(args,"-demo-climb")>=0) StartCoroutine(DemoClimb());
         if(Array.IndexOf(args,"-demo-enter-church")>=0) StartCoroutine(DemoInterior(null));
+        if(Array.IndexOf(args,"-demo-journal")>=0) StartCoroutine(DemoJournal());
         int index = Array.IndexOf(args, "-demo-walk");
         if (index >= 0)
         {

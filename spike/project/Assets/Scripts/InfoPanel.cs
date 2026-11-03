@@ -8,13 +8,14 @@ public sealed class InfoPanel : MonoBehaviour
     public int ParagraphCount => paragraphs == null ? 0 : paragraphs.Length;
     public PoiData Current { get; private set; }
     GameObject overlay, prompt;
-    Text title;
+    Text title, readStatus;
     Text[] paragraphs;
     Font font;
     public Font UiFont => font;
     public string BodyLanguage { get; private set; } = "both";
     public System.Func<string, bool> IsVisited;
     public System.Action<PoiData> OnClosed;
+    public System.Func<string, int> OnOpened;
     int openedFrame;
 
     void Awake()
@@ -38,13 +39,15 @@ public sealed class InfoPanel : MonoBehaviour
         Box("InnerBorder", paper.transform, new Color(.42f, .40f, .32f), new Vector2(700, 580), Vector2.zero);
         var content = Box("Content", paper.transform, new Color(.09f, .12f, .16f), new Vector2(696, 576), Vector2.zero);
         title = Label("Title", content.transform, "", 24, new Vector2(632, 88), new Vector2(0, 226));
+        readStatus = Label("ReadStatus", content.transform, "", 24, new Vector2(656, 34), new Vector2(0, 190));
+        readStatus.color = new Color(.65f, .68f, .70f);
         paragraphs = new[] {
             Label("Chinese", content.transform, "", 24, new Vector2(656, 176), new Vector2(0, 82)),
             Label("English", content.transform, "", 24, new Vector2(656, 200), new Vector2(0, -116)) };
         paragraphs[0].horizontalOverflow = HorizontalWrapMode.Overflow;
         Label("Close", content.transform, "按 E / Esc 关闭", 24, new Vector2(632, 34), new Vector2(0, -254)).alignment = TextAnchor.MiddleRight;
-        prompt = Label("Prompt", transform, "按 E 查看", 24, new Vector2(240, 48), Vector2.zero).gameObject;
-        var corner = prompt.GetComponent<RectTransform>(); corner.anchorMin = corner.anchorMax = Vector2.zero; corner.anchoredPosition = new Vector2(150, 65);
+        prompt = Label("Prompt", transform, "按 E 查看", 24, new Vector2(420, 48), Vector2.zero).gameObject;
+        var corner = prompt.GetComponent<RectTransform>(); corner.anchorMin = corner.anchorMax = Vector2.zero; corner.anchoredPosition = new Vector2(240, 65);
         overlay.SetActive(false); prompt.SetActive(false);
     }
     void Start()
@@ -68,7 +71,7 @@ public sealed class InfoPanel : MonoBehaviour
     void LateUpdate()
     {
         if (!IsOpen) return;
-        font.RequestCharactersInTexture(Current.titleCn + Current.titleEn + Current.bodyCn + Current.bodyEn + " / · 已读按 E / Esc 关闭按 E 查看", 24, FontStyle.Normal);
+        font.RequestCharactersInTexture(Current.titleCn + Current.titleEn + Current.bodyCn + Current.bodyEn + readStatus.text + " / · 已读按 E / Esc 关闭按 E 查看新发现", 24, FontStyle.Normal);
         // Dynamic OS fonts can repack their atlas when a previously hidden paragraph returns.
         // Invalidate the generator as well as the canvas mesh so cached UVs cannot survive it.
         foreach (var label in GetComponentsInChildren<Text>())
@@ -79,14 +82,17 @@ public sealed class InfoPanel : MonoBehaviour
     }
     public void Show(PoiData data)
     {
+        bool wasRead = IsVisited != null && IsVisited(data.id);
+        int count = OnOpened != null ? OnOpened(data.id) : 1;
         Current = data;
+        readStatus.text = wasRead ? "已读 · 第 " + count + " 次打开" : "";
         string heading = data.titleCn + " / " + data.titleEn;
         font.RequestCharactersInTexture(heading + data.bodyCn + data.bodyEn + "按 E / Esc 关闭按 E 查看", 24, FontStyle.Normal);
-        title.text = heading + (IsVisited != null && IsVisited(data.id) ? " · 已读" : "");
+        title.text = heading + (wasRead ? " · 已读" : "");
         ApplyLanguage(BodyLanguage);
         overlay.SetActive(true); prompt.SetActive(false); openedFrame = Time.frameCount;
     }
-    public void SetPrompt(bool visible) { prompt.SetActive(visible); }
+    public void SetPrompt(bool visible, bool unread = false) { prompt.GetComponent<Text>().text = unread ? "按 E 查看 · 新发现" : "按 E 查看"; font.RequestCharactersInTexture(prompt.GetComponent<Text>().text,24,FontStyle.Normal); prompt.SetActive(visible); }
     public void Close()
     {
         if (!IsOpen) return;
@@ -97,7 +103,7 @@ public sealed class InfoPanel : MonoBehaviour
     {
         BodyLanguage = language;
         if (Current == null) return;
-        font.RequestCharactersInTexture(Current.titleCn + Current.titleEn + Current.bodyCn + Current.bodyEn + " / · 已读按 E / Esc 关闭按 E 查看", 24, FontStyle.Normal);
+        font.RequestCharactersInTexture(Current.titleCn + Current.titleEn + Current.bodyCn + Current.bodyEn + readStatus.text + " / · 已读按 E / Esc 关闭按 E 查看新发现", 24, FontStyle.Normal);
         paragraphs[0].text = language == "en" ? "" : Current.bodyCn;
         paragraphs[1].text = language == "cn" ? "" : Current.bodyEn;
         // A dynamic atlas rebuild must refresh unchanged title/footer meshes too.

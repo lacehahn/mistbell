@@ -26,19 +26,22 @@ fi
 CMD=("$APP")
 if [ "${MISTBELL_GFX_DIRECT:-0}" = "1" ]; then CMD+=(-force-gfx-direct); fi
 CMD+=("${SHOT_ARGS[@]}")
-"${CMD[@]}" -screen-width 1920 -screen-height 1080 -screen-fullscreen 0 -logFile "$LOG" &
-PID=$!
-for _ in $(seq 1 240); do   # 合批 2671 个源对象后启动变慢，原 90s 会误杀
-  kill -0 "$PID" 2>/dev/null || break
+# ⚠️ 必须用 open -n -a 启动：直接执行二进制时窗口不是 active app，Unity 不渲染，
+# 演示/截图会静默卡住（日志停在启动尾部、exit 124）。open 会激活窗口。
+pkill -x Mistbell 2>/dev/null   # 僵尸实例会占住窗口，让新实例卡在启动尾部
+sleep 1
+open -n -a "$PWD/Builds/Mac/Mistbell.app" --args "${CMD[@]:1}" -screen-width 1920 -screen-height 1080 -screen-fullscreen 0 -logFile "$LOG"
+# open 不返回 PID：按进程名等它自己退出，最多 240 s。
+for _ in $(seq 1 240); do
+  pgrep -x Mistbell >/dev/null || break
   sleep 1
 done
 TIMED_OUT=0
-if kill -0 "$PID" 2>/dev/null; then
+if pgrep -x Mistbell >/dev/null; then
   TIMED_OUT=1
-  kill "$PID" 2>/dev/null
+  pkill -x Mistbell 2>/dev/null
 fi
-wait "$PID" 2>/dev/null
-RC=$?
+RC=0
 if [ "$TIMED_OUT" -eq 1 ]; then RC=124; fi
 
 echo "LOG=$LOG"

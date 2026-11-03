@@ -41,7 +41,7 @@ def main():
             p.unlink(missing_ok=True)
         save_log = demo('save', '-demo-save')
         saved = json.loads(files[0].read_text())
-        assert set(saved) == {'position', 'rotationY', 'insideInterior', 'doorOpen', 'visitedPois', 'version', 'savedAtUnix'}
+        assert set(saved) == {'position', 'rotationY', 'insideInterior', 'doorOpen', 'visitedPois', 'version', 'savedAtUnix', 'visitCounts'}
         assert saved['version'] == 1 and saved['insideInterior'] and saved['doorOpen']
         assert saved['visitedPois'] == ['gergeti_p04']
         assert '[SAVE_DEMO] pass=true' in save_log
