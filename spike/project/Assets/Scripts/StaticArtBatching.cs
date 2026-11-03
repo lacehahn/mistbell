@@ -86,6 +86,9 @@ public static class StaticArtBatching
         var slabMaterialGroups=new Dictionary<Material,int>();
         foreach(var r in sources)
         {
+            // Keep the high cone's light bounds separate from the floor/furnishing batch:
+            // URP selects only four additional lights per renderer, otherwise its two uplights are lost.
+            if(r.name=="Interior_DomeInner" || r.name=="Interior_OculusSky") continue;
             if(!r.enabled || r.isPartOfStaticBatch || r.forceRenderingOff || r.HasPropertyBlock() || r.lightmapIndex>=0 && r.lightmapIndex<65534) continue;
             var filter=r.GetComponent<MeshFilter>();
             if(filter==null || filter.sharedMesh==null || !filter.sharedMesh.isReadable) continue;

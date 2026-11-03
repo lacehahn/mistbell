@@ -9,6 +9,22 @@ public sealed class ChurchInterior : MonoBehaviour
     public MeshCollider floor;
     public Collider threshold;
     public Light[] lamps;
+    public Light[] domeUplights;
+    float domeLightIntensity, domeFadeStart, domeFadeTime;
+    bool lookingUp;
+    public void SetLookingUp(bool value)
+    {
+        if(lookingUp==value) return;
+        lookingUp=value;
+        domeFadeStart=domeLightIntensity; domeFadeTime=0;
+    }
+    void UpdateDomeLights()
+    {
+        domeFadeTime+=Time.deltaTime;
+        float target=inside?(lookingUp?1.6f:.35f):0;
+        domeLightIntensity=Mathf.Lerp(domeFadeStart,target,Mathf.SmoothStep(0,1,Mathf.Clamp01(domeFadeTime/.4f)));
+        foreach(var lamp in domeUplights) lamp.intensity=domeLightIntensity;
+    }
     public Renderer[] shafts;
     public Light chandelierLamp;
     public GameObject detailRoot;
@@ -49,7 +65,7 @@ public sealed class ChurchInterior : MonoBehaviour
         var domeRenderers=detailRoot.GetComponentsInChildren<MeshRenderer>(true);
         int windows=Array.FindAll(domeRenderers,r=>r.name.StartsWith("Interior_DrumWindow_")).Length;
         int ribs=Array.FindAll(domeRenderers,r=>r.name.StartsWith("Interior_DrumRib_")).Length;
-        Debug.Log($"[DOME] drum_sides=12 drum_h=3.6 windows={windows} ribs={ribs} cone_h=2.4 aperture=0.5 look_target=10.2");
+        Debug.Log($"[DOME] drum_sides=12 drum_h=3.6 windows={windows} ribs={ribs} cone_h=2.4 aperture=0.8 look_target=10.2");
         if(windows!=12 || ribs!=12) throw new InvalidOperationException("Incomplete interior drum");
         if(shell!=null) outdoorStone=shell.sharedMaterials;
         foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill" || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=false;
@@ -88,6 +104,7 @@ public sealed class ChurchInterior : MonoBehaviour
     }
     void Update()
     {
+        UpdateDomeLights();
         if (!opening) return;
         openingTime += Time.deltaTime;
         OpenDegrees = 100 * Mathf.SmoothStep(0,1,Mathf.Clamp01(openingTime/.8f));
@@ -116,6 +133,7 @@ public sealed class ChurchInterior : MonoBehaviour
     {
         if (value == inside || PlayerController.CaptureMode) return;
         inside = value;
+        domeFadeStart=domeLightIntensity; domeFadeTime=0;
         SetDetail(value);
         foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill" || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=value;
         if(chandelierLamp!=null) chandelierLamp.transform.position=value?indoorChandelierPosition:outdoorChandelierPosition;

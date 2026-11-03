@@ -653,7 +653,7 @@ public sealed partial class PlayerController : MonoBehaviour
         // 跟随相机防穿过墙/地形：从头部向理想机位做球形扫掠，撞到东西就拉近。
         if(cinemaActive) return;
         bool inside=interior!=null && interior.Contains(transform.position);
-        if(interior!=null) interior.SetInside(inside);
+        if(interior!=null) { interior.SetInside(inside); interior.SetLookingUp(inside && lookUp); }
         CheckAutosave(inside);
         follow.fieldOfView=Mathf.MoveTowards(follow.fieldOfView,inside?50:followFov,Time.deltaTime*30);   // 38 装不下"地板+吊灯+天花板"，室内用 50 广角
         // 室内人眼机位只比脚高 1.75 m：看向 +3.2 会把角色和长椅全部推出画面，改看 +2.0（微仰但保人可见）。
@@ -875,7 +875,7 @@ public sealed partial class PlayerController : MonoBehaviour
         // 天花板在 8.6 m，50° 视野下与"角色入画"互斥（实测 player_screen_y 会掉到 1.23）；
         // 取舍：保证角色/长椅/吊灯同框，天花板改为"存在即通过"，仍在日志里记录可见比例。
         bool composition=chandelierVp.z>follow.nearClipPlane && chandelierVp.x>=0 && chandelierVp.x<=1 && cy>=.15f && cy<=.80f;   // 天花板在 8.6m 与"角色入画"几何互斥，改为仅记录
-        return detailPass && composition && candles==8 && frames==3 && additive && Mathf.Abs(alpha-.08f)<.001f && luma>=.18f && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
+        return detailPass && composition && candles==8 && frames==3 && additive && Mathf.Abs(alpha-.08f)<.001f && luma>=.18f && luma<=.45f && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
     }
     // Sample actual ceiling triangles with depth occlusion, rather than counting object bounds.
     // Temporary query colliders are isolated from gameplay and removed before the next frame.
@@ -978,12 +978,27 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(1.2f);
         yield return new WaitForEndOfFrame();
         string lookupShot=InteriorShot("interior_lookup");
+        var domeFrame=ScreenCapture.CaptureScreenshotAsTexture();
+        double domeSum=0; int domePixels=0;
+        // Display-referred Rec.709 over the central 60% of both image dimensions.
+        for(int y=domeFrame.height/5;y<domeFrame.height*4/5;y++)
+        for(int x=domeFrame.width/5;x<domeFrame.width*4/5;x++)
+        {
+            Color c=domeFrame.GetPixel(x,y); domeSum+=.2126*c.r+.7152*c.g+.0722*c.b; domePixels++;
+        }
+        Destroy(domeFrame);
+        float headroomLuma=(float)(domeSum/domePixels);
+        int windowFills=Array.FindAll(interior.detailRoot.GetComponentsInChildren<MeshRenderer>(),r=>r.name.StartsWith("Interior_DrumWindowFill_")).Length;
+        float domeIntensity=interior.domeUplights[0].intensity;
+        Debug.Log(FormattableString.Invariant($"[DOME_LIGHT] uplights={interior.domeUplights.Length} intensity={domeIntensity:F1} windows_emissive={windowFills} cone_color=#8A8177 aperture=0.8 headroom_luma={headroomLuma:F4}"));
+        bool domeLightPass=headroomLuma>=.28f && interior.domeUplights.Length==2 && windowFills==12 &&
+            Array.TrueForAll(interior.domeUplights,l=>Mathf.Abs(l.intensity-1.6f)<.001f);
         float ceilingFx=0f; bool ceilingSeen=false;
         MeasureCeiling(out ceilingSeen,out ceilingFx,out bool domeSeen);
         Debug.Log(FormattableString.Invariant($"[LOOKUP] ceiling_visible={ceilingSeen.ToString().ToLowerInvariant()} dome_visible={domeSeen.ToString().ToLowerInvariant()} ceiling_pct={ceilingFx:F4} bytes={(new FileInfo(lookupShot)).Length}"));
         lookUp=false;
         yield return new WaitForSeconds(.4f);
-        bool pass=ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
+        bool pass=domeLightPass && ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
             Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==14 && interior.shafts.Length==3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;

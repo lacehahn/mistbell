@@ -186,7 +186,7 @@ public static class ChurchInteriorBuilder
         }
         OpenIndoorDrum(church,interior);
         BuildCeiling(detail);
-        BuildDrum(detail);
+        BuildDrum(detail,interior);
         BuildFloor(detail,interior);
         DressPews(church,detail,interior);
         interior.lamps=lamps.ToArray();
@@ -390,16 +390,40 @@ public static class ChurchInteriorBuilder
         }
         interior.drumCutFilters=filters.ToArray(); interior.drumOutdoorMeshes=outside.ToArray(); interior.drumIndoorMeshes=inside.ToArray();
     }
-    static void BuildDrum(Transform parent)
+    static void BuildDrum(Transform parent,ChurchInterior interior)
     {
         var stone=Lit("M_InteriorDrum",new Color32(140,133,121,255),new Color(.34f,.32f,.29f));
-        var dark=Lit("M_InteriorDome",new Color32(110,103,93,255),new Color(.26f,.245f,.22f));
+        var coneColor=(Color)new Color32(138,129,119,255);
+        // Emissive energy is authored in linear light; this spike renders in Gamma.
+        // Convert the requested 0.05 floor for that pipeline rather than losing it to gamma/tonemapping.
+        var coneEmission=new Color(.05f,.05f,.05f);
+        if(PlayerSettings.colorSpace==ColorSpace.Gamma) coneEmission=coneEmission.gamma;
+        var dark=Lit("M_InteriorDome",coneColor,coneEmission);
         stone.globalIlluminationFlags=dark.globalIlluminationFlags=MaterialGlobalIlluminationFlags.BakedEmissive;
         var cold=Lit("M_InteriorDrumDaylight",new Color32(132,170,211,255),new Color(.48f,.68f,.95f));
         var shaft=new Material(Shader.Find("Mistbell/InteriorShaft")) {name="M_InteriorDrumShaft"};
         shaft.SetColor("_BaseColor",new Color(.45f,.64f,.9f,.10f)); shaft.SetFloat("_DstBlend",(float)BlendMode.One);
         AssetDatabase.DeleteAsset("Assets/Settings/M_InteriorDrumShaft.mat"); AssetDatabase.CreateAsset(shaft,"Assets/Settings/M_InteriorDrumShaft.mat");
+        var windowEmission=(Color)new Color32(207,226,245,255);
+        var windowFill=Lit("M_InteriorDrumWindowFill",windowEmission,windowEmission*1.2f);
+        var skyEmission=(Color)new Color32(191,215,234,255);
+        var skyFill=Lit("M_InteriorOculusSky",skyEmission,skyEmission);
+        // Clear EmissiveIsBlack before URP validates/saves this material, or its emission keyword is removed.
+        skyFill.globalIlluminationFlags=MaterialGlobalIlluminationFlags.BakedEmissive;
+        skyFill.SetFloat("_Cull",0); EditorUtility.SetDirty(skyFill);
         var center=new Vector3(-2,0,0);
+        interior.domeUplights=new Light[2];
+        for(int i=0;i<2;i++)
+        {
+            var lamp=new GameObject("Interior_DomeUplight_"+i).AddComponent<Light>();
+            lamp.transform.SetParent(parent,true);
+            lamp.transform.position=center+new Vector3(i==0?-1.8f:1.8f,10.5f,0);
+            lamp.transform.rotation=Quaternion.LookRotation(Vector3.up);
+            lamp.type=LightType.Point; lamp.range=8; lamp.intensity=.35f;
+            lamp.color=new Color32(255,224,184,255); lamp.shadows=LightShadows.None;
+            lamp.renderMode=LightRenderMode.ForcePixel;
+            interior.domeUplights[i]=lamp;
+        }
         float apothem=3.2f*Mathf.Cos(Mathf.PI/12),outer=4.2f*Mathf.Cos(Mathf.PI/12);
         for(int side=0;side<12;side++)
         {
@@ -442,6 +466,10 @@ public static class ChurchInteriorBuilder
             Arch(parent,"Interior_DrumWindow_"+side,glowCenter,.7f,1.4f,cold);
             var glow=parent.Find("Interior_DrumWindow_"+side); glow.rotation=Quaternion.LookRotation(radial);
             glow.GetComponent<Renderer>().shadowCastingMode=ShadowCastingMode.Off;
+            // Inward-facing emissive substitute; no additional real-time window light.
+            var window=Primitive(parent,"Interior_DrumWindowFill_"+side,PrimitiveType.Quad,
+                P(0,10.4f,apothem+.02f),new Vector3(.4f,.4f,1),windowFill);
+            window.transform.rotation=Quaternion.LookRotation(radial);
             if(side%3==0)
             {
                 Vector3 top=P(0,10.3f,apothem-.02f),bottom=top-radial*1.8f-Vector3.up*3.7f;
@@ -449,17 +477,20 @@ public static class ChurchInteriorBuilder
                 beam.transform.rotation=Quaternion.LookRotation(Vector3.Cross(tangent,top-bottom).normalized,(top-bottom).normalized);
             }
         }
-        // Downward/inward winding; the final ring leaves a real 0.5 m diameter oculus.
+        // Downward/inward winding; the final ring leaves a real 0.8 m diameter oculus.
         var coneV=new List<Vector3>(); var coneT=new List<int>(); const int segments=48;
         for(int i=0;i<segments;i++)
         {
             float a=i*Mathf.PI*2/segments,b=(i+1)*Mathf.PI*2/segments; int n=coneV.Count;
             Vector3 C(float angle,float radius,float y) => center+new Vector3(Mathf.Cos(angle)*radius,y,Mathf.Sin(angle)*radius);
-            coneV.AddRange(new[]{C(a,3.2f,12.2f),C(b,3.2f,12.2f),C(b,.25f,14.6f),C(a,.25f,14.6f)});
+            coneV.AddRange(new[]{C(a,3.2f,12.2f),C(b,3.2f,12.2f),C(b,.4f,14.6f),C(a,.4f,14.6f)});
             coneT.AddRange(new[]{n,n+1,n+2,n,n+2,n+3});
         }
         Surface(parent,"Interior_DomeInner",coneV.ToArray(),coneT.ToArray(),dark);
-        Debug.Log("[DOME] drum_sides=12 drum_h=3.6 windows=12 ribs=12 cone_h=2.4 aperture=0.5 look_target=10.2");
+        var oculus=Primitive(parent,"Interior_OculusSky",PrimitiveType.Quad,center+Vector3.up*14.65f,
+            new Vector3(.84f,.84f,1),skyFill);
+        oculus.transform.rotation=Quaternion.LookRotation(Vector3.up);
+        Debug.Log("[DOME] drum_sides=12 drum_h=3.6 windows=12 ribs=12 cone_h=2.4 aperture=0.8 look_target=10.2");
     }
 
     static void BuildFloor(Transform parent,ChurchInterior interior)
