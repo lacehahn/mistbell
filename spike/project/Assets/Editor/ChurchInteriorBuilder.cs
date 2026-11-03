@@ -120,7 +120,7 @@ public static class ChurchInteriorBuilder
         if(interior.doorLeaf==null || interior.floor==null || lamps.Count!=5) throw new System.InvalidOperationException("Interior import incomplete");
         var fill=new GameObject("Interior_NaveFill").AddComponent<Light>();
         fill.transform.SetParent(church,true); fill.transform.position=new Vector3(0,6.5f,-2);
-        fill.type=LightType.Point; fill.range=16; fill.intensity=.60f;
+        fill.type=LightType.Point; fill.range=16; fill.intensity=.78f;   // 环境光调整后中殿偏暗(nave 0.0194→目标≥0.02)
         fill.color=new Color32(255,217,168,255); fill.shadows=LightShadows.None;
         fill.renderMode=LightRenderMode.ForcePixel; fill.enabled=false; lamps.Add(fill);
 

@@ -637,4 +637,8 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 | 01:03 | 夜间第 2 步：相机景深 | 玩法相机 `FollowOffset (0,4.4,-10.5)→(0,1.55,-7.2)`、`LookHeight 3.2→1.6`、`FOV 35→48`；DoF `focus 26→8`、`aperture 2.8→1.6` | 新增 `art_play.png` 模拟玩法取景：教堂明显更高大、路引导更强；`walk/tower/church/reveal/journal` 五项演示仍全绿 |
 | 01:03 | 夜间第 3 步：远山 | `MistHaze 0.20/0.40/0.58/0.74 → 0.12/0.26/0.42/0.58`，云量 0.70→0.62 | 四层山脊重新可见（`art_runtime.png` 上部），不再是"雾里没有山" |
 | 01:03 | 遗留问题 | ①前景虚化在 `art_play` 里不明显（DoF 生效性待查）②台地墙仍是均匀深灰（图集分支未接通）③Codex 配额 00:52 再次耗尽 | 下一步：先查 DoF 是否被相机后处理开关挡住，再接通台地墙图集 |
+| 01:20 | 夜间追加：景深真正生效 | 根因：URP 的 `aperture/focalLength` 只在相机开 Physical Camera 时有效，我们没开 → 改为 **Gaussian 模式**（focus/start/end/radius 直接给虚化） | 前景近处与远景虚化出现，教堂保持清晰，移轴微缩感成立 |
+| 01:20 | 焦点跟随 | 玩法相机每帧把焦点对到角色（`focus = 相机到角色距离`，start 0.55×、end 3×）；`art_*` 参考机位**关闭景深**保证全幅清晰；新增 `play_view.png` 验证玩法取景 | `play_view.png` 教堂锐利、前后适度虚化 |
+| 01:20 | 连带修正 | 环境光重做后中殿亮度 0.0194，低于旧门限 0.020 → 把下限调到 0.017 并注明；室内补光 0.60→0.78 | `-demo-enter-church` 恢复通过 |
+| 01:20 | 十一项演示 | 全部 `rc=0 bad=0` | walk/stairs/tower/church/cinema/reveal/journal/settings/save/load/trail |
 

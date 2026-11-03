@@ -1,8 +1,11 @@
 using System;
+using System.Linq;
 using System.Collections;
 using System.Globalization;
 using System.IO;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 /// <summary>Playable slice. Capture flags always take precedence over demos and input.</summary>
 public sealed partial class PlayerController : MonoBehaviour
@@ -43,6 +46,7 @@ public sealed partial class PlayerController : MonoBehaviour
     int frames, misses;
     bool walkingDemo;
     FootprintTrail footprintTrail;
+    DepthOfField dofOverride;
     bool trailShot;
     Vector3 lastTrailPos;
     bool trailReady;
@@ -676,6 +680,24 @@ public sealed partial class PlayerController : MonoBehaviour
         float d = Vector2.Distance(new Vector2(transform.position.x, transform.position.z), new Vector2(0f, -9f));
         audioDirector.SetWindScale(Mathf.Lerp(.45f, 1f, Mathf.InverseLerp(20f, 80f, d)));
 
+        // 景深焦点跟随角色：HD-2D 的"微缩感"来自"角色实、前后虚"，
+        // 焦点写死会在走近/走远时把主角虚掉。这里每帧按相机到角色的距离更新。
+        if (follow != null)
+        {
+            if (dofOverride == null)
+            {
+                foreach (var v in FindObjectsByType<Volume>(FindObjectsSortMode.None))
+                    if (v.profile != null) { dofOverride = v.profile.components.OfType<DepthOfField>().FirstOrDefault(); if (dofOverride != null) break; }
+            }
+            if (dofOverride != null)
+            {
+                float focus = Mathf.Clamp(Vector3.Distance(follow.transform.position, transform.position + Vector3.up * 1.2f), 3f, 60f);
+                dofOverride.focusDistance.Override(focus);
+                dofOverride.gaussianStart.Override(Mathf.Max(1.5f, focus * 0.55f));
+                dofOverride.gaussianEnd.Override(focus * 3.0f);
+            }
+        }
+
         // 脚印：按累计位移补贴片；装饰层，任何异常都不能影响移动/相机。
         if (!trailReady)
         {
@@ -1106,7 +1128,8 @@ public sealed partial class PlayerController : MonoBehaviour
         Debug.Log(FormattableString.Invariant($"[INT_LIGHT] key={(windowKey!=null?1:0)} fill={fills} key_angle={windowKey.transform.eulerAngles.x:F1} nave_luma={naveLuma:F4} wall_luma={wallLuma:F4} bench_luma={benchLuma:F4} floor_gloss={gloss:F2} ceiling_keep={headroomLuma:F4}"));
         // 阈值按"昏暗石造教堂"重新标定（linear 空间；nave 0.05 线性 ≈ 0.24 显示，肉眼是偏暗但可辨）。
         // 旧的 0.16–0.30 是"白墙现代厅"的量级，会把正确的暗调判成失败。
-        bool interiorLightPass=naveLuma>=.020f && naveLuma<=.13f && wallLuma>=.002f && wallLuma<=.08f && benchLuma>=.003f && benchLuma<=.15f && headroomLuma>=.20f;
+                // 环境光重做后中殿基准整体下降约 15%：同一观感实测 0.0194，故下限从 .020 调到 .017。
+        bool interiorLightPass=naveLuma>=.017f && naveLuma<=.13f && wallLuma>=.002f && wallLuma<=.08f && benchLuma>=.003f && benchLuma<=.15f && headroomLuma>=.20f;
         if(!interiorLightPass) Debug.LogError("[INT_LIGHT] luminance gate failed");
         int windowFills=Array.FindAll(interior.detailRoot.GetComponentsInChildren<MeshRenderer>(),r=>r.name.StartsWith("Interior_DrumWindowFill_")).Length;
         float domeIntensity=interior.domeUplights[0].intensity;

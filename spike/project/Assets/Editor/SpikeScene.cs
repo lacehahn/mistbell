@@ -236,7 +236,7 @@ public static class SpikeScene
         // 模拟"低机位 + FOV48"的玩法取景，用来验证相机改动（艺术图那几张是固定机位，不受玩法相机影响）
         var playEye = EyeAt(4f, -30f) + new Vector3(0f, -0.15f, -7.2f);
         var playAim = new Vector3(0f, GroundY(-18f) + 1.6f, -18f);
-        rig.poses.Add(ShotRig.Look("art_play", playEye, playAim, 48f));
+        rig.poses.Add(ShotRig.Look("play_view", playEye, playAim, 48f));   // 不带 art_ 前缀 → 会启用景深
         var groundPose = ShotRig.Look("art_ground", EyeAt(6f, -23f), new Vector3(0f, GroundY(-20f), -20f), 36f);
         rig.poses.Add(groundPose);
 
@@ -2337,8 +2337,14 @@ public static class SpikeScene
         bloom.tint.Override(new Color(1f, 0.95f, 0.88f));
 
         var dof = profile.Add<DepthOfField>(true);
-        dof.mode.Override(DepthOfFieldMode.Bokeh);
-        dof.focusDistance.Override(8f);
+        // Bokeh 模式的 aperture/focalLength 只有开启相机物理属性才生效（我们没开），
+        // 所以之前景深几乎看不出。改用 Gaussian：不依赖物理相机，靠 start/end/radius 直接给虚化。
+        dof.mode.Override(DepthOfFieldMode.Gaussian);
+        dof.focusDistance.Override(20f);
+        dof.gaussianStart.Override(12f);
+        dof.gaussianEnd.Override(60f);
+        dof.gaussianMaxRadius.Override(1.6f);
+        dof.highQualitySampling.Override(true);
         dof.aperture.Override(1.6f);
         dof.focalLength.Override(50f);
         dof.bladeCount.Override(6);

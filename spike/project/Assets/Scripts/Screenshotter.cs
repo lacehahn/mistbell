@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections;
 using System.IO;
 using UnityEngine;
@@ -95,6 +96,25 @@ public class Screenshotter : MonoBehaviour
                 {
                     rig.Apply(i);
                     var p = rig.poses[i];
+                    // 按该机位的视线中心对焦：远景机位不该被前景虚化规则坑到（反之亦然）
+                    var camNow = Camera.main;
+                    var dofComp = vol.profile != null ? vol.profile.components.OfType<DepthOfField>().FirstOrDefault() : null;
+                    if (dofComp != null && camNow != null)
+                    {
+                        // art_* 是用来判断材质/构图的参考图，必须全幅清晰；景深只在玩法视角里生效。
+                        bool referenceShot = p.name.StartsWith("art_", System.StringComparison.Ordinal);
+                        dofComp.active = !referenceShot;
+                        if (!referenceShot)
+                        {
+                            float dist = 25f;
+                            if (Physics.Raycast(camNow.transform.position, camNow.transform.forward, out var focusHit, 600f))
+                                dist = focusHit.distance;
+                            dist = Mathf.Clamp(dist, 5f, 400f);
+                            dofComp.focusDistance.Override(dist);
+                            dofComp.gaussianStart.Override(Mathf.Max(2f, dist * 0.55f));
+                            dofComp.gaussianEnd.Override(dist * 3.2f);
+                        }
+                    }
                     yield return null;
                     yield return null;
                     yield return null;
