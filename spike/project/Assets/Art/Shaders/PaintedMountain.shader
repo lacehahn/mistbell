@@ -8,6 +8,8 @@ Shader "Mistbell/PaintedMountain"
         _HazeColor ("Haze color", Color) = (0.79, 0.84, 0.89, 1)
         _Haze ("Haze amount", Range(0,1)) = 0
         _HazeBottom ("Extra haze at foot", Range(0,1)) = 0
+        _HorizonFogColor ("Sampled sky horizon", Color) = (1,1,1,1)
+        _HorizonFog ("Vertical horizon veil", Range(0,1)) = 0
     }
     SubShader
     {
@@ -25,13 +27,16 @@ Shader "Mistbell/PaintedMountain"
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
             CBUFFER_START(UnityPerMaterial)
                 float4 _HazeColor;
+                float4 _HorizonFogColor;
+                float _HorizonFog;
                 float _Haze, _HazeBottom;
             CBUFFER_END
             struct Attributes { float4 positionOS:POSITION; float2 uv:TEXCOORD0; };
-            struct Varyings { float4 positionCS:SV_POSITION; float2 uv:TEXCOORD0; };
+            struct Varyings { float4 positionCS:SV_POSITION; float2 uv:TEXCOORD0; float3 direction:TEXCOORD1; };
             Varyings Vert(Attributes v)
             {
                 Varyings o;
+                o.direction=TransformObjectToWorld(v.positionOS.xyz)-_WorldSpaceCameraPos;
                 float3 view=TransformWorldToView(TransformObjectToWorld(v.positionOS.xyz));
                 o.positionCS=mul(UNITY_MATRIX_P,float4(view,1));
                 // Keep the physical card and projected XY at 1800m while putting
@@ -49,6 +54,8 @@ Shader "Mistbell/PaintedMountain"
                 float footHaze=saturate(1.0-i.uv.y/.12) * _HazeBottom;
                 half amount=saturate(_Haze+footHaze);
                 c.rgb=lerp(c.rgb,_HazeColor.rgb,amount);
+                float verticalFog=(1.0-smoothstep(.10,.24,normalize(i.direction).y))*_HorizonFog;
+                c.rgb=lerp(c.rgb,_HorizonFogColor.rgb,verticalFog);
                 return c;
             }
             ENDHLSL

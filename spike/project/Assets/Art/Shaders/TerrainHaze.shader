@@ -23,6 +23,8 @@ Shader "Mistbell/TerrainHaze"
         _HazeEnd ("Haze end metres", Float) = 135
         _HazePower ("Haze power", Float) = 1.4
         _HazeStrength ("Haze strength", Range(0,1)) = 0.92
+        _FarHazeStrength ("Far snow haze (terrain only)", Range(0,1)) = 0
+        _FarHazeColor ("Sampled sky horizon", Color) = (1,1,1,1)
     }
     SubShader
     {
@@ -48,7 +50,8 @@ Shader "Mistbell/TerrainHaze"
             TEXTURE2D(_SnowLow); SAMPLER(sampler_SnowLow);
             TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap);
             CBUFFER_START(UnityPerMaterial)
-                float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor;
+                float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor, _FarHazeColor;
+                float _FarHazeStrength;
                 float _SnowRelief;
                 float _StoneSurface, _SnowAlbedo, _RockSnowCap, _Footprint, _RockOnly;
                 float _NormalScale, _Metallic, _Smoothness;
@@ -218,7 +221,16 @@ Shader "Mistbell/TerrainHaze"
                 float low = (1-smoothstep(0,15,input.positionWS.y)) * step(0,input.positionWS.y);
                 float f = pow(t, _HazePower) * _HazeStrength * low;
                 color = max(0, color - _Footprint * .08);
-                return half4(lerp(color, _HazeColor.rgb, f), 1);
+                color = lerp(color, _HazeColor.rgb, f);
+                // Far snow falls below world Y=0: the old low-height gate misses it.
+                // Opt-in on the terrain material; church, props and paving stay intact.
+                float farHaze = smoothstep(600.0, 1100.0, d) * _FarHazeStrength;
+                // The visible horizon is a nearer snow crest, not the mesh's far edge.
+                // Match its atmosphere with the foot of the depthless mountain cards.
+                float elevation = normalize(input.positionWS - _WorldSpaceCameraPos).y;
+                float crestHaze = smoothstep(55.0, 85.0, d)
+                    * (1.0 - smoothstep(.10, .24, elevation)) * saturate(_FarHazeStrength/.85);
+                return half4(lerp(color, _FarHazeColor.rgb, max(farHaze, crestHaze)), 1);
             }
             ENDHLSL
         }

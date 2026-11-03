@@ -236,6 +236,7 @@ public static class SpikeScene
 
         rig.Apply(0);
         MountainBackdrop.Build(cam, GameObject.Find("Mountain Ridges"));
+        HorizonHazeSky.Apply();
 
         Directory.CreateDirectory("Assets/Scenes");
         const string scenePath = "Assets/Scenes/ArtSpike.unity";
@@ -1673,7 +1674,8 @@ public static class SpikeScene
         mat.SetColor("_HorizonColor", Hex("#DCE6EF"));
         mat.SetColor("_CloudColor", Hex("#F4F7FA"));
         mat.SetColor("_CloudShadow", Hex("#A9B6C6"));
-        mat.SetFloat("_CloudAmount", .85f);
+        mat.SetFloat("_CloudAmount", .7f);
+        mat.SetFloat("_CloudScale", .6f);
         mat.SetFloat("_CloudHeight", .22f);
         AssetDatabase.DeleteAsset("Assets/Settings/M_SkyGradient.mat");
         AssetDatabase.CreateAsset(mat, "Assets/Settings/M_SkyGradient.mat");

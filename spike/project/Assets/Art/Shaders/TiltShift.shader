@@ -38,6 +38,11 @@ Shader "Mistbell/TiltShift"
             half4 Palette(float4 color, float2 positionCS, float2 uv)
             {
                 const uint bayer[16]={0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5};
+                const uint bayer8[64]={
+                    0,32,8,40,2,34,10,42, 48,16,56,24,50,18,58,26,
+                    12,44,4,36,14,46,6,38, 60,28,52,20,62,30,54,22,
+                    3,35,11,43,1,33,9,41, 51,19,59,27,49,17,57,25,
+                    15,47,7,39,13,45,5,37, 63,31,55,23,61,29,53,21};
                 uint2 pixel=(uint2)positionCS;
                 float threshold=(bayer[(pixel.y&3)*4+(pixel.x&3)]+.5)/16.0-.5;
                 #if defined(UNITY_COLORSPACE_GAMMA)
@@ -59,8 +64,13 @@ Shader "Mistbell/TiltShift"
                 float footBand=smoothstep(.52,.58,screenY)*(1.0-smoothstep(.74,.80,screenY));
                 float footMask=backdrop*footBand;
                 float ditherStrength=_DitherStrength*(1.0-footMask);
+                // The sky and depthless backdrop receive 6-bit / 8x8 at 0.35.
+                // Preserve the authored palette of church, gameplay and interiors.
+                float steps=lerp(31.0,63.0,backdrop);
+                threshold=lerp(threshold,(bayer8[(pixel.y&7)*8+(pixel.x&7)]+.5)/64.0-.5,backdrop);
+                ditherStrength=lerp(_DitherStrength,.35,backdrop)*(1.0-footMask);
                 float3 continuous=srgb;
-                srgb=floor(saturate(srgb+threshold*ditherStrength/31.0)*31.0+.5)/31.0;
+                srgb=floor(saturate(srgb+threshold*ditherStrength/steps)*steps+.5)/steps;
                 srgb=lerp(srgb,continuous,footMask);
                 #if defined(UNITY_COLORSPACE_GAMMA)
                     return half4(srgb,color.a);
