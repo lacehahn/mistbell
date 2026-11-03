@@ -15,8 +15,17 @@ open spike/project/Builds/Mac/Mistbell.app
 | 交互 / 开门 | `E`（进入 POI 半径时左下角出现「按 E 查看」） |
 | 室内抬头看顶 | `F`（仅室内生效，切回再按一次） |
 | 关闭面板 | `E` 或 `Esc` |
+| 设置菜单 | `Esc`（无 POI 面板时打开：音量 / 中文 / English / 双语 / 返回 / 退出） |
+| 启动续玩 | 有存档时按 `C` 继续、`N` 重新开始（3 秒后自动继续） |
 
 带 `-shot` / `-shots` 参数启动时**完全走截图模式**，不会启用玩家控制（保证美术验收链路可复现）。
+
+### 存档
+
+- 路径：`~/Library/Application Support/Lot/Mistbell/mistbell_save.json`（设置同名 `mistbell_settings.json`）
+- 自动存档点：首次踏上台地、首次进入室内、关闭任意 POI 面板
+- 内容：位置 / 朝向 / 是否在室内 / 门是否开启 / 已访问 POI 列表
+- 实测：`[SAVE] load pos=(-2.0,0.374,5.029) inside=true door=true pois=1 delta_m=0.000000`
 
 ## 2. 已验证的体验（都有日志数字）
 
