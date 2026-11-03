@@ -658,7 +658,7 @@ public sealed partial class PlayerController : MonoBehaviour
         follow.fieldOfView=Mathf.MoveTowards(follow.fieldOfView,inside?50:followFov,Time.deltaTime*30);   // 38 装不下"地板+吊灯+天花板"，室内用 50 广角
         // 室内人眼机位只比脚高 1.75 m：看向 +3.2 会把角色和长椅全部推出画面，改看 +2.0（微仰但保人可见）。
         float look=inside?2.0f:LookHeight;
-        if (inside && lookUp) look = 6.4f;   // 抬头：看向 8.2m 的穹顶/天花中心
+        if (inside && lookUp) look = 10.2f;   // 抬头：保持机位与镜头，仅提高目标以纳入鼓座和穹顶
         Vector3 target = transform.position + (inside?ChurchInterior.CameraOffset:FollowOffset);
         Vector3 head = transform.position + Vector3.up * (inside?3.2f:look+.4f);
         Vector3 delta = target - head;
@@ -881,27 +881,36 @@ public sealed partial class PlayerController : MonoBehaviour
     // Temporary query colliders are isolated from gameplay and removed before the next frame.
     void MeasureCeiling(out bool visible,out float fraction)
     {
+        MeasureCeiling(out visible,out fraction,out _);
+    }
+    void MeasureCeiling(out bool visible,out float fraction,out bool domeVisible)
+    {
         const int queryLayer=30, width=160,height=90;
         var queries=new System.Collections.Generic.List<GameObject>();
         var ceilings=new System.Collections.Generic.HashSet<Collider>();
-        foreach(var r in interior.detailRoot.GetComponentsInChildren<MeshRenderer>())
+        var domes=new System.Collections.Generic.HashSet<Collider>();
+        foreach(var r in interior.GetComponentsInChildren<MeshRenderer>())
         {
-            if(!r.enabled || !r.name.StartsWith("Interior_Ceiling")) continue;
+            // Query source geometry even when it was merged into a render batch.
+            if(!r.enabled || !r.gameObject.activeInHierarchy || r.name.StartsWith("StaticArtBatch") || r.name.StartsWith("Interior_DrumWindow") ||
+                Array.Exists(r.sharedMaterials,m=>m==null || m.renderQueue>=2500)) continue;
             var go=new GameObject("CeilingVisibilityQuery"); go.layer=queryLayer;
             go.transform.SetPositionAndRotation(r.transform.position,r.transform.rotation);
             go.transform.localScale=r.transform.lossyScale;
             var collider=go.AddComponent<MeshCollider>(); collider.sharedMesh=r.GetComponent<MeshFilter>().sharedMesh;
-            queries.Add(go); ceilings.Add(collider);
+            queries.Add(go);
+            if(r.name.StartsWith("Interior_Ceiling") || r.name.StartsWith("Interior_Drum") || r.name=="Interior_DomeInner") ceilings.Add(collider);
+            if(r.name=="Interior_DomeInner") domes.Add(collider);
         }
         Physics.SyncTransforms();
-        int covered=0; visible=false;
+        int covered=0,domePixels=0; visible=false; domeVisible=false;
         for(int y=0;y<height;y++) for(int x=0;x<width;x++)
         {
             var ray=follow.ViewportPointToRay(new Vector3((x+.5f)/width,(y+.5f)/height,0));
-            if(Physics.Raycast(ray,out var hit,follow.farClipPlane,(1<<queryLayer)|(1<<BlockerLayer),QueryTriggerInteraction.Ignore) && ceilings.Contains(hit.collider))
-            { covered++; if((y+.5f)/height>=.88f) visible=true; }
+            if(Physics.Raycast(ray,out var hit,follow.farClipPlane,1<<queryLayer,QueryTriggerInteraction.Ignore) && ceilings.Contains(hit.collider))
+            { covered++; if((y+.5f)/height>=.88f) visible=true; if(domes.Contains(hit.collider)) domePixels++; }
         }
-        fraction=(float)covered/(width*height);
+        fraction=(float)covered/(width*height); domeVisible=domePixels>=8;
         foreach(var go in queries) { go.SetActive(false); Destroy(go); }
     }
 
@@ -970,11 +979,11 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForEndOfFrame();
         string lookupShot=InteriorShot("interior_lookup");
         float ceilingFx=0f; bool ceilingSeen=false;
-        MeasureCeiling(out ceilingSeen,out ceilingFx);
-        Debug.Log(FormattableString.Invariant($"[LOOKUP] png={lookupShot} ceiling_visible={ceilingSeen.ToString().ToLowerInvariant()} ceiling_pct={ceilingFx:F4} bytes={(new FileInfo(lookupShot)).Length}"));
+        MeasureCeiling(out ceilingSeen,out ceilingFx,out bool domeSeen);
+        Debug.Log(FormattableString.Invariant($"[LOOKUP] ceiling_visible={ceilingSeen.ToString().ToLowerInvariant()} dome_visible={domeSeen.ToString().ToLowerInvariant()} ceiling_pct={ceilingFx:F4} bytes={(new FileInfo(lookupShot)).Length}"));
         lookUp=false;
         yield return new WaitForSeconds(.4f);
-        bool pass=InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
+        bool pass=ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
             Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==14 && interior.shafts.Length==3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;

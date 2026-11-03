@@ -17,9 +17,12 @@ public sealed class ChurchInterior : MonoBehaviour
     public Material[] pewOutdoorMaterials;
     public Material pewWood, pewLegs;
     public int floorSlabs;
+    public MeshFilter[] drumCutFilters;
+    public Mesh[] drumOutdoorMeshes, drumIndoorMeshes;
     [NonSerialized] public Renderer pewBatch;
     void SetDetail(bool value)
     {
+        if(drumCutFilters!=null) for(int i=0;i<drumCutFilters.Length;i++) drumCutFilters[i].sharedMesh=value?drumIndoorMeshes[i]:drumOutdoorMeshes[i];
         if(pewBatch!=null) pewBatch.sharedMaterials=value?new[]{pewWood,pewLegs}:new[]{pewOutdoorMaterials[0],pewOutdoorMaterials[0]};
         if(detailRoot!=null) detailRoot.SetActive(value);
         if(floor!=null) floor.GetComponent<Renderer>().enabled=!value;
@@ -43,6 +46,11 @@ public sealed class ChurchInterior : MonoBehaviour
     void Awake()
     {
         SetDetail(false);
+        var domeRenderers=detailRoot.GetComponentsInChildren<MeshRenderer>(true);
+        int windows=Array.FindAll(domeRenderers,r=>r.name.StartsWith("Interior_DrumWindow_")).Length;
+        int ribs=Array.FindAll(domeRenderers,r=>r.name.StartsWith("Interior_DrumRib_")).Length;
+        Debug.Log($"[DOME] drum_sides=12 drum_h=3.6 windows={windows} ribs={ribs} cone_h=2.4 aperture=0.5 look_target=10.2");
+        if(windows!=12 || ribs!=12) throw new InvalidOperationException("Incomplete interior drum");
         if(shell!=null) outdoorStone=shell.sharedMaterials;
         foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill" || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=false;
         if(chandelierLamp!=null) chandelierLamp.transform.position=outdoorChandelierPosition;

@@ -9,7 +9,7 @@ public static class ChurchInteriorBuilder
     {
         var m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name=name };
         m.SetColor("_BaseColor",color); m.SetFloat("_Smoothness",.12f);
-        if(emission.maxColorComponent>0) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor",emission); if(name=="M_InteriorWood" || name=="M_InteriorStone" || name=="M_InteriorGold" || name.StartsWith("M_InteriorSlab_") || name.StartsWith("M_InteriorPew") || name=="M_InteriorAisle" || name=="M_InteriorCeiling") m.globalIlluminationFlags=MaterialGlobalIlluminationFlags.BakedEmissive; }
+        if(emission.maxColorComponent>0) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor",emission); if(name=="M_InteriorWood" || name=="M_InteriorStone" || name=="M_InteriorGold" || name.StartsWith("M_InteriorSlab_") || name.StartsWith("M_InteriorPew") || name=="M_InteriorAisle" || name=="M_InteriorCeiling" || name.StartsWith("M_InteriorDrum") || name=="M_InteriorDome") m.globalIlluminationFlags=MaterialGlobalIlluminationFlags.BakedEmissive; }
         string path="Assets/Settings/"+name+".mat";
         AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(m,path); return m;
     }
@@ -184,7 +184,9 @@ public static class ChurchInteriorBuilder
                 new Vector3(.025f,(top-bottom).magnitude/2,.025f),iron);
             cable.transform.rotation=Quaternion.FromToRotation(Vector3.up,top-bottom);
         }
+        OpenIndoorDrum(church,interior);
         BuildCeiling(detail);
+        BuildDrum(detail);
         BuildFloor(detail,interior);
         DressPews(church,detail,interior);
         interior.lamps=lamps.ToArray();
@@ -299,6 +301,165 @@ public static class ChurchInteriorBuilder
         float[] beamZ={-4,-2,1,3,5};
         for(int i=0;i<5;i++) Primitive(parent,"Interior_CeilingBeam_"+i,PrimitiveType.Cube,
             new Vector3(-2,8.75f,beamZ[i]),new Vector3(7.8f,.3f,.25f),wood);
+        foreach(var r in parent.GetComponentsInChildren<MeshRenderer>())
+            if(r.name.StartsWith("Interior_Ceiling"))
+            {
+                var f=r.GetComponent<MeshFilter>(); f.sharedMesh=OpenMesh(f,r.name+"_DrumOpening");
+            }
+    }
+
+    // Subtract a convex vertical opening by splitting triangles at its planes.
+    // Retain interpolated UVs/normals, every submesh and all geometry outside the cut.
+    struct CutVertex
+    {
+        public Vector3 p,n; public Vector2 uv;
+        public static CutVertex Lerp(CutVertex a,CutVertex b,float t) => new CutVertex {
+            p=Vector3.Lerp(a.p,b.p,t), n=Vector3.Lerp(a.n,b.n,t).normalized, uv=Vector2.Lerp(a.uv,b.uv,t) };
+    }
+    static List<CutVertex> Clip(List<CutVertex> polygon,Vector3 normal,float distance,bool outside)
+    {
+        var result=new List<CutVertex>();
+        for(int i=0;i<polygon.Count;i++)
+        {
+            var a=polygon[i]; var b=polygon[(i+1)%polygon.Count];
+            float da=Vector3.Dot(a.p,normal)-distance, db=Vector3.Dot(b.p,normal)-distance;
+            bool ka=outside?da>=0:da<=0, kb=outside?db>=0:db<=0;
+            if(ka) result.Add(a);
+            if(ka!=kb) result.Add(CutVertex.Lerp(a,b,da/(da-db)));
+        }
+        return result;
+    }
+    static Mesh OpenMesh(MeshFilter filter,string name)
+    {
+        var source=filter.sharedMesh; var sv=source.vertices; var sn=source.normals; var su=source.uv;
+        var vertices=new List<Vector3>(); var normals=new List<Vector3>(); var uv=new List<Vector2>();
+        var slots=new List<int[]>();
+        var planes=new List<Plane> {new Plane(Vector3.down,8.599f)};
+        for(int i=0;i<12;i++)
+        {
+            float a=(i+.5f)*Mathf.PI/6; var n=new Vector3(Mathf.Cos(a),0,Mathf.Sin(a));
+            planes.Add(new Plane(n,-(3.2f*Mathf.Cos(Mathf.PI/12)+Vector3.Dot(n,new Vector3(-2,0,0)))));
+        }
+        for(int sub=0;sub<source.subMeshCount;sub++)
+        {
+            var indices=new List<int>(); var triangles=source.GetTriangles(sub);
+            void Emit(List<CutVertex> polygon)
+            {
+                if(polygon.Count<3) return;
+                int start=vertices.Count;
+                foreach(var v in polygon) { vertices.Add(filter.transform.InverseTransformPoint(v.p)); normals.Add(filter.transform.InverseTransformDirection(v.n)); uv.Add(v.uv); }
+                for(int j=1;j<polygon.Count-1;j++) indices.AddRange(new[]{start,start+j,start+j+1});
+            }
+            for(int t=0;t<triangles.Length;t+=3)
+            {
+                var polygon=new List<CutVertex>();
+                for(int j=0;j<3;j++)
+                {
+                    int k=triangles[t+j]; polygon.Add(new CutVertex {p=filter.transform.TransformPoint(sv[k]),
+                        n=filter.transform.TransformDirection(sn[k]),uv=su.Length==sv.Length?su[k]:Vector2.zero});
+                }
+                // Most triangles are wholly outside one clipping plane: preserve them exactly.
+                bool untouched=false;
+                foreach(var plane in planes) if(polygon.TrueForAll(v=>plane.GetDistanceToPoint(v.p)>=0)) { untouched=true; break; }
+                if(untouched) { Emit(polygon); continue; }
+                foreach(var plane in planes)
+                {
+                    Emit(Clip(polygon,plane.normal,-plane.distance,true));
+                    polygon=Clip(polygon,plane.normal,-plane.distance,false);
+                    if(polygon.Count<3) break;
+                }
+            }
+            slots.Add(indices.ToArray());
+        }
+        var mesh=new Mesh {name=name,indexFormat=IndexFormat.UInt32};
+        mesh.SetVertices(vertices); mesh.SetNormals(normals); mesh.SetUVs(0,uv); mesh.subMeshCount=slots.Count;
+        for(int i=0;i<slots.Count;i++) mesh.SetTriangles(slots[i],i);
+        mesh.RecalculateBounds();
+        string path="Assets/Art/Church/"+name+".asset"; AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(mesh,path);
+        return mesh;
+    }
+    static void OpenIndoorDrum(Transform church,ChurchInterior interior)
+    {
+        var filters=new List<MeshFilter>(); var outside=new List<Mesh>(); var inside=new List<Mesh>();
+        foreach(var f in church.GetComponentsInChildren<MeshFilter>())
+        {
+            var r=f.GetComponent<Renderer>();
+            if(r==null || r.bounds.max.y<8.6f || r.bounds.min.x>1.2f || r.bounds.max.x< -5.2f || r.bounds.min.z>3.2f || r.bounds.max.z< -3.2f) continue;
+            filters.Add(f); outside.Add(f.sharedMesh); inside.Add(OpenMesh(f,f.name+"_IndoorDrumCut"));
+            GameObjectUtility.SetStaticEditorFlags(f.gameObject,GameObjectUtility.GetStaticEditorFlags(f.gameObject)&~StaticEditorFlags.BatchingStatic);
+        }
+        interior.drumCutFilters=filters.ToArray(); interior.drumOutdoorMeshes=outside.ToArray(); interior.drumIndoorMeshes=inside.ToArray();
+    }
+    static void BuildDrum(Transform parent)
+    {
+        var stone=Lit("M_InteriorDrum",new Color32(140,133,121,255),new Color(.34f,.32f,.29f));
+        var dark=Lit("M_InteriorDome",new Color32(110,103,93,255),new Color(.26f,.245f,.22f));
+        stone.globalIlluminationFlags=dark.globalIlluminationFlags=MaterialGlobalIlluminationFlags.BakedEmissive;
+        var cold=Lit("M_InteriorDrumDaylight",new Color32(132,170,211,255),new Color(.48f,.68f,.95f));
+        var shaft=new Material(Shader.Find("Mistbell/InteriorShaft")) {name="M_InteriorDrumShaft"};
+        shaft.SetColor("_BaseColor",new Color(.45f,.64f,.9f,.10f)); shaft.SetFloat("_DstBlend",(float)BlendMode.One);
+        AssetDatabase.DeleteAsset("Assets/Settings/M_InteriorDrumShaft.mat"); AssetDatabase.CreateAsset(shaft,"Assets/Settings/M_InteriorDrumShaft.mat");
+        var center=new Vector3(-2,0,0);
+        float apothem=3.2f*Mathf.Cos(Mathf.PI/12),outer=4.2f*Mathf.Cos(Mathf.PI/12);
+        for(int side=0;side<12;side++)
+        {
+            float a=(side+.5f)*Mathf.PI/6;
+            var radial=new Vector3(Mathf.Cos(a),0,Mathf.Sin(a)); var tangent=new Vector3(-radial.z,0,radial.x);
+            Vector3 P(float u,float y,float depth) => center+tangent*u+Vector3.up*y+radial*depth;
+            var v=new List<Vector3>(); var t=new List<int>();
+            void Quad(Vector3 p0,Vector3 p1,Vector3 p2,Vector3 p3,Vector3 normal)
+            {
+                int n=v.Count; v.AddRange(new[]{p0,p1,p2,p3});
+                if(Vector3.Dot(Vector3.Cross(p1-p0,p2-p0),normal)>0) t.AddRange(new[]{n,n+1,n+2,n,n+2,n+3});
+                else t.AddRange(new[]{n,n+2,n+1,n,n+3,n+2});
+            }
+            // Each face is built around a 0.7 x 1.4 m arched void, never overlaid with a dark decal.
+            for(int layer=0;layer<2;layer++)
+            {
+                float d=layer==0?apothem:outer, half=d*Mathf.Tan(Mathf.PI/12); var normal=radial*(layer==0?-1:1);
+                Quad(P(-half,8.6f,d),P(half,8.6f,d),P(half,9.7f,d),P(-half,9.7f,d),normal);
+                Quad(P(-half,9.7f,d),P(-.35f,9.7f,d),P(-.35f,12.2f,d),P(-half,12.2f,d),normal);
+                Quad(P(.35f,9.7f,d),P(half,9.7f,d),P(half,12.2f,d),P(.35f,12.2f,d),normal);
+                for(int j=0;j<12;j++)
+                {
+                    float x0=-.35f*Mathf.Cos(j*Mathf.PI/12), x1=-.35f*Mathf.Cos((j+1)*Mathf.PI/12);
+                    float y0=10.75f+.35f*Mathf.Sin(j*Mathf.PI/12),y1=10.75f+.35f*Mathf.Sin((j+1)*Mathf.PI/12);
+                    Quad(P(x0,y0,d),P(x1,y1,d),P(x1,12.2f,d),P(x0,12.2f,d),normal);
+                    if(layer==0) Quad(P(x0,y0,apothem),P(x1,y1,apothem),P(x1,y1,outer),P(x0,y0,outer),Vector3.down);
+                }
+            }
+            Quad(P(-.35f,9.7f,apothem),P(.35f,9.7f,apothem),P(.35f,9.7f,outer),P(-.35f,9.7f,outer),Vector3.up);
+            foreach(float x in new[]{-.35f,.35f}) Quad(P(x,9.7f,apothem),P(x,10.75f,apothem),P(x,10.75f,outer),P(x,9.7f,outer),tangent*-Mathf.Sign(x));
+            float ih=3.2f*Mathf.Sin(Mathf.PI/12),oh=4.2f*Mathf.Sin(Mathf.PI/12);
+            // Seat the underside 1 cm above the existing 8.6 m wing ceiling to avoid coplanar flicker.
+            foreach(float y in new[]{8.61f,12.2f}) Quad(P(-ih,y,apothem),P(ih,y,apothem),P(oh,y,outer),P(-oh,y,outer),y<9?Vector3.down:Vector3.up);
+            Surface(parent,"Interior_DrumWall_"+side,v.ToArray(),t.ToArray(),stone);
+            float corner=side*Mathf.PI/6;
+            var rib=Primitive(parent,"Interior_DrumRib_"+side,PrimitiveType.Cube,center+new Vector3(Mathf.Cos(corner)*3.16f,10.4f,Mathf.Sin(corner)*3.16f),new Vector3(.18f,3.6f,.18f),stone);
+            rib.transform.rotation=Quaternion.Euler(0,-corner*Mathf.Rad2Deg,0);
+            // Daylight lies beyond the full wall thickness; the passage itself remains empty.
+            var glowCenter=P(0,10.4f,outer+.015f);
+            Arch(parent,"Interior_DrumWindow_"+side,glowCenter,.7f,1.4f,cold);
+            var glow=parent.Find("Interior_DrumWindow_"+side); glow.rotation=Quaternion.LookRotation(radial);
+            glow.GetComponent<Renderer>().shadowCastingMode=ShadowCastingMode.Off;
+            if(side%3==0)
+            {
+                Vector3 top=P(0,10.3f,apothem-.02f),bottom=top-radial*1.8f-Vector3.up*3.7f;
+                var beam=Primitive(parent,"Interior_DrumShaft_"+(side/3),PrimitiveType.Quad,(top+bottom)/2,new Vector3(.32f,(top-bottom).magnitude,1),shaft);
+                beam.transform.rotation=Quaternion.LookRotation(Vector3.Cross(tangent,top-bottom).normalized,(top-bottom).normalized);
+            }
+        }
+        // Downward/inward winding; the final ring leaves a real 0.5 m diameter oculus.
+        var coneV=new List<Vector3>(); var coneT=new List<int>(); const int segments=48;
+        for(int i=0;i<segments;i++)
+        {
+            float a=i*Mathf.PI*2/segments,b=(i+1)*Mathf.PI*2/segments; int n=coneV.Count;
+            Vector3 C(float angle,float radius,float y) => center+new Vector3(Mathf.Cos(angle)*radius,y,Mathf.Sin(angle)*radius);
+            coneV.AddRange(new[]{C(a,3.2f,12.2f),C(b,3.2f,12.2f),C(b,.25f,14.6f),C(a,.25f,14.6f)});
+            coneT.AddRange(new[]{n,n+1,n+2,n,n+2,n+3});
+        }
+        Surface(parent,"Interior_DomeInner",coneV.ToArray(),coneT.ToArray(),dark);
+        Debug.Log("[DOME] drum_sides=12 drum_h=3.6 windows=12 ribs=12 cone_h=2.4 aperture=0.5 look_target=10.2");
     }
 
     static void BuildFloor(Transform parent,ChurchInterior interior)

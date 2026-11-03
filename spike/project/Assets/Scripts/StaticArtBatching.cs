@@ -89,6 +89,7 @@ public static class StaticArtBatching
             if(!r.enabled || r.isPartOfStaticBatch || r.forceRenderingOff || r.HasPropertyBlock() || r.lightmapIndex>=0 && r.lightmapIndex<65534) continue;
             var filter=r.GetComponent<MeshFilter>();
             if(filter==null || filter.sharedMesh==null || !filter.sharedMesh.isReadable) continue;
+            if(interior!=null && interior.drumCutFilters!=null && Array.Exists(interior.drumCutFilters,f=>f==filter)) continue;
             var mats=r.sharedMaterials;
             if(mats.Length!=filter.sharedMesh.subMeshCount || Array.Exists(mats,m=>m==null || m.renderQueue>=2500)) continue;
             // Footprint assets were 176 byte-identical material clones with different names.
