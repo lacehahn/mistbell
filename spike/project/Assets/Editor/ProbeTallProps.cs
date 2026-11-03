@@ -32,6 +32,9 @@ public static class ProbeTallProps
                           $"center=({b.center.x:F1},{b.center.y:F1},{b.center.z:F1}) " +
                           $"root={r.transform.root.name} active={r.enabled}");
         }
+        foreach (var r in Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            if (r.name.StartsWith("TerraceWall_") || r.name.StartsWith("TerraceStep_"))
+                sb.AppendLine($"[MAT] name={r.name} mat={(r.sharedMaterial!=null?r.sharedMaterial.name:"null")} shader={(r.sharedMaterial!=null&&r.sharedMaterial.shader!=null?r.sharedMaterial.shader.name:"null")}");
         sb.AppendLine($"[TALL] done count={count}");
         Debug.Log(sb.ToString());
     }

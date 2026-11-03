@@ -102,7 +102,17 @@ def main():
                 atlases[c['atlas']].paste(patch, box[:2])
                 small += 1
             else:
-                atlases[c['atlas']].paste(img.resize((c['w'], c['h']), Image.LANCZOS), box[:2])
+                chart_ar = c['w'] / max(1, c['h']); img_ar = img.size[0] / max(1, img.size[1])
+                if chart_ar / img_ar > 1.6:
+                    # 长条墙（如 37m x 1.5m）如果直接拉伸，石块会被压成竖条；
+                    # 改为横向重复平铺，保持石块的世界比例。
+                    tile = img.resize((max(1, int(c['h'] * img_ar)), c['h']), Image.LANCZOS)
+                    strip = Image.new('RGB', (c['w'], c['h']))
+                    for k in range(0, c['w'], tile.size[0]):
+                        strip.paste(tile, (k, 0))
+                    atlases[c['atlas']].paste(strip, box[:2])
+                else:
+                    atlases[c['atlas']].paste(img.resize((c['w'], c['h']), Image.LANCZOS), box[:2])
                 filled_big += 1
                 area_big += c['area']
 

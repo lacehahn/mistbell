@@ -629,3 +629,8 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - 已目视检查外景近景／全景、480 放大图、室内入门／中殿／抬头三图；逐像素确认 LANCZOS 480×270→NEAREST×4；Python 语法与 `git diff --check` 通过。
 
 交付截图：`project/Shots/art_close.png`、`art_runtime.png`、`interior_lookup.png`、`style_480_upscaled.png`；另有 `interior_entry.png`、`interior_inside.png`。本轮截图 SHA 见 `logs/prop_v13_final.json` 与 `project/Shots/style11_capture.json`。
+| 00:06 | 手绘贴图回贴（9 张用户出图） | `[HAND] slots=9 charts_filled=1294 coverage_area_pct=0.9804 small_filled_by_sample=2675 dupes=0` | 教堂墙/屋顶/山墙/塔身/檐口/室内换成手绘砂岩与冷灰石板；石块各自有笔触高光，塑料感消失 |
+| 00:06 | 小图表平涂 bug | 台阶踏面原用"平均色平涂"→ 纯黑方块 | 改为从贴图取 35% 区域缩放贴上；长条图表(>1.6 倍宽高比)改横向平铺，避免石块被压成竖条 |
+| 00:06 | 挡土墙仍是黑砖（未解决） | 探针：`TerraceWall_*` 材质 = `Stone_Sub_Coping`，**着色器 = Mistbell/TerrainHaze**（不是 Lit、不吃 `_BaseMap`） | 所以替换 `Stone_Sub_Albedo.png` 无效；下一步要改 TerrainHaze 的 rock 参数或把台地墙换成图集材质 |
+| 00:06 | `art_close` 机位穿墙 | 近景相机落在台地墙体内部 | 台地几何改动后机位需要重算，下一轮一并修 |
+
