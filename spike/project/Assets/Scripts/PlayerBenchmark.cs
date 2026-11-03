@@ -88,12 +88,14 @@ public sealed partial class PlayerController
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output)));
             File.WriteAllText(output, JsonUtility.ToJson(report, true));
             bool pass = true;
+            bool foregroundGate = Array.IndexOf(args, "-bench-foreground") >= 0;
             string beforePath = BenchArg(args, "-bench-before");
             BenchReport before = beforePath == null ? null : JsonUtility.FromJson<BenchReport>(File.ReadAllText(beforePath));
             for (int i = 0; i < 3; i++)
             {
                 var a = report.results[i];
-                pass &= a.fps_avg >= 55 && a.drawcalls > 0 && a.drawcalls <= 250 && a.tris > 0;
+                pass &= a.fps_avg >= (foregroundGate ? 200 : 55) && a.drawcalls > 0
+                    && a.drawcalls <= (foregroundGate ? 330 : 250) && a.tris > 0;
                 if (before != null)
                 {
                     var b = Array.Find(before.results, r => r.pos == a.pos);

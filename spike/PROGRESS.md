@@ -400,4 +400,7 @@
 | 15:21 | 修三个连带问题 | ①室内落蓝色脚印（改用几何区域判断，不再靠材质名）②`[INTERIOR_COLLIDE]` 里硬编码的 key=1.9 断言 ③`luma>=.18` 门限与新暗调冲突 | 三处都是"参数改了但判据没跟着改"，属自检脚本滞后，不是画面 bug |
 | 15:21 | 十一项演示 + 截图全绿 | `rc=0 bad=0` ×11、`cap=0` | `[INT_PASS] light=True … obstacles=True walked=True` |
 | 15:21 | 性能复测（1920×1080 满分辨率） | `z01 242.7fps/239dc`、`terrace 237.0fps/233dc`、`interior 260.6fps/231dc`，tris 3.10–3.45M，`[BENCH_GATE] pass=True` | drawcall 从 174 涨到 ~235（远山多层 + 室内 16 盏灯），仍远低于预算；帧率 237–260 |
+| 15:36 | Codex 配额再次耗尽（这次到 2026-11-07 14:45 才恢复） | `You've hit your usage limit … try again at Nov 7th` | 前景雪原只完成一半就被打断；我接手收尾 |
+| 15:36 | 前景雪原（Codex 半成品 + 我修正密度） | `[FGD_LAYOUT] sastrugi_cov=0.23423 rock_clusters=13 rocks=39 grass_patches=16 cairns=3 renderer_batches=4 path_clear_min=3.4` | Codex 原版 77 簇/385 块读起来像散落木箱；我疏到 22 m 网格、每簇 3 块、尺寸缩 30% 后自然了；风蚀雪脊覆盖率 23%，路径净空 3.4 m |
+| 15:36 | 十一项演示全绿 | `rc=0 bad=0` ×11 | 前景改动没有破坏移动/碰撞/显现/室内 |
 

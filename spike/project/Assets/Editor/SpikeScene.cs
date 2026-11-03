@@ -21,6 +21,7 @@ public static class SpikeScene
     static bool entryCleared;
     static float churchSeatY;
     static Material generatedRockContact;
+    static float foregroundSurfaceClear;
 
     public static void Run()
     {
@@ -1428,8 +1429,8 @@ public static class SpikeScene
             ? hit.point.y : TerrainHeight(x,z);
         var xs=new System.Collections.Generic.List<float>();
         var zs=new System.Collections.Generic.List<float>();
-        for(float x=-150;x<=150; x+= x>=-76 && x<86 ? .5f : 2f) xs.Add(x);
-        for(float z=-230;z<=1200; z+=z>=-230 && z< -18 ? .5f : (z>=-100&&z<100?2:10)) zs.Add(z);
+        for(float x=-150;x<=150; x+= x>=-55 && x<65 ? .25f : (x>=-76 && x<86 ? .5f : 2f)) xs.Add(x);
+        for(float z=-230;z<=1200; z+=z>=-142 && z< -22 ? .25f : (z>=-230 && z< -18 ? .5f : (z>=-100&&z<100?2:10))) zs.Add(z);
         // Keep original rows at the entrance and far field.
         for(int z=-100;z<=100;z+=2) if(!zs.Contains(z)) zs.Add(z);
         for(int z=110;z<=1200;z+=10) if(!zs.Contains(z)) zs.Add(z);
@@ -1440,8 +1441,8 @@ public static class SpikeScene
         int drifts=0;
         for(int j=0;j<zs.Count;j++) for(int i=0;i<cols;i++)
         {
-            float x=xs[i],z=zs[j],h=Drift(x,z); int v=j*cols+i;
-            vs[v]=new Vector3(x,OldHeight(x,z)+h,z); uv[v]=new Vector2(x,z); relief[v]=new Vector2(h,0);
+            float x=xs[i],z=zs[j],ridge=ForegroundRidge(x,z),h=Drift(x,z); int v=j*cols+i;
+            vs[v]=new Vector3(x,OldHeight(x,z)+h+ridge,z); uv[v]=new Vector2(x,z); relief[v]=new Vector2(h+ridge,ridge);
             if(h>.045f)
             {
                 bool peak=true;
@@ -1453,6 +1454,18 @@ public static class SpikeScene
             int t=(j*(cols-1)+i)*6;
             tris[t]=v;tris[t+1]=v+cols;tris[t+2]=v+1;
             tris[t+3]=v+1;tris[t+4]=v+cols;tris[t+5]=v+cols+1;
+        }
+        // Include zero-height edge vertices: interpolation spreads the footprint
+        // to the whole adjacent triangle, not just its displaced vertices.
+        foregroundSurfaceClear=float.PositiveInfinity;
+        for(int t=0;t<tris.Length;t+=3)
+        {
+            if(relief[tris[t]].y<=0 && relief[tris[t+1]].y<=0 && relief[tris[t+2]].y<=0)continue;
+            for(int j=0;j<3;j++)
+            {
+                var p=vs[tris[t+j]];
+                foregroundSurfaceClear=Mathf.Min(foregroundSurfaceClear,Mathf.Abs(p.x-ClimbRoute.CenterX(p.z)));
+            }
         }
         // Preserve the original entrance subdivisions and every triangle behind
         // z=-18 exactly; resampling that 6 cm clearing would move church seating.
@@ -1483,47 +1496,174 @@ public static class SpikeScene
         terrain.GetComponent<MeshRenderer>().sharedMaterial=snow;
         Physics.SyncTransforms();
         float Height(float x,float z) => terrain.Raycast(new Ray(new Vector3(x,500,z),Vector3.down),out var hit,1500)?hit.point.y:TerrainHeight(x,z);
-        var root=new GameObject("Snow2 Surface Details").transform;
-        var rnd=new System.Random(20261103);
-        float Range(float a,float b)=>Mathf.Lerp(a,b,(float)rnd.NextDouble());
-        var ridgeMat=new Material(snow){name="M_Snow2Sastrugi"};ridgeMat.SetFloat("_SnowRelief",2);
-        AssetDatabase.DeleteAsset("Assets/Settings/M_Snow2Sastrugi.mat");AssetDatabase.CreateAsset(ridgeMat,"Assets/Settings/M_Snow2Sastrugi.mat");
-        int sastrugi=0;
-        // Sparse groups, with gaps between groups and irregular parallel spacing.
-        for(int group=0;group<22;group++)
+        BuildForegroundDetails(terrain);
+        Debug.Log($"[SNOW2] drifts={drifts} sastrugi=heightfield exposure_patches=0 tiling_near=0.6 mid=1.6 far=3.0 shadow_tint=#B9CBDE");
+        Debug.Log("[CLOSEUP_PATCHES] rock_contact=0 snow_exposure=0 shadows=realtime");
+    }
+
+    // Foreground is the 60 m ground-plane disc of the fixed art-runtime eye.
+    // This does not move the camera or touch the terrace (all new vertices z < -22).
+    static bool ForegroundArea(float x, float z) => z < -22f && z > -142f
+        && Vector2.Distance(new Vector2(x,z),new Vector2(5,-82)) < 60f;
+
+    static float ForegroundRidge(float x, float z)
+    {
+        if(!ForegroundArea(x,z)) return 0;
+        float clear=Mathf.Abs(x-ClimbRoute.CenterX(z));
+        if(clear<=3.7f) return 0; // Include a full triangle of guard space beyond the 3 m lane.
+        // Route tangent + 28 degrees; local wind follows the switchback continuously.
+        float tangent=(ClimbRoute.CenterX(z+.1f)-ClimbRoute.CenterX(z-.1f))/.2f;
+        float angle=Mathf.Atan(tangent)+28f*Mathf.Deg2Rad;
+        float sn=Mathf.Sin(angle),cs=Mathf.Cos(angle);
+        float along=x*sn+z*cs, across=x*cs-z*sn;
+        // Vary row spacing 1.4..2.0 m and phase; no additional ridge renderer.
+        float row=Mathf.Floor(across/1.7f);
+        float phase=Mathf.PerlinNoise(row*.37f+71,19)*5.8f;
+        float col=Mathf.Floor((along+phase)/6.2f);
+        float hsh=Mathf.PerlinNoise(col*.71f+37,row*.83f+91);
+        float length=Mathf.Lerp(1.5f,6f,hsh);
+        float u=((along+phase)-col*6.2f-3.1f)/(length*.5f);
+        float width=Mathf.Lerp(.65f,.8f,Mathf.PerlinNoise(col+61,row+27));
+        float offset=.12f*Mathf.Sin(along*.9f+row);
+        float v=(across-(row+.5f)*1.7f-offset)/(width*.5f);
+        if(Mathf.Abs(u)>=1 || Mathf.Abs(v)>=1) return 0;
+        float edge=Mathf.Clamp01((60-Vector2.Distance(new Vector2(x,z),new Vector2(5,-82)))/2);
+        float protection=Mathf.SmoothStep(0,1,Mathf.InverseLerp(3.7f,4.7f,clear));
+        return Mathf.Lerp(.10f,.25f,hsh)*Mathf.Pow(1-u*u,.55f)
+            *(1-Mathf.Abs(v))*edge*protection;
+    }
+
+    static void BuildForegroundDetails(MeshCollider terrain)
+    {
+        var root=new GameObject("Foreground Snowfield Details").transform;
+        root.gameObject.AddComponent<ForegroundDetailProbe>();
+        var random=new System.Random(731103);
+        float Range(float a,float b)=>Mathf.Lerp(a,b,(float)random.NextDouble());
+        float Height(float x,float z)=>terrain.Raycast(new Ray(new Vector3(x,500,z),Vector3.down),out var hit,1500)
+            ?hit.point.y:TerrainHeight(x,z);
+        var vs=new System.Collections.Generic.List<Vector3>();
+        var colors=new System.Collections.Generic.List<Color>();
+        var ts=new System.Collections.Generic.List<int>();
+        float minimum=foregroundSurfaceClear;
+        void Triangle(Vector3 a,Vector3 b,Vector3 c,Color color)
         {
-            Vector2 center=new Vector2(Range(-29,37),Range(-112,-43));
-            float angle=Range(-30,30)*Mathf.Deg2Rad;
-            var along=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle));var across=new Vector2(-along.y,along.x);
-            for(int k=0;k<4;k++)
+            foreach(var v in new[]{a,b,c})
             {
-                var p=center+across*(k*Range(1.1f,1.8f))+along*Range(-2,2);
-                float length=Range(3,8),width=Range(.3f,.8f),height=Range(.08f,.15f);
-                if(Vector2.Distance(p,new Vector2(eye.x,eye.z))+length*.5f>44.8f || Protect(p.x,p.y)<.99f)continue;
-                bool clear=true;
-                for(int a=0;a<=16;a++) {var q=p+along*((a/16f-.5f)*length);if(Protect(q.x,q.y)<.99f)clear=false;}
-                if(!clear)continue;
-                var rv=new Vector3[17*5];var ru=new Vector2[rv.Length];var rh=new Vector2[rv.Length];var rt=new int[16*4*6];
-                for(int a=0;a<=16;a++)for(int b=0;b<5;b++)
-                {
-                    float t=a/16f, cross=b/4f; int v=a*5+b;
-                    float taper=Mathf.Pow(Mathf.Sin(t*Mathf.PI),.6f);
-                    var q=p+along*((t-.5f)*length)+across*((cross-.5f)*width*taper + .07f*Mathf.Sin(t*6.2f));
-                    float h=height*(cross<=.5f?cross*2:(1-cross)*2)*taper;
-                    rv[v]=new Vector3(q.x,Height(q.x,q.y)+h+.002f,q.y);ru[v]=q;rh[v]=new Vector2(Drift(q.x,q.y)+h,h);
-                    if(a==16||b==4)continue; int ti=(a*4+b)*6;
-                    rt[ti]=v;rt[ti+1]=v+1;rt[ti+2]=v+5;rt[ti+3]=v+1;rt[ti+4]=v+6;rt[ti+5]=v+5;
-                }
-                var rm=new Mesh{name="Sastrugi_"+sastrugi,vertices=rv,uv=ru,uv2=rh,triangles=rt};rm.RecalculateNormals();rm.RecalculateBounds();
-                string rp="Assets/Settings/Snow2Ridge_"+sastrugi+".asset";AssetDatabase.DeleteAsset(rp);AssetDatabase.CreateAsset(rm,rp);
-                var go=new GameObject("Sastrugi_"+sastrugi++);go.transform.SetParent(root,false);go.AddComponent<MeshFilter>().sharedMesh=rm;go.AddComponent<MeshRenderer>().sharedMaterial=ridgeMat;
+                if(!ForegroundArea(v.x,v.z) || Mathf.Abs(v.x-ClimbRoute.CenterX(v.z))<3f)
+                    throw new System.InvalidOperationException("Foreground detail entered protected area: "+v);
+                minimum=Mathf.Min(minimum,Mathf.Abs(v.x-ClimbRoute.CenterX(v.z)));
+                ts.Add(vs.Count);vs.Add(v);colors.Add(color.linear);
             }
         }
-        // The legacy SnowExposure polygons are the visible black stars in the
-        // approach. Omit these decorative overlays together with contact decals;
-        // terrain, drift/sastrugi meshes, road route and realtime shadows stay intact.
-        Debug.Log($"[SNOW2] drifts={drifts} sastrugi={sastrugi} exposure_patches=0 tiling_near=0.6 mid=1.6 far=3.0 shadow_tint=#B9CBDE");
-        Debug.Log("[CLOSEUP_PATCHES] rock_contact=0 snow_exposure=0 shadows=realtime");
+        var mat=new Material(Shader.Find("Mistbell/ForegroundSnowfield")){name="M_ForegroundSnowfield"};
+        const string matPath="Assets/Settings/M_ForegroundSnowfield.mat";
+        AssetDatabase.DeleteAsset(matPath);AssetDatabase.CreateAsset(mat,matPath);
+        void Save(string name,bool shadow)
+        {
+            var mesh=new Mesh{name=name,indexFormat=IndexFormat.UInt32,vertices=vs.ToArray(),colors=colors.ToArray(),triangles=ts.ToArray()};
+            mesh.RecalculateNormals();mesh.RecalculateBounds();
+            string path="Assets/Settings/"+name+".asset";
+            AssetDatabase.DeleteAsset(path);AssetDatabase.CreateAsset(mesh,path);
+            var go=new GameObject(name);go.transform.SetParent(root,false);
+            go.AddComponent<MeshFilter>().sharedMesh=mesh;
+            var renderer=go.AddComponent<MeshRenderer>();renderer.sharedMaterial=mat;
+            renderer.shadowCastingMode=shadow?ShadowCastingMode.On:ShadowCastingMode.Off;
+            vs.Clear();colors.Clear();ts.Clear();
+        }
+        bool Safe(float x,float z,float radius)=>ForegroundArea(x,z)
+            &&Vector2.Distance(new Vector2(x,z),new Vector2(5,-82))<58-radius
+            &&z<-23-radius &&z>-140+radius
+            &&Mathf.Abs(x-ClimbRoute.CenterX(z))>4.5f+radius;
+        void Rock(float x,float z,float rx,float rz,float height,float ground,bool snow)
+        {
+            const int sides=8;
+            Vector3 Ring(int j,int ring)
+            {
+                float a=j*2*Mathf.PI/sides;
+                float r=ring==0?1f:(ring==1?.86f:.52f);
+                float y=ring==0?-.12f:(ring==1?height*.68f:height);
+                return new Vector3(x+Mathf.Cos(a)*rx*r,ground+y,z+Mathf.Sin(a)*rz*r);
+            }
+            for(int j=0;j<sides;j++)
+            {
+                int n=(j+1)%sides;
+                for(int k=0;k<2;k++)
+                {
+                    Color c=k==1&&snow?Hex("#E4EDF5"):Color.Lerp(Hex("#514D49"),Hex("#837D73"),(j%3)/2f);
+                    Triangle(Ring(j,k),Ring(j,k+1),Ring(n,k+1),c);
+                    Triangle(Ring(j,k),Ring(n,k+1),Ring(n,k),c);
+                }
+                Triangle(Ring(j,2),new Vector3(x,ground+height+.025f,z),Ring(n,2),snow?Hex("#F6FAFD"):Hex("#837D73"));
+            }
+        }
+        // One renderer for all 5-rock clusters: 5 rocks / 100 m² of eligible snow.
+        int clusters=0,rocks=0;float area=0,covered=0;
+        for(float z=-142;z<-22;z+=.25f)for(float x=-55;x<65;x+=.25f)
+        {
+            if(!ForegroundArea(x,z)||Mathf.Abs(x-ClimbRoute.CenterX(z))<3.2f)continue;
+            area+=.0625f;
+            if(ForegroundRidge(x,z)>.0025f)
+            {
+                covered+=.0625f;
+                minimum=Mathf.Min(minimum,Mathf.Abs(x-ClimbRoute.CenterX(z)));
+            }
+        }
+        // 10 m 网格 → 77 簇/385 块，读起来像散落的木箱；疏到 22 m 网格、每簇 3 块。
+        for(float z=-136;z<-26;z+=22)for(float x=-50;x<60;x+=22)
+        {
+            float cx=x+Range(-2,2),cz=z+Range(-2,2);
+            if(!Safe(cx,cz,3))continue;
+            clusters++;
+            for(int i=0;i<3;i++)
+            {
+                float a=Range(0,Mathf.PI*2),r=Range(.3f,2.3f);
+                float px=cx+Mathf.Cos(a)*r,pz=cz+Mathf.Sin(a)*r;
+                Rock(px,pz,Range(.25f,.55f),Range(.3f,.7f),Range(.12f,.45f),Height(px,pz),true);rocks++;
+            }
+        }
+        Save("FGD_Bedrock",true);
+        int grass=0;
+        for(int side=-1;side<=1;side+=2)
+        {
+            for(int attempt=0,count=0;attempt<1000&&count<8;attempt++)
+            {
+                float z=Range(-130,-32),x=ClimbRoute.CenterX(z)+side*Range(6,30);
+                if(!Safe(x,z,1))continue;
+                float ground=Height(x,z),height=Range(.15f,.35f);
+                for(int j=0;j<7;j++)
+                {
+                    float angle=Range(0,Mathf.PI*2),r=Range(.02f,.18f);
+                    var a=new Vector3(x+Mathf.Cos(angle)*r,ground-.025f,z+Mathf.Sin(angle)*r);
+                    var b=a+new Vector3(Range(-.08f,.08f),height,Range(-.08f,.08f));
+                    var w=new Vector3(.012f,0,.008f);var c=Hex("#3A342C");
+                    Triangle(a-w,b,a+w,c);Triangle(a+w,b,a-w,c);
+                    var branch=b+new Vector3(.08f,-height*.25f,.035f);
+                    Triangle(b-Vector3.up*height*.5f,branch,b-Vector3.up*height*.5f+w,c);
+                    Triangle(b-Vector3.up*height*.5f+w,branch,b-Vector3.up*height*.5f,c);
+                }
+                count++;grass++;
+            }
+            Save(side<0?"FGD_GrassLeft":"FGD_GrassRight",false);
+        }
+        // Three positions 50..54 m apart along the actual bent route; all fit
+        // inside the 60 m camera disc (its diameter is 120 m, not 60 m).
+        int cairns=0;
+        foreach(float z in new[]{-133f,-85f,-37f})
+        {
+            float x=ClimbRoute.CenterX(z)+(cairns%2==0?-4.4f:4.4f),ground=Height(x,z);
+            for(int j=0;j<4;j++)
+            {
+                float scale=1-j*.18f,h=.19f;
+                Rock(x+j*.018f,z,.42f*scale,.34f*scale,h,ground,j==3);
+                ground+=h-.025f;
+            }
+            cairns++;
+        }
+        Save("FGD_Cairns",true);
+        float coverage=covered/area;
+        Debug.Log(FormattableStringInvariant($"[FGD_LAYOUT] sastrugi_cov={coverage:F5} rock_clusters={clusters} rocks={rocks} grass_patches={grass} cairns={cairns} renderer_batches=4 path_clear_min={minimum:F4} eligible_area={area:F2} rock_density={rocks*100/area:F3} foreground_center=5,-82 radius=60"));
+        if(coverage<.18f||coverage>.30f||minimum<3||grass<12||grass>20||clusters==0)
+            throw new System.InvalidOperationException("Foreground layout gate failed");
     }
 
     // 沿揭示机位视轴横向展开；指定色板与远距薄雾共同形成层次。
