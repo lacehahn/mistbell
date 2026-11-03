@@ -608,3 +608,24 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - 独立开发构建后以 `open -n -a` + caffeinate 运行 `-bench -bench-foreground -screen-width 1920 -screen-height 1080 -screen-fullscreen 0`：`logs/prop_v12_perf_build.log` / `logs/prop_v12_bench.log` / `logs/prop_v12_bench.json`。z01 平均 FPS=230.26 / 1% low=175.10 / drawcall=263；terrace=237.33 / 171.39 / 252；interior=230.42 / 163.21 / 250。BENCH_GATE pass=True；平均 FPS ≥200、drawcall ≤330，未将 1% low 声称为 ≥200。
 - 已重新生成并目视检查 `project/Shots/art_close.png`、`art_runtime.png`、`style_480_upscaled.png` 和室内三图；逐像素验证 480×270 LANCZOS → NEAREST ×4。清单 `project/Shots/style11_capture.json`。
 - 汇总报告 `logs/prop_v12_final.json`：快速验收、性能、整帧通过，`final_pass=false` 保留严格几何失败。Python 编译、`git diff --check` 通过。
+
+## 2026-11-03 教堂比例 v13：放行室内净高后的外墙压低与尖顶加高
+
+执行 `tasks/church_proportions_v13.md` 及用户补充范围。没有安装包、commit 或修改 AGENTS.md；材质生成算法、配色、曝光、玩法、相机、UI、室内平面与台地均未改动。当前会话已由统一 `tools/codex.sh` 入口启动；检查进程后终止了仅在等待锁的重复派发，没有并行写入。
+
+- 新入口 `tools/build_church_proportions_v13.py` 从原始构建器确定性重建，先复现 v12，再施加 v13 几何变形；不是对已修改资产累积缩放。运行：`/Applications/Blender.app/Contents/MacOS/Blender -b --python-exit-code 1 --python spike/tools/build_church_proportions_v13.py`。v12 基线日志仍打印其原有失败门槛，最终以 `[PROP2_GATE]` 为准。
+- 外墙 **12.10→10.60m**；实际竖直射线量得室内净高 **12.00→10.40m**；尖顶（沿用檐口至十字架底口径）**7.924290→8.558232m（+8%）**，墙顶比 **1.238574**。鼓座与外部斜屋面同步下降 1.50m，锥顶基部跟随，十字架整体移到新锥顶；Unity 鼓座暖窗饰同步下降，材质不变。
+- 钟楼直径 **6.239893m**、总高 **17.599269m** 和净距 **3.010000m** 全部保持 v12 值；宽度 **29.000m**。仅将后殿外端 Y>11.21m 的屋顶／外墙收短，进深 **23.042973→22.550000m**；后殿地板最远端 11.20m，室内平面不变。三角面仍为 **90,774**，增量为零。
+- `tools/build_church.py` 的室内检查读取场景净高规格（旧版本默认 12m），据此检查顶面射线，未移除墙厚、通道、门洞或家具检查。高柱贴合新顶部；地板、长椅、祭台、圣像屏、烛台仍贴地。现有室内装饰天花 8.6m 与吊灯吊索已低于新壳体净高，因此保留贴合位置；室内细节鼓座／穹顶及 F 镜头参数保持原值。
+- 独立校验入口 `tools/verify_church_proportions_v13.py`：同上 Blender 命令替换脚本路径即可。保存 BLEND 与导出 FBX 回读、逐对象包围盒、三角面、拓扑、净高射线、地面家具、门洞、钟楼十二拱洞与实心墩均通过。FBX 已同步 Unity，字节一致。证据：`logs/prop_v13_build.log`、`logs/prop_v13_verify.log`、`logs/proportions_v13.json`。
+
+验收：
+
+- **`bash spike/tools/accept.sh --fast` exit=0**：`logs/prop_v13_accept.log` / `logs/accept_231957.log`。场景、UV 图集绑定、macOS / Windows 构建、11 项演示、重新截图及既有 STYLE11 门槛全部通过。钟楼：`logs/run_232209_-demo-walk-to-tower.log`；入堂演示：`logs/run_232223_-demo-enter-church.log`；截图阶段独立入堂：`logs/run_232414_-demo-enter-church.log`。
+- F 抬头实际射线遮挡量测：`[PROP2_LOOKUP] ceiling_pct=0.7928 dome_visible=true`；`[INT_PASS]` 各布尔值全 true。最终室内线性亮度 nave=0.0244、wall=0.0170、bench=0.0099，抬头显示亮度=0.2264，既有室内光照门槛全过。固定截图区域 interior_L*=8.983089，既有截图色调门槛通过；未改阈值。十二扇鼓座窗与穹顶目视可见。
+- 整帧 **snow_ratio=0.6939、white_clip=0.0161、magenta_px=0、mountain_luma=0.485728**。固定 ROI church_L*=38.621972、church_b*=15.499282、roof_L*=32.842298、sub_L*=13.188844；材质冻结 SHA、图集绑定与截图新鲜度检查通过。沿用 STYLE11 既有二维自相关口径，本轮没有重新定义该旧验收口径。
+- **`bash spike/tools/bench_style11.sh` exit=0**：`logs/prop_v13_perf.log`，本轮原始开发构建／性能日志和数据另存 `logs/prop_v13_perf_build.log`、`logs/prop_v13_bench.log`、`logs/prop_v13_bench.json`。所有播放器由 `open -n -a` + caffeinate 启动，实际 1920×1080。z01 平均 FPS=230.58 / 1% low=170.61 / drawcall=263；terrace=238.35 / 173.42 / 252；interior=231.38 / 168.66 / 250。平均 FPS≥200、drawcall≤330 全过，不将 1% low 声称为≥200。
+- 最终 `[PROP2_GATE] body_ok=true interior_ok=true roof_ok=true ratio_ok=true tower_ok=true gap_ok=true depth_ok=true width_ok=true triangles_ok=true pass=true`。性能支持的 STYLE11 gate 全 true；汇总 **`logs/prop_v13_final.json` final_pass=true**。
+- 已目视检查外景近景／全景、480 放大图、室内入门／中殿／抬头三图；逐像素确认 LANCZOS 480×270→NEAREST×4；Python 语法与 `git diff --check` 通过。
+
+交付截图：`project/Shots/art_close.png`、`art_runtime.png`、`interior_lookup.png`、`style_480_upscaled.png`；另有 `interior_entry.png`、`interior_inside.png`。本轮截图 SHA 见 `logs/prop_v13_final.json` 与 `project/Shots/style11_capture.json`。

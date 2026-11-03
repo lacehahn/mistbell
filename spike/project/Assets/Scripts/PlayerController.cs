@@ -1118,6 +1118,7 @@ public sealed partial class PlayerController : MonoBehaviour
         float ceilingFx=0f; bool ceilingSeen=false;
         MeasureCeiling(out ceilingSeen,out ceilingFx,out bool domeSeen);
         Debug.Log(FormattableString.Invariant($"[LOOKUP] ceiling_visible={ceilingSeen.ToString().ToLowerInvariant()} dome_visible={domeSeen.ToString().ToLowerInvariant()} ceiling_pct={ceilingFx:F4} bytes={(new FileInfo(lookupShot)).Length}"));
+        Debug.Log(FormattableString.Invariant($"[PROP2_LOOKUP] ceiling_pct={ceilingFx:F4} dome_visible={domeSeen.ToString().ToLowerInvariant()}"));
         lookUp=false;
         yield return new WaitForSeconds(.4f);
         bool pass=interiorLightPass && domeLightPass && ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&

@@ -1202,8 +1202,8 @@ public static class SpikeScene
         for(int i=0;i<5;i++)
         {
             float a=(210+i*30)*Mathf.Deg2Rad;
-            // Follow the V12 drum's 0.50m descent; preserve the window's material and shape.
-            var pos=new Vector3(-2+Mathf.Cos(a)*4.38f,12.63f,Mathf.Sin(a)*4.38f);
+            // Follow the V13 drum's total 2.00m descent; preserve the window's material and shape.
+            var pos=new Vector3(-2+Mathf.Cos(a)*4.38f,11.13f,Mathf.Sin(a)*4.38f);
             Window("WarmWindow_Drum"+i,pos,.58f,2.38f,90f-(210+i*30));
         }
         var pedestal=MakeLit("Assets/Settings/M_BrazierStone.mat",Hex("#4C5360"),0,0);

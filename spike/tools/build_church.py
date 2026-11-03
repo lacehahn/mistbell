@@ -534,6 +534,7 @@ def arch_stones(prefix,cx,y,bottom,width,height,stone):
 
 
 def interior_check(objects):
+    clear=float(bpy.context.scene.get('interior_clear',12.0))
     shell=[o for o in objects if o.name in ('Stone','Main_Shell')]
     assert len([o for o in objects if o.name.startswith('Window_Glass_')])==6
     leaf=next(o for o in objects if o.name=='Door_Leaf')
@@ -541,10 +542,10 @@ def interior_check(objects):
     floor=next(o for o in objects if o.name=='Interior_Floor')
     assert abs(bounds([floor])[1].z)<1e-5
     for origin,direction,distance in [((-2,-6,1),(0,1,0),12),((-7,0,1),(1,0,0),10),
-            ((-2,6,1),(0,1,0),4),((-2,0,.05),(0,0,1),11.94)]:
+            ((-2,6,1),(0,1,0),4),((-2,0,.05),(0,0,1),clear-.06)]:
         assert not any(ray_hit(o,origin,direction,distance) for o in shell), (origin,direction)
-    # Ceiling at 12.0 and both nave walls at 0.6m thickness.
-    assert any(ray_hit(o,(-2,-5,11.99),(0,0,1),.03) for o in shell)
+    # Ceiling follows the measured specification; both nave walls remain 0.6m thick.
+    assert any(ray_hit(o,(-2,-5,clear-.01),(0,0,1),.03) for o in shell)
     for side in (-1,1):
         assert any(ray_hit(o,(-2+side*3.89,-4,2),(side,0,0),.03) for o in shell)
         assert not any(ray_hit(o,(-2+side*4.51,-4,2),(side,0,0),.1) for o in shell)
@@ -556,7 +557,7 @@ def interior_check(objects):
         assert len([o for o in objects if o.name.startswith(prefix)])==n,prefix
     lo,hi=bounds(objects); size=hi-lo; tris=sum(triangle_count(o) for o in objects)
     assert tris<=95000
-    print('[INTERIOR] shell_wall=0.6 nave_clear_h=12.0 door_leaf=true window_openings=6 columns=4 pews=6 altar=1 candles=4 chandelier=1 iconostasis=1 banners=2 tris=%d bbox=%.3fx%.3fx%.3f'%(tris,size.x,size.z,size.y),flush=True)
+    print('[INTERIOR] shell_wall=0.6 nave_clear_h=%.3f door_leaf=true window_openings=6 columns=4 pews=6 altar=1 candles=4 chandelier=1 iconostasis=1 banners=2 tris=%d bbox=%.3fx%.3fx%.3f'%(clear,tris,size.x,size.z,size.y),flush=True)
 
 
 def build():
