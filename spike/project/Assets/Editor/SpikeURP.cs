@@ -41,7 +41,8 @@ public static class SpikeURP
             AssetDatabase.CreateAsset(feature, featurePath);
         }
         feature.injectionPoint = FullScreenPassRendererFeature.InjectionPoint.AfterRenderingPostProcessing;
-        feature.requirements = ScriptableRenderPassInput.None;
+        // MTN15 foot palette mask reads depth to leave opaque geometry unchanged.
+        feature.requirements = ScriptableRenderPassInput.Depth;
         feature.fetchColorBuffer = true;
         feature.bindDepthStencilAttachment = false;
         feature.passMaterial = material;

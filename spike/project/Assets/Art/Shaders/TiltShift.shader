@@ -24,6 +24,7 @@ Shader "Mistbell/TiltShift"
             #pragma fragment Frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 float _DitherStrength;
@@ -34,7 +35,7 @@ Shader "Mistbell/TiltShift"
                 float _MaxRadius;
             CBUFFER_END
 
-            half4 Palette(float4 color, float2 positionCS)
+            half4 Palette(float4 color, float2 positionCS, float2 uv)
             {
                 const uint bayer[16]={0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5};
                 uint2 pixel=(uint2)positionCS;
@@ -44,7 +45,23 @@ Shader "Mistbell/TiltShift"
                 #else
                     float3 srgb=LinearToSRGB(saturate(color.rgb));
                 #endif
-                srgb=floor(saturate(srgb+threshold*_DitherStrength/31.0)*31.0+.5)/31.0;
+                // MTN15: a 5-bit green dither step alone exceeds the foot's
+                // 0.02 luma budget. Preserve continuous color only on the distant
+                // backdrop at the mountain foot; opaque church/ground/interior
+                // depth keeps the original palette and dithering unchanged.
+                float rawDepth=SampleSceneDepth(uv);
+                #if UNITY_REVERSED_Z
+                    float backdrop=rawDepth<0.00001?1.0:0.0;
+                #else
+                    float backdrop=rawDepth>0.99999?1.0:0.0;
+                #endif
+                float screenY=1.0-positionCS.y/_ScreenParams.y;
+                float footBand=smoothstep(.52,.58,screenY)*(1.0-smoothstep(.74,.80,screenY));
+                float footMask=backdrop*footBand;
+                float ditherStrength=_DitherStrength*(1.0-footMask);
+                float3 continuous=srgb;
+                srgb=floor(saturate(srgb+threshold*ditherStrength/31.0)*31.0+.5)/31.0;
+                srgb=lerp(srgb,continuous,footMask);
                 #if defined(UNITY_COLORSPACE_GAMMA)
                     return half4(srgb,color.a);
                 #else
@@ -63,7 +80,7 @@ Shader "Mistbell/TiltShift"
                 float radiusPixels = _MaxRadius * band;
                 [branch]
                 if (radiusPixels < 0.01)
-                    return Palette(SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv), input.positionCS.xy);
+                    return Palette(SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv), input.positionCS.xy, uv);
 
                 // _ScreenParams.zw contains 1 + reciprocal size, not texel size.
                 float2 pixelSize = rcp(_ScreenParams.xy);
@@ -76,7 +93,7 @@ Shader "Mistbell/TiltShift"
                     float2 offset = float2(cos(a), sin(a)) * r * pixelSize * radiusPixels;
                     color += SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv + offset);
                 }
-                return Palette(color / 24.0, input.positionCS.xy);
+                return Palette(color / 24.0, input.positionCS.xy, uv);
             }
             ENDHLSL
         }
