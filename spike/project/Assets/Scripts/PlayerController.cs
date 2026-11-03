@@ -847,16 +847,18 @@ public sealed partial class PlayerController : MonoBehaviour
             flat &= interior.SupportAt(p,out var hit) && Mathf.Abs(hit.point.y-interior.FloorY)<.01f;
         foreach(var lamp in interior.lamps)
         {
-            if(lamp.name=="Interior_WindowKey")
+            if(lamp.name.StartsWith("Interior_WindowKey"))
             {
-                pass &= lamp.enabled && lamp.type==LightType.Directional && Mathf.Abs(lamp.intensity-.95f)<.001f &&   // 主光从 1.9 降到 .95：1.9 把中殿打成白墙厅
-                    Mathf.Abs(lamp.transform.eulerAngles.x-35)<.001f && lamp.color==(Color)new Color32(232,217,196,255);
+                // 室内 v2：高窗改 3 盏斜射聚光（光柱+地面光斑的来源），不再是单盏方向光
+                pass &= lamp.enabled && lamp.type==LightType.Spot && Mathf.Abs(lamp.spotAngle-45)<.01f &&
+                    Mathf.Abs(lamp.range-22)<.01f && Mathf.Abs(lamp.intensity-2.5f)<.001f && lamp.shadows==LightShadows.None &&
+                    lamp.color==(Color)new Color32(232,210,182,255);
                 continue;
             }
-            if(lamp.name.StartsWith("Interior_NaveFill_"))
+            if(lamp.name=="Interior_FloorBounce")
             {
-                pass &= lamp.enabled && lamp.type==LightType.Point && Mathf.Abs(lamp.range-9)<.001f &&
-                    Mathf.Abs(lamp.intensity-.55f)<.001f && lamp.color==(Color)new Color32(201,214,230,255);
+                pass &= lamp.enabled && lamp.type==LightType.Point && Mathf.Abs(lamp.range-14)<.01f &&
+                    Mathf.Abs(lamp.intensity-.40f)<.001f && lamp.color==(Color)new Color32(138,106,78,255);
                 continue;
             }
             if(lamp.name.StartsWith("Interior_ChandelierCandle_")) { pass &= Mathf.Abs(lamp.range-1.2f)<.001f && Mathf.Abs(lamp.intensity-.35f)<.001f; continue; }
@@ -1146,7 +1148,7 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(.4f);
         bool pass=interiorLightPass && domeLightPass && ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
-            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==16 && interior.shafts.Length==3 &&
+            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==17 && interior.shafts.Length==3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;
         Debug.Log($"[INT_PASS] light={interiorLightPass} domeLight={domeLightPass} ceilingSeen={ceilingSeen} " +
             $"domeSeen={domeSeen} fx={ceilingFx:F3} visible={InteriorVisibility()} obstacles={TestInteriorObstacles()} " +

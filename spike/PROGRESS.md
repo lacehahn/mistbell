@@ -644,4 +644,7 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 | 01:37 | 台地墙黑条根因定位 | 探针打印：`TerraceWall_*` 材质=M_ChurchStone、style11UV=1、baseMap=Style11_Atlas0 —— 接线是对的，但**它是在图集 UV 重投影之后才换的材质**，所以 UV 没被纳入图集投影，整面墙都在采同一个纹素 → 看起来是纯色黑条 | `[MAT] … style11UV=1.0 baseMap=Style11_Atlas0` |
 | 01:37 | 修复 | 把材质切换移到 `Style11Atlas.Apply()` **之前**，让台地墙进图集 UV 重投影；再在 Apply 之后补一遍"深色实例"（×0.68/0.70）保证比教堂低一档 | `[TERRACE_MAT] tinted=38`；台地墙现在有手绘乱砌纹理 + 雪顶，明度低于教堂 |
 | 01:37 | 回归 | 十一项演示全绿 | `FAIL=0` |
+| 07:50 | 室内 v2（Codex 执行 + 我收口） | 3 盏高窗斜射聚光（spot 45°/2.5/22m）+ 地面反弹光 + 3 道灰尘粒子 + 3 个地面光斑；长椅加木色/端板/边光；祭坛抬到 1.05 m、三凹龛 + 木十字 + 5 支蜡烛；地板 smoothness 0.35 | `[INTERIOR] shafts=3 pools=3 dust=3 altar_h=1.05 pew_rows=6`；`nave_luma 0.0433 / wall 0.0330 / bench 0.0749`（原 0.0203 / 0.0124 / 0.0153） |
+| 07:50 | 演示门限同步 | 室内灯改成 3 盏聚光后，旧的"单盏方向光 0.95/35°"断言全部失效 → 改判 Spot/45°/2.5/22m、FloorBounce 0.40、lamps 17 | `-demo-enter-church` 全绿 |
+| 07:50 | 未解 | 地板明度改不动：`Assets/Settings/M_InteriorSlab_*.mat` 的自发光仍是 0.16，说明**室内材质不是由 `SpikeScene.Run` 重建的**（builder 里改成 0.025 已生效但资产没重写），需要查室内资产的生成入口 | — |
 

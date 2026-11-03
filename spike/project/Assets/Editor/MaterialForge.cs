@@ -307,6 +307,7 @@ public static class MaterialForge
             if(churchMat!=null) r.sharedMaterial = churchMat;
         }
         Style11Atlas.Apply(indoor);
+        ChurchInteriorBuilder.FinishInterior(indoor);
 
         // 图集 Apply 会把同族渲染器的材质统一回 churchMat，所以"台地墙更深一档"必须在它之后再盖一次。
         {

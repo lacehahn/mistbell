@@ -11,7 +11,12 @@ public static class ChurchInteriorBuilder
     {
         var m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name=name };
         m.SetColor("_BaseColor",color); m.SetFloat("_Smoothness",.12f);
-        if(emission.maxColorComponent>0) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor",emission); if(name=="M_InteriorWood" || name=="M_InteriorStone" || name=="M_InteriorGold" || name.StartsWith("M_InteriorSlab_") || name.StartsWith("M_InteriorPew") || name=="M_InteriorAisle" || name=="M_InteriorCeiling" || name.StartsWith("M_InteriorDrum") || name=="M_InteriorDome") m.globalIlluminationFlags=MaterialGlobalIlluminationFlags.BakedEmissive; }
+        if(emission.maxColorComponent>0)
+        {
+            m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor",emission);
+            if(name=="M_InteriorWood" || name=="M_InteriorStone" || name=="M_InteriorGold" || name.StartsWith("M_InteriorSlab_") || name.StartsWith("M_InteriorPew") || name=="M_InteriorAisle" || name=="M_InteriorCeiling" || name.StartsWith("M_InteriorDrum") || name=="M_InteriorDome" || name.StartsWith("M_InteriorV2"))
+                m.globalIlluminationFlags=MaterialGlobalIlluminationFlags.BakedEmissive;
+        }
         string path="Assets/Settings/"+name+".mat";
         AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(m,path); return m;
     }
@@ -30,8 +35,8 @@ public static class ChurchInteriorBuilder
         // Door leaf and exterior threshold retain their exact previous material values.
         var doorWood=Lit("M_InteriorDoorWood",new Color(.22f,.105f,.045f));
         var thresholdStone=Lit("M_InteriorThreshold",new Color(.36f,.29f,.20f));
-        var wood=Lit("M_InteriorWood",new Color(.32f,.21f,.12f),new Color(.32f,.26f,.19f));
-        var stone=Lit("M_InteriorStone",new Color(.46f,.39f,.30f),new Color(.32f,.29f,.24f));
+        var wood=Lit("M_InteriorWood",new Color(.26f,.17f,.10f),new Color(.30f,.24f,.17f));
+        var stone=Lit("M_InteriorStone",new Color(.37f,.31f,.24f),new Color(.30f,.27f,.22f));
         var gold=Lit("M_InteriorGold",new Color(.66f,.43f,.12f),new Color(.32f,.26f,.15f));
         var blue=Lit("M_InteriorBlue",new Color(.045f,.12f,.32f));
         var red=Lit("M_InteriorRed",new Color(.32f,.045f,.025f));
@@ -50,6 +55,13 @@ public static class ChurchInteriorBuilder
                 interior.shell=f.GetComponent<Renderer>();
                 // Runtime indoor instance: exterior/capture material is restored on exit.
                 interior.indoorStone=new Material(interior.shell.sharedMaterial) { name="M_IndoorShell" };
+                if (interior.indoorStone.HasProperty("_BaseColor"))
+                {
+                    // 内壁/地面用的是教堂外墙材质的副本：室外那张图在室内直射光下会发白，
+                    // 压到 0.72 让室内回到"昏暗石室"，光柱才有对比空间。
+                    var ic = interior.indoorStone.GetColor("_BaseColor");
+                    interior.indoorStone.SetColor("_BaseColor", new Color(ic.r*.72f, ic.g*.72f, ic.b*.74f, ic.a));
+                }
                 interior.indoorStone.shader=Shader.Find("Universal Render Pipeline/Lit");
                 interior.indoorStone.SetColor("_BaseColor",new Color(.42f,.36f,.29f));   // .65 线性≈0.83 sRGB，太亮
                 interior.indoorStone.EnableKeyword("_EMISSION");
@@ -120,7 +132,7 @@ public static class ChurchInteriorBuilder
         if(interior.doorLeaf==null || interior.floor==null || lamps.Count!=5) throw new System.InvalidOperationException("Interior import incomplete");
         var fill=new GameObject("Interior_NaveFill").AddComponent<Light>();
         fill.transform.SetParent(church,true); fill.transform.position=new Vector3(0,6.5f,-2);
-        fill.type=LightType.Point; fill.range=16; fill.intensity=.78f;   // 环境光调整后中殿偏暗(nave 0.0194→目标≥0.02)
+        fill.type=LightType.Point; fill.range=14; fill.intensity=.78f;   // 环境光调整后中殿偏暗(nave 0.0194→目标≥0.02)
         fill.color=new Color32(255,217,168,255); fill.shadows=LightShadows.None;
         fill.renderMode=LightRenderMode.ForcePixel; fill.enabled=false; lamps.Add(fill);
 
@@ -192,18 +204,7 @@ public static class ChurchInteriorBuilder
         BuildFloor(detail,interior);
         DressPews(church,detail,interior);
         interior.lamps=lamps.ToArray();
-        var frameMat=Lit("M_InteriorArchFrame",new Color(.09f,.045f,.018f),new Color(.035f,.018f,.008f));
-        var iconMat=Lit("M_InteriorIconCore",new Color(.58f,.28f,.075f),new Color(.65f,.30f,.075f));
-        var doorMat=Lit("M_InteriorHolyDoor",new Color(.72f,.42f,.14f),new Color(.95f,.53f,.16f));
-        foreach(var r in church.GetComponentsInChildren<MeshRenderer>())
-            if(r.name.StartsWith("Interior_IconFrame_")) r.enabled=false;
-        var screen=System.Array.Find(church.GetComponentsInChildren<MeshRenderer>(),r=>r.name=="Interior_Iconostasis");
-        for(int i=0;i<3;i++)
-        {
-            var center=new Vector3(screen.bounds.center.x+(i-1)*1.02f,screen.bounds.center.y,screen.bounds.min.z-.025f);
-            Arch(church,"Interior_ArchFrame_"+i,center,.9f,1.6f,frameMat);
-            Arch(church,"Interior_ArchCore_"+i,center+Vector3.back*.015f,.74f,1.42f,i==1?doorMat:iconMat);
-        }
+        BuildSanctuary(church,detail,interior);
         Physics.SyncTransforms();
         // Short stone threshold joins the graded courtyard to the flat local-zero floor.
         float fy=interior.FloorY;
@@ -216,32 +217,24 @@ public static class ChurchInteriorBuilder
         threshold.AddComponent<MeshFilter>().sharedMesh=mesh; threshold.AddComponent<MeshRenderer>().sharedMaterial=thresholdStone;
         var ramp=threshold.AddComponent<MeshCollider>(); ramp.sharedMesh=mesh; threshold.layer=PlayerController.TraversalLayer;
         interior.threshold=ramp;
-        // Camera-facing volumes carry a radial cross-section; additive blending never darkens stone.
-        var shaftMat=new Material(Shader.Find("Mistbell/InteriorShaft")) { name="M_InteriorShaft" };
-        shaftMat.SetColor("_BaseColor",new Color(.45f,.64f,.9f,.08f));
-        shaftMat.SetFloat("_DstBlend",(float)BlendMode.One);
-        AssetDatabase.DeleteAsset("Assets/Settings/M_InteriorShaft.mat"); AssetDatabase.CreateAsset(shaftMat,"Assets/Settings/M_InteriorShaft.mat");
-        var shafts=new List<Renderer>();
-        var rng=new System.Random(2170);
-        for(int i=0;i<3;i++)
-        {
-            float x=i%2==0?-5.55f:1.55f, z=i==0?-5.5f:5.6f;
-            Vector3 offset=new Vector3((float)rng.NextDouble()*.22f-.11f,0,(float)rng.NextDouble()*.4f-.2f);
-            Vector3 top=new Vector3(x,fy+6.5f,z)+offset, bottom=new Vector3(-2+(x+2)*.3f,fy+.08f,z+1.2f)+offset;
-            var go=GameObject.CreatePrimitive(PrimitiveType.Quad); go.name="Interior_LightShaft_"+i;
-            Object.DestroyImmediate(go.GetComponent<Collider>()); go.transform.SetParent(church,true);
-            go.transform.position=(top+bottom)*.5f;
-            go.transform.rotation=Quaternion.LookRotation(Vector3.Cross(Vector3.right,top-bottom).normalized,(top-bottom).normalized);
-            go.transform.localScale=new Vector3(.9f,(top-bottom).magnitude,1);
-            var r=go.GetComponent<MeshRenderer>(); r.sharedMaterial=shaftMat;
-            r.shadowCastingMode=ShadowCastingMode.Off; r.receiveShadows=false; shafts.Add(r);
-        }
-        interior.shafts=shafts.ToArray();
+        BuildWestWindows(detail,interior);
         ApplyLighting(interior);
-        Debug.Log($"[INTERIOR_BUILD] floor_y={fy:F3} lamps={lamps.Count} shafts={shafts.Count} hinge={interior.doorLeaf.position}");
+        Debug.Log($"[INTERIOR_BUILD] floor_y={fy:F3} lamps={interior.lamps.Length} shafts={interior.shafts.Length} hinge={interior.doorLeaf.position}");
         return interior;
     }
     // Patch the authored scene in place: do not regenerate terrain, sky or exterior assets.
+    public static void RefreshV2AndPlayer()
+    {
+        var scene=EditorSceneManager.OpenScene("Assets/Scenes/ArtSpike.unity");
+        FinishInterior(Object.FindFirstObjectByType<ChurchInterior>());
+        EditorSceneManager.MarkSceneDirty(scene); EditorSceneManager.SaveScene(scene); AssetDatabase.SaveAssets();
+        PerformanceBuild.Run();
+    }
+    public static void BuildV2AndPlayer()
+    {
+        SpikeScene.Run();
+        PerformanceBuild.Run();
+    }
     public static void ApplyLightingAndBuild()
     {
         var scene=EditorSceneManager.OpenScene("Assets/Scenes/ArtSpike.unity");
@@ -258,42 +251,26 @@ public static class ChurchInteriorBuilder
     static void ApplyLighting(ChurchInterior interior)
     {
         var lamps=new List<Light>(interior.lamps);
-        lamps.RemoveAll(l=>l==null || l.name=="Interior_NaveFill" || l.name.StartsWith("Interior_WindowKey") || l.name.StartsWith("Interior_NaveFill_"));
+        lamps.RemoveAll(l=>l==null || l.name=="Interior_FloorBounce" || l.name=="Interior_NaveFill" || l.name.StartsWith("Interior_WindowKey") || l.name.StartsWith("Interior_NaveFill_"));
         foreach(var l in interior.GetComponentsInChildren<Light>(true))
-            if(l.name=="Interior_NaveFill" || l.name.StartsWith("Interior_WindowKey") || l.name.StartsWith("Interior_NaveFill_")) Object.DestroyImmediate(l.gameObject);
-        var key=new GameObject("Interior_WindowKey").AddComponent<Light>();
-        key.transform.SetParent(interior.transform,true);
-        key.transform.position=new Vector3(-5.5f,interior.FloorY+6.5f,-3.5f);
-        key.transform.rotation=Quaternion.Euler(35,75,0);
-        // Indoor-only directional daylight; its transform encodes the west high-window direction.
-        key.type=LightType.Directional; key.intensity=.95f; key.range=24;   // 1.9 把中殿打成一间白墙现代厅
-        // Project the high-window aperture instead of illuminating the whole floor uniformly.
-        // The imported solid roof otherwise occludes a second directional shadow map entirely.
-        var cookie=new Texture2D(256,256,TextureFormat.RGB24,false,true) {
-            name="Interior_WestWindowCookie",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear };
-        for(int y=0;y<256;y++) for(int x=0;x<256;x++)
+            if(l.name=="Interior_FloorBounce" || l.name=="Interior_NaveFill" || l.name.StartsWith("Interior_WindowKey") || l.name.StartsWith("Interior_NaveFill_")) Object.DestroyImmediate(l.gameObject);
+        for(int i=0;i<3;i++)
         {
-            float u=(x/255f-.5f)*24, v=(y/255f-.5f)*24;
-            float aperture=Mathf.SmoothStep(0,1,Mathf.InverseLerp(-4.6f,-3.4f,v)) *
-                (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(5,6,v))) *
-                (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(9,10,Mathf.Abs(u))));
-            cookie.SetPixel(x,y,new Color(aperture,aperture,aperture));
+            var key=new GameObject(i==0?"Interior_WindowKey":"Interior_WindowKey_"+i).AddComponent<Light>();
+            key.transform.SetParent(interior.detailRoot.transform,true);
+            Vector3 top=WindowTop(interior,i), bottom=WindowPool(interior,i);
+            key.transform.position=top; key.transform.rotation=Quaternion.LookRotation(bottom-top);
+            key.type=LightType.Spot; key.spotAngle=45; key.innerSpotAngle=26;
+            key.range=22; key.intensity=2.5f; key.color=new Color32(232,210,182,255);
+            key.shadows=LightShadows.None; key.renderMode=LightRenderMode.ForcePixel;
+            lamps.Add(key);
         }
-        cookie.Apply();
-        AssetDatabase.DeleteAsset("Assets/Art/Church/Interior_WestWindowCookie.asset");
-        AssetDatabase.CreateAsset(cookie,"Assets/Art/Church/Interior_WestWindowCookie.asset");
-        key.cookie=cookie; key.gameObject.AddComponent<UniversalAdditionalLightData>().lightCookieSize=new Vector2(24,24);
-        key.color=new Color32(232,217,196,255); key.shadows=LightShadows.None;
-        key.renderMode=LightRenderMode.ForcePixel; key.enabled=false; lamps.Add(key);
-        for(int i=0;i<2;i++)
-        {
-            var fill=new GameObject("Interior_NaveFill_"+i).AddComponent<Light>();
-            fill.transform.SetParent(interior.transform,true);
-            fill.transform.position=new Vector3(i==0?-4.1f:.1f,interior.FloorY+3.6f,2.6f);
-            fill.type=LightType.Point; fill.intensity=.55f; fill.range=9;
-            fill.color=new Color32(201,214,230,255); fill.shadows=LightShadows.None;
-            fill.renderMode=LightRenderMode.ForcePixel; fill.enabled=false; lamps.Add(fill);
-        }
+        var bounce=new GameObject("Interior_FloorBounce").AddComponent<Light>();
+        bounce.transform.SetParent(interior.detailRoot.transform,true);
+        bounce.transform.position=new Vector3(-2,interior.FloorY+.6f,1);
+        bounce.type=LightType.Point; bounce.range=14; bounce.intensity=.40f;
+        bounce.color=new Color32(138,106,78,255); bounce.shadows=LightShadows.None;
+        lamps.Add(bounce);
         foreach(var lamp in lamps) if(lamp.name.StartsWith("Interior_Candle_")) lamp.range=6;
         interior.lamps=lamps.ToArray();
         var foot=Lit("M_InteriorWallFoot",interior.indoorStone.GetColor("_BaseColor")*.9f,
@@ -315,7 +292,7 @@ public static class ChurchInteriorBuilder
                 for(int k=1;k<polygon.Count-1;k++) indices.AddRange(new[]{offset,offset+k,offset+k+1});
             }
             var normal=f.transform.InverseTransformDirection(Vector3.up).normalized;
-            float height=Vector3.Dot(normal,f.transform.InverseTransformPoint(new Vector3(0,interior.FloorY+.7f,0)));
+            float height=Vector3.Dot(normal,f.transform.InverseTransformPoint(new Vector3(0,interior.FloorY+1.2f,0)));
             for(int k=0;k<t.Length;k+=3)
             {
                 var polygon=new List<CutVertex>();
@@ -351,11 +328,11 @@ public static class ChurchInteriorBuilder
         {
             var mat=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_InteriorSlab_"+i+".mat");
             // Preserve subtle per-slab variation around the specified stone palette.
-            mat.SetColor("_BaseColor",(Color)new Color32(185,167,142,255)*(1+(i-7)*.01f));
-            mat.SetFloat("_Smoothness",.22f); EditorUtility.SetDirty(mat);
+            mat.SetColor("_BaseColor",(Color)new Color32(185,167,142,255)*(1+(i-7)*(.08f/7)));
+            mat.SetFloat("_Smoothness",.35f); EditorUtility.SetDirty(mat);
         }
         var aisle=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_InteriorAisle.mat");
-        aisle.SetFloat("_Smoothness",.22f); EditorUtility.SetDirty(aisle);
+        aisle.SetFloat("_Smoothness",.35f); EditorUtility.SetDirty(aisle);
         EditorUtility.SetDirty(foot); EditorUtility.SetDirty(interior.pewEnds); EditorUtility.SetDirty(interior);
     }
     static GameObject Primitive(Transform parent,string name,PrimitiveType type,Vector3 position,Vector3 scale,Material material)
@@ -525,7 +502,7 @@ public static class ChurchInteriorBuilder
         shaft.SetColor("_BaseColor",new Color(.45f,.64f,.9f,.10f)); shaft.SetFloat("_DstBlend",(float)BlendMode.One);
         AssetDatabase.DeleteAsset("Assets/Settings/M_InteriorDrumShaft.mat"); AssetDatabase.CreateAsset(shaft,"Assets/Settings/M_InteriorDrumShaft.mat");
         var windowEmission=(Color)new Color32(207,226,245,255);
-        var windowFill=Lit("M_InteriorDrumWindowFill",windowEmission,windowEmission*1.2f);
+        var windowFill=Lit("M_InteriorDrumWindowFill",windowEmission,windowEmission);
         var skyEmission=(Color)new Color32(191,215,234,255);
         var skyFill=Lit("M_InteriorOculusSky",skyEmission,skyEmission);
         // Clear EmissiveIsBlack before URP validates/saves this material, or its emission keyword is removed.
@@ -544,6 +521,8 @@ public static class ChurchInteriorBuilder
             lamp.renderMode=LightRenderMode.ForcePixel;
             interior.domeUplights[i]=lamp;
         }
+        var ribLight=Lit("M_InteriorV2RibLight",(Color)new Color32(122,107,92,255)*1.10f,new Color(.14f,.12f,.10f));
+        var ribDark=Lit("M_InteriorV2RibDark",(Color)new Color32(122,107,92,255)*.92f,new Color(.10f,.085f,.07f));
         float apothem=3.2f*Mathf.Cos(Mathf.PI/12),outer=4.2f*Mathf.Cos(Mathf.PI/12);
         for(int side=0;side<12;side++)
         {
@@ -579,7 +558,7 @@ public static class ChurchInteriorBuilder
             foreach(float y in new[]{8.61f,12.2f}) Quad(P(-ih,y,apothem),P(ih,y,apothem),P(oh,y,outer),P(-oh,y,outer),y<9?Vector3.down:Vector3.up);
             Surface(parent,"Interior_DrumWall_"+side,v.ToArray(),t.ToArray(),stone);
             float corner=side*Mathf.PI/6;
-            var rib=Primitive(parent,"Interior_DrumRib_"+side,PrimitiveType.Cube,center+new Vector3(Mathf.Cos(corner)*3.16f,10.4f,Mathf.Sin(corner)*3.16f),new Vector3(.18f,3.6f,.18f),stone);
+            var rib=Primitive(parent,"Interior_DrumRib_"+side,PrimitiveType.Cube,center+new Vector3(Mathf.Cos(corner)*3.16f,10.4f,Mathf.Sin(corner)*3.16f),new Vector3(.18f,3.6f,.18f),side<6?ribLight:ribDark);
             rib.transform.rotation=Quaternion.Euler(0,-corner*Mathf.Rad2Deg,0);
             // Daylight lies beyond the full wall thickness; the passage itself remains empty.
             var glowCenter=P(0,10.4f,outer+.015f);
@@ -588,7 +567,7 @@ public static class ChurchInteriorBuilder
             glow.GetComponent<Renderer>().shadowCastingMode=ShadowCastingMode.Off;
             // Inward-facing emissive substitute; no additional real-time window light.
             var window=Primitive(parent,"Interior_DrumWindowFill_"+side,PrimitiveType.Quad,
-                P(0,10.4f,apothem+.02f),new Vector3(.4f,.4f,1),windowFill);
+                P(0,10.4f,apothem+.02f),new Vector3(.66f,1.35f,1),windowFill);
             window.transform.rotation=Quaternion.LookRotation(radial);
             if(side%3==0)
             {
@@ -616,8 +595,8 @@ public static class ChurchInteriorBuilder
     static void BuildFloor(Transform parent,ChurchInterior interior)
     {
         var mats=new Material[15];
-        for(int i=0;i<mats.Length;i++) mats[i]=Lit("M_InteriorSlab_"+i,(Color)new Color32(120,110,98,255)*(1+(i-7)*.01f),new Color(.11f,.10f,.085f));   // 自发光 0.32 让石板变纯白
-        var aisle=Lit("M_InteriorAisle",new Color32(110,101,91,255),new Color(.09f,.08f,.07f));
+        for(int i=0;i<mats.Length;i++) mats[i]=Lit("M_InteriorSlab_"+i,(Color)new Color32(86,70,54,255)*(1+(i-7)*(.08f/7)),new Color(.025f,.022f,.018f));   // 自发光只留一点点底光：0.11 会让地面整片发白、盖过光柱
+        var aisle=Lit("M_InteriorAisle",new Color32(76,62,48,255),new Color(.020f,.018f,.015f));
         var grout=Lit("M_InteriorGrout",new Color32(65,59,53,255),new Color(.03f,.025f,.02f));
         var bed=new GameObject("Interior_GroutBed"); bed.transform.SetParent(parent,true);
         bed.transform.SetPositionAndRotation(interior.floor.transform.position+Vector3.down*.008f,interior.floor.transform.rotation);
@@ -628,7 +607,7 @@ public static class ChurchInteriorBuilder
         // Nominal 1.2 x .8 m slabs; cut pieces only at the plan boundary and the aisle.
         for(int row=0;row<26;row++) for(int col=0;col<12;col++)
         {
-            float x=-8.4f+col*1.2f,z=-9.35f+row*.8f;
+            float x=-8.4f+col*1.2f+(row%2)*.47f,z=-9.35f+row*.8f;
             float x1=x+1.2f,z1=z+.8f;
             var cuts=new List<float>{x,x1};
             foreach(float c in new[]{-5.9f,-2.8f,-1.2f,1.9f}) if(c>x && c<x1) cuts.Add(c);
@@ -651,9 +630,9 @@ public static class ChurchInteriorBuilder
     static void DressPews(Transform church,Transform detail,ChurchInterior interior)
     {
         // Separate asset path avoids touching M_Wood used by exterior props.
-        var wood=Lit("M_InteriorPewWood",new Color32(107,74,50,255),new Color(.06f,.05f,.04f));   // 木头上加 0.32 自发光 = 塑料感 wood.name="M_Wood"; EditorUtility.SetDirty(wood);
-        var legs=Lit("M_InteriorPewLeg",new Color32(78,54,36,255),new Color(.19f,.14f,.09f));
-        var edge=Lit("M_InteriorPewEdge",new Color32(122,87,60,255),new Color(.36f,.29f,.21f));
+        var wood=Lit("M_InteriorPewWood",new Color32(74,53,38,255),new Color(.26f,.187f,.122f));   // 木头上加 0.32 自发光 = 塑料感 wood.name="M_Wood"; EditorUtility.SetDirty(wood);
+        var legs=Lit("M_InteriorPewLeg",new Color32(42,30,22,255),new Color(.04f,.025f,.015f));
+        var edge=Lit("M_InteriorPewEdge",(Color)new Color32(74,53,38,255)*1.14f,new Color(.30f,.217f,.142f));
         var grain=new Texture2D(128,32,TextureFormat.RGBA32,false) {name="Interior_WoodGrain",wrapMode=TextureWrapMode.Repeat};
         for(int y=0;y<32;y++) for(int x=0;x<128;x++)
         {
@@ -676,9 +655,23 @@ public static class ChurchInteriorBuilder
             mesh.subMeshCount=2; mesh.SetTriangles(body,0); mesh.SetTriangles(feet,1);
             string path="Assets/Art/Church/"+r.name+"_Materials.asset"; AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(mesh,path); f.sharedMesh=mesh;
             r.sharedMaterials=new[]{wood,legs};
-            Primitive(detail,"Interior_PewSeatEdge_"+r.name,PrimitiveType.Cube,new Vector3(b.center.x,interior.FloorY+.46f,b.max.z+.012f),new Vector3(b.size.x,.06f,.035f),edge);
+
         }
         interior.pews=pews.ToArray(); interior.pewOutdoorMaterials=originals.ToArray(); interior.pewWood=wood; interior.pewLegs=legs;
+        // Twelve open wooden benches; imported meshes remain as the existing collision contract.
+        for(int side=0;side<2;side++) for(int row=0;row<6;row++)
+        {
+            float x=side==0?-4.15f:.15f,z=.55f+row*1.1f,y=interior.FloorY;
+            string n="Interior_V2Pew_"+side+"_"+row;
+            Primitive(detail,n+"_Seat",PrimitiveType.Cube,new Vector3(x,y+.46f,z),new Vector3(2.7f,.08f,.44f),wood);
+            Primitive(detail,n+"_Back",PrimitiveType.Cube,new Vector3(x,y+.76f,z+.20f),new Vector3(2.7f,.48f,.06f),wood);
+            Primitive(detail,n+"_Rim",PrimitiveType.Cube,new Vector3(x,y+1.01f,z+.20f),new Vector3(2.7f,.02f,.065f),edge);
+            foreach(float dx in new[]{-1.32f,1.32f})
+            {
+                Primitive(detail,n+"_End",PrimitiveType.Cube,new Vector3(x+dx,y+.59f,z),new Vector3(.06f,.74f,.48f),wood);
+                foreach(float dz in new[]{-.16f,.16f}) Primitive(detail,n+"_Leg",PrimitiveType.Cube,new Vector3(x+dx,y+.215f,z+dz),new Vector3(.06f,.43f,.06f),legs);
+            }
+        }
     }
     static void Arch(Transform parent,string name,Vector3 center,float width,float height,Material material)
     {
@@ -691,6 +684,169 @@ public static class ChurchInteriorBuilder
         string path="Assets/Art/Church/"+name+".asset"; AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(mesh,path);
         var go=new GameObject(name); go.transform.SetParent(parent,true); go.transform.position=center;
         go.AddComponent<MeshFilter>().sharedMesh=mesh; go.AddComponent<MeshRenderer>().sharedMaterial=material;
+    }
+    static Vector3 WindowTop(ChurchInterior interior,int i) => new Vector3(-5.78f,interior.FloorY+7.6f+i*.25f,-1+i*3.75f);
+    static Vector3 WindowPool(ChurchInterior interior,int i) => new Vector3(-2.4f+i*.4f,interior.FloorY+.025f,-3+i*4.5f);
+    static Material Additive(string name,Color color)
+    {
+        var m=new Material(Shader.Find("Mistbell/InteriorShaft")){name=name};
+        m.SetColor("_BaseColor",color); m.SetFloat("_DstBlend",1);
+        string path="Assets/Settings/"+name+".mat";
+        AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(m,path); return m;
+    }
+    static void BuildWestWindows(Transform detail,ChurchInterior interior)
+    {
+        var shaft=Additive("M_InteriorV2Shaft",new Color(2.8f,2.35f,1.85f,.08f));
+        var pool=Additive("M_InteriorV2Pool",new Color(1,.82f,.59f,.12f));
+        var dust= new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")){name="M_InteriorV2Dust"};
+        dust.SetFloat("_Surface",1); dust.SetFloat("_Blend",0); dust.SetFloat("_ZWrite",0);
+        dust.SetFloat("_SrcBlend",(float)BlendMode.SrcAlpha); dust.SetFloat("_DstBlend",(float)BlendMode.OneMinusSrcAlpha);
+        dust.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); dust.renderQueue=3000;
+        AssetDatabase.DeleteAsset("Assets/Settings/M_InteriorV2Dust.mat"); AssetDatabase.CreateAsset(dust,"Assets/Settings/M_InteriorV2Dust.mat");
+        var shafts=new List<Renderer>();
+        for(int i=0;i<3;i++)
+        {
+            var top=WindowTop(interior,i); var bottom=WindowPool(interior,i); var up=(top-bottom).normalized;
+            var beam=Primitive(detail,"Interior_LightShaft_"+i,PrimitiveType.Quad,(top+bottom)/2,new Vector3(1.65f,(top-bottom).magnitude,1),shaft);
+            beam.transform.rotation=Quaternion.LookRotation(Vector3.Cross(Vector3.right,up),up);
+            shafts.Add(beam.GetComponent<Renderer>());
+            var pv=new List<Vector3>{bottom}; var pt=new List<int>(); var puv=new List<Vector2>{new Vector2(.5f,.5f)};
+            for(int j=0;j<=48;j++)
+            {
+                float a=j*Mathf.PI*2/48;
+                pv.Add(bottom+Quaternion.Euler(0,-25,0)*new Vector3(Mathf.Cos(a)*.8f,0,Mathf.Sin(a)*1.55f));
+                puv.Add(new Vector2(1,.5f)); if(j>0) pt.AddRange(new[]{0,j+1,j});
+            }
+            var patch=Surface(detail,"Interior_WindowPool_"+i,pv.ToArray(),pt.ToArray(),pool);
+            patch.GetComponent<MeshFilter>().sharedMesh.SetUVs(0,puv);
+            var ps=new GameObject("Interior_WindowDust_"+i).AddComponent<ParticleSystem>();
+            ps.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
+            ps.transform.SetParent(detail,true); ps.transform.position=bottom;
+            ps.transform.rotation=Quaternion.LookRotation(top-bottom);
+            var main=ps.main; main.loop=true; main.prewarm=true; main.duration=24;
+            main.maxParticles=36; main.startLifetime=24; main.startSpeed=new ParticleSystem.MinMaxCurve(.05f,.15f);
+            main.startSize=new ParticleSystem.MinMaxCurve(.02f,.05f);
+            main.startColor=new Color(1,242/255f,220/255f,.14f); main.simulationSpace=ParticleSystemSimulationSpace.Local;
+            var emission=ps.emission; emission.rateOverTime=1.5f;
+            var shape=ps.shape; shape.shapeType=ParticleSystemShapeType.ConeVolume; shape.angle=5;
+            shape.radius=.65f; shape.length=(top-bottom).magnitude;
+            var collision=ps.collision; collision.enabled=false;
+            ps.GetComponent<ParticleSystemRenderer>().sharedMaterial=dust;
+            ps.GetComponent<ParticleSystemRenderer>().shadowCastingMode=ShadowCastingMode.Off;
+        }
+        interior.shafts=shafts.ToArray();
+    }
+    static void BuildSanctuary(Transform church,Transform detail,ChurchInterior interior)
+    {
+        var originals=new List<Renderer>();
+        foreach(var r in church.GetComponentsInChildren<MeshRenderer>())
+            if(r.name=="Interior_Altar" || r.name=="Interior_Iconostasis" || r.name.StartsWith("Interior_IconFrame_")) originals.Add(r);
+        interior.legacySanctuary=originals.ToArray();
+        var stone=Lit("M_InteriorV2AltarStone",new Color32(122,107,92,255),new Color(.13f,.11f,.09f));
+        var cloth=Lit("M_InteriorV2AltarCloth",new Color32(216,203,186,255),new Color(.16f,.14f,.12f));
+        var dark=Lit("M_InteriorV2Niche",new Color32(58,46,36,255),new Color(.055f,.04f,.025f));
+        var gold=Lit("M_InteriorV2Gold",new Color32(201,162,39,255),new Color(.70f,.45f,.10f));
+        gold.SetFloat("_Cull",0);
+        var wood=Lit("M_InteriorV2Cross",new Color32(74,53,38,255),new Color(.27f,.16f,.08f));
+        var wax=Lit("M_InteriorV2Wax",new Color32(231,213,175,255),new Color(.12f,.10f,.07f));
+        var flame=Additive("M_InteriorV2Flame",new Color(1,201/255f,122/255f,.8f));
+        float fy=interior.FloorY;
+        Vector3 altar=new Vector3(-2,fy,8.6f);
+        Primitive(detail,"Interior_V2AltarBody",PrimitiveType.Cube,altar+Vector3.up*.495f,new Vector3(2.08f,.99f,.85f),stone);
+        Primitive(detail,"Interior_V2AltarTop",PrimitiveType.Cube,altar+Vector3.up*1.02f,new Vector3(2.2f,.06f,1),stone);
+        Primitive(detail,"Interior_V2AltarCloth",PrimitiveType.Cube,altar+Vector3.up*1.056f,new Vector3(2.22f,.012f,1.02f),cloth);
+        Primitive(detail,"Interior_V2AltarDrape",PrimitiveType.Cube,altar+new Vector3(0,.925f,-.51f),new Vector3(2.22f,.25f,.012f),cloth);
+        for(int i=0;i<3;i++)
+        {
+            Vector3 center=new Vector3(-2+(i-1)*1.02f,fy+2.05f,7.55f);
+            // Open front: rear plane and extruded arch ring form a genuine 6 cm recess.
+            Arch(detail,"Interior_V2NicheBack_"+i,center+Vector3.forward*.06f,.86f,1.56f,dark);
+            var v=new List<Vector3>(); var tris=new List<int>();
+            for(int j=0;j<32;j++)
+            {
+                float a=j*Mathf.PI*2/32,b=(j+1)*Mathf.PI*2/32;
+                Vector3 P(float q,float inset,float z)
+                {
+                    // Upper semicircle and straight lower jambs (matching the rear arched panel).
+                    float x=Mathf.Cos(q)*(.45f-inset);
+                    float y=Mathf.Sin(q)>=0?.36f+Mathf.Sin(q)*(.45f-inset):-.81f+inset;
+                    return center+new Vector3(x,y,z);
+                }
+                int n=v.Count; v.AddRange(new[]{P(a,0,0),P(b,0,0),P(b,.02f,0),P(a,.02f,0),P(a,.02f,.06f),P(b,.02f,.06f)});
+                tris.AddRange(new[]{n,n+2,n+1,n,n+3,n+2,n+3,n+5,n+2,n+3,n+4,n+5});
+            }
+            Surface(detail,"Interior_ArchFrame_"+i,v.ToArray(),tris.ToArray(),gold);
+        }
+        Vector3 cross=new Vector3(-2,fy+2.05f,7.48f);
+        Primitive(detail,"Interior_V2CrossGoldV",PrimitiveType.Cube,cross,new Vector3(.13f,1.1f,.065f),gold);
+        Primitive(detail,"Interior_V2CrossGoldH",PrimitiveType.Cube,cross+Vector3.up*.20f,new Vector3(.63f,.13f,.065f),gold);
+        Primitive(detail,"Interior_V2CrossWoodV",PrimitiveType.Cube,cross+Vector3.back*.04f,new Vector3(.09f,1.06f,.035f),wood);
+        Primitive(detail,"Interior_V2CrossWoodH",PrimitiveType.Cube,cross+new Vector3(0,.20f,-.04f),new Vector3(.59f,.09f,.035f),wood);
+        for(int i=0;i<5;i++)
+        {
+            float h=.12f+i*.02f; var foot=altar+new Vector3((i-2)*.35f,1.065f,-.44f);
+            Primitive(detail,"Interior_V2Candle_"+i,PrimitiveType.Cylinder,foot+Vector3.up*(h/2),new Vector3(.045f,h/2,.045f),wax);
+            Primitive(detail,"Interior_V2Flame_"+i,PrimitiveType.Quad,foot+Vector3.up*(h+.035f),new Vector3(.045f,.075f,1),flame);
+        }
+    }
+    // Called after the exterior atlas pass. Only indoor meshes/materials are touched.
+    public static void FinishInterior(ChurchInterior interior)
+    {
+        var texture=new Texture2D(256,256,TextureFormat.RGB24,true){name="Interior_V2PaintedStone",wrapMode=TextureWrapMode.Repeat};
+        var rng=new System.Random(2170);
+        for(int y=0;y<256;y++) for(int x=0;x<256;x++)
+        {
+            int row=y/32, bx=(x+(row%2)*29)%256, col=bx/64;
+            float block=1+Mathf.Sin(row*17.13f+col*41.7f)*.06f;
+            float strokes=.025f*Mathf.Sin(x*.4f+y*.7f)+(float)rng.NextDouble()*.025f;
+            float seam=(y%32<2 || bx%64<2)?.74f:1;
+            float brush=.025f*(Mathf.PerlinNoise(x*.07f,y*.22f)-.5f);
+            texture.SetPixel(x,y,new Color(1,1,1)*.90f*(block+strokes+brush)*seam);
+        }
+        texture.Apply(); const string path="Assets/Art/Church/Interior_V2PaintedStone.asset";
+        AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(texture,path);
+        void Stone(Material m,Color color,Color emission)
+        {
+            m.shader=Shader.Find("Universal Render Pipeline/Lit"); m.SetTexture("_BaseMap",texture);
+            m.SetTextureScale("_BaseMap",Vector2.one*.4f); m.SetTextureOffset("_BaseMap",Vector2.zero);
+            m.SetColor("_BaseColor",color); m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor",emission);
+            m.globalIlluminationFlags=MaterialGlobalIlluminationFlags.BakedEmissive;
+            m.SetFloat("_Smoothness",.12f); EditorUtility.SetDirty(m);
+        }
+        Stone(interior.indoorStone,new Color32(122,107,92,255),new Color(.23f,.1955f,.161f));
+        Stone(interior.wallFootStone,new Color32(90,78,67,255),new Color(.20f,.168f,.136f));
+        // Independent local UVs for the runtime-only shell; the outdoor atlas mesh is untouched.
+        for(int i=0;i<interior.drumCutFilters.Length;i++)
+        {
+            if(interior.drumCutFilters[i].GetComponent<Renderer>()!=interior.shell) continue;
+            var mesh=interior.drumIndoorMeshes[i]; var v=mesh.vertices; var ns=mesh.normals; var uv=new Vector2[v.Length];
+            var tr=interior.drumCutFilters[i].transform;
+            for(int j=0;j<v.Length;j++)
+            {
+                var p=tr.TransformPoint(v[j]); var n=tr.TransformDirection(ns[j]);
+                uv[j]=Mathf.Abs(n.y)>.7f?new Vector2(p.x,p.z):Mathf.Abs(n.x)>.7f?new Vector2(p.z,p.y):new Vector2(p.x,p.y);
+            }
+            mesh.uv=uv; EditorUtility.SetDirty(mesh);
+        }
+        foreach(var r in interior.detailRoot.GetComponentsInChildren<MeshRenderer>(true))
+        {
+            var m=r.sharedMaterial; string n=m.name;
+            if(n.StartsWith("M_InteriorSlab_") || n=="M_InteriorAisle")
+            {
+                int index=7; if(n.StartsWith("M_InteriorSlab_")) int.TryParse(n.Substring("M_InteriorSlab_".Length),out index);
+                Stone(m,(Color)new Color32(140,128,112,255)*(1+(index-7)*(.08f/7)),new Color(.16f,.14f,.115f));
+                m.SetFloat("_WorkflowMode",0); m.EnableKeyword("_SPECULAR_SETUP");
+                m.SetColor("_SpecColor",new Color(.25f,.25f,.25f)); m.SetFloat("_Smoothness",.35f);
+                var mf=r.GetComponent<MeshFilter>(); var positions=mf.sharedMesh.vertices; var slabUV=new Vector2[positions.Length];
+                for(int j=0;j<positions.Length;j++) {var point=r.transform.TransformPoint(positions[j]); slabUV[j]=new Vector2(point.x,point.z);}
+                mf.sharedMesh.uv=slabUV; EditorUtility.SetDirty(mf.sharedMesh);
+            }
+        }
+        interior.pewWood.SetColor("_EmissionColor",new Color(.26f,.187f,.122f));
+        EditorUtility.SetDirty(interior.pewWood);
+        var edge=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_InteriorPewEdge.mat");
+        edge.SetColor("_EmissionColor",new Color(.30f,.217f,.142f)); EditorUtility.SetDirty(edge);
+        EditorUtility.SetDirty(interior);
     }
     static void CutBelowFloor(MeshFilter f)
     {
