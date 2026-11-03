@@ -31,7 +31,7 @@ public sealed class ChurchInterior : MonoBehaviour
     public Renderer legacyChandelier;
     public Renderer[] pews;
     public Material[] pewOutdoorMaterials;
-    public Material pewWood, pewLegs;
+    public Material pewWood, pewLegs, pewEnds;
     public int floorSlabs;
     public MeshFilter[] drumCutFilters;
     public Mesh[] drumOutdoorMeshes, drumIndoorMeshes;
@@ -39,15 +39,15 @@ public sealed class ChurchInterior : MonoBehaviour
     void SetDetail(bool value)
     {
         if(drumCutFilters!=null) for(int i=0;i<drumCutFilters.Length;i++) drumCutFilters[i].sharedMesh=value?drumIndoorMeshes[i]:drumOutdoorMeshes[i];
-        if(pewBatch!=null) pewBatch.sharedMaterials=value?new[]{pewWood,pewLegs}:new[]{pewOutdoorMaterials[0],pewOutdoorMaterials[0]};
+        if(pewBatch!=null) pewBatch.sharedMaterials=value?new[]{pewWood,pewLegs,pewEnds}:new[]{pewOutdoorMaterials[0],pewOutdoorMaterials[0],pewOutdoorMaterials[0]};
         if(detailRoot!=null) detailRoot.SetActive(value);
         if(floor!=null) floor.GetComponent<Renderer>().enabled=!value;
         if(legacyChandelier!=null) legacyChandelier.enabled=!value;
-        if(pews!=null) for(int i=0;i<pews.Length;i++) pews[i].sharedMaterials=value?new[]{pewWood,pewLegs}:new[]{pewOutdoorMaterials[i],pewOutdoorMaterials[i]};
+        if(pews!=null) for(int i=0;i<pews.Length;i++) pews[i].sharedMaterials=value?new[]{pewWood,pewLegs,pewEnds}:new[]{pewOutdoorMaterials[i],pewOutdoorMaterials[i],pewOutdoorMaterials[i]};
     }
     public Vector3 indoorChandelierPosition, outdoorChandelierPosition;
     public Renderer shell;
-    public Material indoorStone;
+    public Material indoorStone, wallFootStone;
     Material[] outdoorStone;
     Quaternion closedRotation;
     float openingTime;
@@ -68,8 +68,9 @@ public sealed class ChurchInterior : MonoBehaviour
         Debug.Log($"[DOME] drum_sides=12 drum_h=3.6 windows={windows} ribs={ribs} cone_h=2.4 aperture=0.8 look_target=10.2");
         if(windows!=12 || ribs!=12) throw new InvalidOperationException("Incomplete interior drum");
         if(shell!=null) outdoorStone=shell.sharedMaterials;
-        foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill" || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=false;
+        foreach(var lamp in lamps) if((lamp.name.StartsWith("Interior_NaveFill") || lamp.name=="Interior_WindowKey") || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=false;
         if(chandelierLamp!=null) chandelierLamp.transform.position=outdoorChandelierPosition;
+        foreach(var lamp in lamps) if(lamp.name.StartsWith("Interior_Candle_")) lamp.range=2.6f;
         closedRotation = doorLeaf.localRotation;
         sky = RenderSettings.ambientSkyColor; equator = RenderSettings.ambientEquatorColor;
         ambientGround = RenderSettings.ambientGroundColor;
@@ -135,12 +136,13 @@ public sealed class ChurchInterior : MonoBehaviour
         inside = value;
         domeFadeStart=domeLightIntensity; domeFadeTime=0;
         SetDetail(value);
-        foreach(var lamp in lamps) if(lamp.name=="Interior_NaveFill" || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=value;
+        foreach(var lamp in lamps) if(lamp.name.StartsWith("Interior_Candle_")) lamp.range=value?6:2.6f;
+        foreach(var lamp in lamps) if((lamp.name.StartsWith("Interior_NaveFill") || lamp.name=="Interior_WindowKey") || lamp.name.StartsWith("Interior_ChandelierCandle_")) lamp.enabled=value;
         if(chandelierLamp!=null) chandelierLamp.transform.position=value?indoorChandelierPosition:outdoorChandelierPosition;
         RenderSettings.ambientSkyColor = value ? new Color32(0x5A,0x4A,0x3C,255) : sky;
         RenderSettings.ambientEquatorColor = value ? new Color32(0x43,0x38,0x2E,255) : equator;
         RenderSettings.ambientGroundColor = value ? new Color32(0x2A,0x23,0x20,255) : ambientGround;
-        if(shell!=null) shell.sharedMaterials=value ? new[]{indoorStone} : outdoorStone;
+        if(shell!=null) shell.sharedMaterials=value ? new[]{indoorStone,wallFootStone} : outdoorStone;
         RenderSettings.ambientIntensity = ambientIntensity;
         RenderSettings.fogDensity = value ? fogDensity*.12f : fogDensity;
     }

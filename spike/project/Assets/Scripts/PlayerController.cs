@@ -694,7 +694,9 @@ public sealed partial class PlayerController : MonoBehaviour
         }
         else if (footprintTrail != null)
         {
-            footprintTrail.RecordMovement(lastTrailPos, transform.position);
+            // 室内不落脚印（教堂地板是石板，靠材质名判定不稳；直接按几何区域判断）。
+            bool indoors = interior != null && interior.Contains(transform.position);
+            if (!indoors) footprintTrail.RecordMovement(lastTrailPos, transform.position);
             lastTrailPos = transform.position;
         }
         // 跟随相机防穿过墙/地形：从头部向理想机位做球形扫掠，撞到东西就拉近。
@@ -823,12 +825,23 @@ public sealed partial class PlayerController : MonoBehaviour
             flat &= interior.SupportAt(p,out var hit) && Mathf.Abs(hit.point.y-interior.FloorY)<.01f;
         foreach(var lamp in interior.lamps)
         {
-            if(lamp.name=="Interior_NaveFill") { pass &= Mathf.Abs(lamp.range-16)<.001f && Mathf.Abs(lamp.intensity-.85f)<.001f; continue; }
+            if(lamp.name=="Interior_WindowKey")
+            {
+                pass &= lamp.enabled && lamp.type==LightType.Directional && Mathf.Abs(lamp.intensity-.95f)<.001f &&   // 主光从 1.9 降到 .95：1.9 把中殿打成白墙厅
+                    Mathf.Abs(lamp.transform.eulerAngles.x-35)<.001f && lamp.color==(Color)new Color32(232,217,196,255);
+                continue;
+            }
+            if(lamp.name.StartsWith("Interior_NaveFill_"))
+            {
+                pass &= lamp.enabled && lamp.type==LightType.Point && Mathf.Abs(lamp.range-9)<.001f &&
+                    Mathf.Abs(lamp.intensity-.55f)<.001f && lamp.color==(Color)new Color32(201,214,230,255);
+                continue;
+            }
             if(lamp.name.StartsWith("Interior_ChandelierCandle_")) { pass &= Mathf.Abs(lamp.range-1.2f)<.001f && Mathf.Abs(lamp.intensity-.35f)<.001f; continue; }
             bool hanging=lamp.name.Contains("Chandelier");
-            pass &= Mathf.Abs(lamp.range-(hanging?9:2.6f))<.001f && Mathf.Abs(lamp.intensity-(hanging?1f:1.2f))<.001f;
+            pass &= Mathf.Abs(lamp.range-(hanging?9:6f))<.001f && Mathf.Abs(lamp.intensity-(hanging?1f:1.2f))<.001f;
         }
-        Debug.Log($"[INTERIOR_COLLIDE] floor_flat={flat.ToString().ToLowerInvariant()}");
+        Debug.Log($"[INTERIOR_COLLIDE] floor_flat={flat.ToString().ToLowerInvariant()} obstacles_and_lights={pass.ToString().ToLowerInvariant()}");
         return pass && flat;
     }
 
@@ -882,6 +895,17 @@ public sealed partial class PlayerController : MonoBehaviour
         Directory.CreateDirectory(Path.GetDirectoryName(output));
         var frame=ScreenCapture.CaptureScreenshotAsTexture(); File.WriteAllBytes(output,frame.EncodeToPNG()); Destroy(frame);
         return output;
+    }
+    static float InteriorSurfaceLuma(Texture2D frame, Rect roi)
+    {
+        double sum=0; int count=0;
+        for(int y=Mathf.RoundToInt(frame.height*roi.yMin);y<Mathf.RoundToInt(frame.height*roi.yMax);y++)
+        for(int x=Mathf.RoundToInt(frame.width*roi.xMin);x<Mathf.RoundToInt(frame.width*roi.xMax);x++)
+        {
+            var c=frame.GetPixel(x,y).linear;
+            sum+=.2126*c.r+.7152*c.g+.0722*c.b; count++;
+        }
+        return (float)(sum/count);
     }
     bool InteriorVisibility()
     {
@@ -950,7 +974,10 @@ public sealed partial class PlayerController : MonoBehaviour
         // 天花板在 8.6 m，50° 视野下与"角色入画"互斥（实测 player_screen_y 会掉到 1.23）；
         // 取舍：保证角色/长椅/吊灯同框，天花板改为"存在即通过"，仍在日志里记录可见比例。
         bool composition=chandelierVp.z>follow.nearClipPlane && chandelierVp.x>=0 && chandelierVp.x<=1 && cy>=.15f && cy<=.80f;   // 天花板在 8.6m 与"角色入画"几何互斥，改为仅记录
-        return detailPass && composition && candles==8 && frames==3 && additive && Mathf.Abs(alpha-.08f)<.001f && luma>=.18f && luma<=.45f && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
+        Debug.Log($"[INT_TERMS] detail={detailPass} comp={composition} candles={candles} frames={frames} " +
+            $"additive={additive} alpha={alpha:F3} luma={luma:F4} icons={icons} chandelier={chandelier} " +
+            $"below={cameraBelowFloor} minY={indoorMinY:F3} gap={indoorMinGap:F3}");
+        return detailPass && composition && candles==8 && frames==3 && additive && Mathf.Abs(alpha-.08f)<.001f && luma>=.13f && luma<=.45f && icons && chandelier && !cameraBelowFloor && indoorMinY>=1.7f-.001f && indoorMinGap>=.35f-.001f;
     }
     // Sample actual ceiling triangles with depth occlusion, rather than counting object bounds.
     // Temporary query colliders are isolated from gameplay and removed before the next frame.
@@ -1048,6 +1075,13 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(1.5f);
         yield return new WaitForEndOfFrame();
         string inside=InteriorShot("interior_inside");
+        Debug.Log("[INT_LIGHT_ROI] surface_space=linear ceiling_space=display nave=center60 wall=bilateral_lower_wall bench=bilateral_front_pews");
+        var lightingFrame=ScreenCapture.CaptureScreenshotAsTexture();
+        // Linear Rec.709 for surface light energy, fixed normalized screen ROIs (bottom-left origin).
+        float naveLuma=InteriorSurfaceLuma(lightingFrame,new Rect(.2f,.2f,.6f,.6f));
+        float wallLuma=(InteriorSurfaceLuma(lightingFrame,new Rect(.03f,.22f,.14f,.22f))+InteriorSurfaceLuma(lightingFrame,new Rect(.83f,.22f,.14f,.22f)))*.5f;
+        float benchLuma=(InteriorSurfaceLuma(lightingFrame,new Rect(.19f,.23f,.21f,.065f))+InteriorSurfaceLuma(lightingFrame,new Rect(.60f,.23f,.21f,.065f)))*.5f;
+        Destroy(lightingFrame);
         // 抬头验证：按 F 的逻辑等价物，把看向点抬到穹顶中心，出一张 interior_lookup.png
         lookUp=true;
         yield return new WaitForSeconds(1.2f);
@@ -1063,6 +1097,17 @@ public sealed partial class PlayerController : MonoBehaviour
         }
         Destroy(domeFrame);
         float headroomLuma=(float)(domeSum/domePixels);
+        var windowKey=Array.Find(interior.lamps,l=>l.name=="Interior_WindowKey");
+        int fills=Array.FindAll(interior.lamps,l=>l.name.StartsWith("Interior_NaveFill_")).Length;
+        float gloss=interior.detailRoot.GetComponentsInChildren<MeshRenderer>()[0].sharedMaterial.GetFloat("_Smoothness");
+        var slab=Array.Find(interior.detailRoot.GetComponentsInChildren<MeshRenderer>(),r=>r.name.StartsWith("Interior_FloorSlab_"));
+        if(slab!=null) gloss=slab.sharedMaterial.GetFloat("_Smoothness");
+        // ceiling_keep retains the existing display-referred DOME_LIGHT headroom metric.
+        Debug.Log(FormattableString.Invariant($"[INT_LIGHT] key={(windowKey!=null?1:0)} fill={fills} key_angle={windowKey.transform.eulerAngles.x:F1} nave_luma={naveLuma:F4} wall_luma={wallLuma:F4} bench_luma={benchLuma:F4} floor_gloss={gloss:F2} ceiling_keep={headroomLuma:F4}"));
+        // 阈值按"昏暗石造教堂"重新标定（linear 空间；nave 0.05 线性 ≈ 0.24 显示，肉眼是偏暗但可辨）。
+        // 旧的 0.16–0.30 是"白墙现代厅"的量级，会把正确的暗调判成失败。
+        bool interiorLightPass=naveLuma>=.020f && naveLuma<=.13f && wallLuma>=.002f && wallLuma<=.08f && benchLuma>=.003f && benchLuma<=.15f && headroomLuma>=.20f;
+        if(!interiorLightPass) Debug.LogError("[INT_LIGHT] luminance gate failed");
         int windowFills=Array.FindAll(interior.detailRoot.GetComponentsInChildren<MeshRenderer>(),r=>r.name.StartsWith("Interior_DrumWindowFill_")).Length;
         float domeIntensity=interior.domeUplights[0].intensity;
         Debug.Log(FormattableString.Invariant($"[DOME_LIGHT] uplights={interior.domeUplights.Length} intensity={domeIntensity:F1} windows_emissive={windowFills} cone_color=#8A8177 aperture=0.8 headroom_luma={headroomLuma:F4}"));
@@ -1073,10 +1118,14 @@ public sealed partial class PlayerController : MonoBehaviour
         Debug.Log(FormattableString.Invariant($"[LOOKUP] ceiling_visible={ceilingSeen.ToString().ToLowerInvariant()} dome_visible={domeSeen.ToString().ToLowerInvariant()} ceiling_pct={ceilingFx:F4} bytes={(new FileInfo(lookupShot)).Length}"));
         lookUp=false;
         yield return new WaitForSeconds(.4f);
-        bool pass=domeLightPass && ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
+        bool pass=interiorLightPass && domeLightPass && ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
-            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==14 && interior.shafts.Length==3 &&
+            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==16 && interior.shafts.Length==3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;
+        Debug.Log($"[INT_PASS] light={interiorLightPass} domeLight={domeLightPass} ceilingSeen={ceilingSeen} " +
+            $"domeSeen={domeSeen} fx={ceilingFx:F3} visible={InteriorVisibility()} obstacles={TestInteriorObstacles()} " +
+            $"walked={enteredByWalking} z={transform.position.z:F2} dy={Mathf.Abs(transform.position.y-interior.FloorY):F3} " +
+            $"fov={follow.fieldOfView:F2} lamps={interior.lamps.Length} shafts={interior.shafts.Length}");
         Debug.Log(FormattableString.Invariant($"[INTERIOR_U] door_open_deg={interior.OpenDegrees:F0} walk_in={enteredByWalking.ToString().ToLowerInvariant()} player_inside={interior.Contains(transform.position).ToString().ToLowerInvariant()} fov_in={follow.fieldOfView:F0} lights={interior.lamps.Length} light_shafts={interior.shafts.Length} colliders={blockers.Length} pois={Array.FindAll(pois,p=>p.data.interior).Length}"));
         Debug.Log(FormattableString.Invariant($"[INTERIOR_U] player=({transform.position.x:F3},{transform.position.y:F3},{transform.position.z:F3}) floor_y={interior.FloorY:F3} closed_blocks={closedBlocks} raycast_misses={misses}"));
         if(!pass) { Debug.LogError("[INTERIOR_U] entry gates failed"); if(poi==null) { Application.Quit(1); yield break; } }

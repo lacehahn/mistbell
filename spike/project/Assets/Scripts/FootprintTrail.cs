@@ -123,7 +123,8 @@ public sealed class FootprintTrail : MonoBehaviour
         string materialName = colliderRenderer != null && colliderRenderer.sharedMaterial != null
             ? colliderRenderer.sharedMaterial.name
             : string.Empty;
-        if (materialName.Contains("Paving") || materialName.Contains("Interior"))
+        if (materialName.Contains("Paving") || materialName.Contains("Interior") ||
+            hit.collider.name.StartsWith("Interior", StringComparison.Ordinal))
         {
             PavingSkipped++;
             return;

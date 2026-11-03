@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEditor.SceneManagement;
+using UnityEngine.Rendering.Universal;
 
 public static class ChurchInteriorBuilder
 {
@@ -49,10 +51,10 @@ public static class ChurchInteriorBuilder
                 // Runtime indoor instance: exterior/capture material is restored on exit.
                 interior.indoorStone=new Material(interior.shell.sharedMaterial) { name="M_IndoorShell" };
                 interior.indoorStone.shader=Shader.Find("Universal Render Pipeline/Lit");
-                interior.indoorStone.SetColor("_BaseColor",new Color(.65f,.58f,.48f));
+                interior.indoorStone.SetColor("_BaseColor",new Color(.42f,.36f,.29f));   // .65 线性≈0.83 sRGB，太亮
                 interior.indoorStone.EnableKeyword("_EMISSION");
                 interior.indoorStone.globalIlluminationFlags=MaterialGlobalIlluminationFlags.BakedEmissive;
-                interior.indoorStone.SetColor("_EmissionColor",new Color(.32f,.29f,.24f));
+                interior.indoorStone.SetColor("_EmissionColor",new Color(.13f,.115f,.10f));   // 自发光 0.32 让墙整体发白
                 interior.indoorStone.SetTextureScale("_BaseMap",Vector2.one/.9f);
                 AssetDatabase.DeleteAsset("Assets/Settings/M_IndoorShell.mat");
                 AssetDatabase.CreateAsset(interior.indoorStone,"Assets/Settings/M_IndoorShell.mat");
@@ -118,7 +120,7 @@ public static class ChurchInteriorBuilder
         if(interior.doorLeaf==null || interior.floor==null || lamps.Count!=5) throw new System.InvalidOperationException("Interior import incomplete");
         var fill=new GameObject("Interior_NaveFill").AddComponent<Light>();
         fill.transform.SetParent(church,true); fill.transform.position=new Vector3(0,6.5f,-2);
-        fill.type=LightType.Point; fill.range=16; fill.intensity=.85f;
+        fill.type=LightType.Point; fill.range=16; fill.intensity=.60f;
         fill.color=new Color32(255,217,168,255); fill.shadows=LightShadows.None;
         fill.renderMode=LightRenderMode.ForcePixel; fill.enabled=false; lamps.Add(fill);
 
@@ -235,8 +237,126 @@ public static class ChurchInteriorBuilder
             r.shadowCastingMode=ShadowCastingMode.Off; r.receiveShadows=false; shafts.Add(r);
         }
         interior.shafts=shafts.ToArray();
+        ApplyLighting(interior);
         Debug.Log($"[INTERIOR_BUILD] floor_y={fy:F3} lamps={lamps.Count} shafts={shafts.Count} hinge={interior.doorLeaf.position}");
         return interior;
+    }
+    // Patch the authored scene in place: do not regenerate terrain, sky or exterior assets.
+    public static void ApplyLightingAndBuild()
+    {
+        var scene=EditorSceneManager.OpenScene("Assets/Scenes/ArtSpike.unity");
+        ApplyLighting(Object.FindFirstObjectByType<ChurchInterior>());
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+        AssetDatabase.SaveAssets();
+        var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions {
+            scenes=new[]{"Assets/Scenes/ArtSpike.unity"}, locationPathName="Builds/Mac/Mistbell.app",
+            target=BuildTarget.StandaloneOSX, options=BuildOptions.None });
+        Debug.Log($"[INT_LIGHT_BUILD] result={report.summary.result} errors={report.summary.totalErrors}");
+        if(report.summary.result!=UnityEditor.Build.Reporting.BuildResult.Succeeded) EditorApplication.Exit(1);
+    }
+    static void ApplyLighting(ChurchInterior interior)
+    {
+        var lamps=new List<Light>(interior.lamps);
+        lamps.RemoveAll(l=>l==null || l.name=="Interior_NaveFill" || l.name.StartsWith("Interior_WindowKey") || l.name.StartsWith("Interior_NaveFill_"));
+        foreach(var l in interior.GetComponentsInChildren<Light>(true))
+            if(l.name=="Interior_NaveFill" || l.name.StartsWith("Interior_WindowKey") || l.name.StartsWith("Interior_NaveFill_")) Object.DestroyImmediate(l.gameObject);
+        var key=new GameObject("Interior_WindowKey").AddComponent<Light>();
+        key.transform.SetParent(interior.transform,true);
+        key.transform.position=new Vector3(-5.5f,interior.FloorY+6.5f,-3.5f);
+        key.transform.rotation=Quaternion.Euler(35,75,0);
+        // Indoor-only directional daylight; its transform encodes the west high-window direction.
+        key.type=LightType.Directional; key.intensity=.95f; key.range=24;   // 1.9 把中殿打成一间白墙现代厅
+        // Project the high-window aperture instead of illuminating the whole floor uniformly.
+        // The imported solid roof otherwise occludes a second directional shadow map entirely.
+        var cookie=new Texture2D(256,256,TextureFormat.RGB24,false,true) {
+            name="Interior_WestWindowCookie",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear };
+        for(int y=0;y<256;y++) for(int x=0;x<256;x++)
+        {
+            float u=(x/255f-.5f)*24, v=(y/255f-.5f)*24;
+            float aperture=Mathf.SmoothStep(0,1,Mathf.InverseLerp(-4.6f,-3.4f,v)) *
+                (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(5,6,v))) *
+                (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(9,10,Mathf.Abs(u))));
+            cookie.SetPixel(x,y,new Color(aperture,aperture,aperture));
+        }
+        cookie.Apply();
+        AssetDatabase.DeleteAsset("Assets/Art/Church/Interior_WestWindowCookie.asset");
+        AssetDatabase.CreateAsset(cookie,"Assets/Art/Church/Interior_WestWindowCookie.asset");
+        key.cookie=cookie; key.gameObject.AddComponent<UniversalAdditionalLightData>().lightCookieSize=new Vector2(24,24);
+        key.color=new Color32(232,217,196,255); key.shadows=LightShadows.None;
+        key.renderMode=LightRenderMode.ForcePixel; key.enabled=false; lamps.Add(key);
+        for(int i=0;i<2;i++)
+        {
+            var fill=new GameObject("Interior_NaveFill_"+i).AddComponent<Light>();
+            fill.transform.SetParent(interior.transform,true);
+            fill.transform.position=new Vector3(i==0?-4.1f:.1f,interior.FloorY+3.6f,2.6f);
+            fill.type=LightType.Point; fill.intensity=.55f; fill.range=9;
+            fill.color=new Color32(201,214,230,255); fill.shadows=LightShadows.None;
+            fill.renderMode=LightRenderMode.ForcePixel; fill.enabled=false; lamps.Add(fill);
+        }
+        foreach(var lamp in lamps) if(lamp.name.StartsWith("Interior_Candle_")) lamp.range=6;
+        interior.lamps=lamps.ToArray();
+        var foot=Lit("M_InteriorWallFoot",interior.indoorStone.GetColor("_BaseColor")*.9f,
+            interior.indoorStone.GetColor("_EmissionColor"));
+        foot.CopyPropertiesFromMaterial(interior.indoorStone);
+        var c=interior.indoorStone.GetColor("_BaseColor");
+        foot.SetColor("_BaseColor",new Color(c.r*1.1f,c.g*1.1f,c.b*1.1f,c.a));
+        interior.wallFootStone=foot;
+        for(int i=0;i<interior.drumCutFilters.Length;i++)
+        {
+            var f=interior.drumCutFilters[i]; if(f.GetComponent<Renderer>()!=interior.shell) continue;
+            var mesh=interior.drumIndoorMeshes[i]; var upper=new List<int>(); var lower=new List<int>();
+            var v=mesh.vertices; var normals=mesh.normals; var uv=mesh.uv; var t=mesh.triangles;
+            var resultV=new List<Vector3>(); var resultN=new List<Vector3>(); var resultUV=new List<Vector2>();
+            void Emit(List<CutVertex> polygon,List<int> indices)
+            {
+                int offset=resultV.Count;
+                foreach(var q in polygon) { resultV.Add(q.p); resultN.Add(q.n); resultUV.Add(q.uv); }
+                for(int k=1;k<polygon.Count-1;k++) indices.AddRange(new[]{offset,offset+k,offset+k+1});
+            }
+            var normal=f.transform.InverseTransformDirection(Vector3.up).normalized;
+            float height=Vector3.Dot(normal,f.transform.InverseTransformPoint(new Vector3(0,interior.FloorY+.7f,0)));
+            for(int k=0;k<t.Length;k+=3)
+            {
+                var polygon=new List<CutVertex>();
+                for(int j=0;j<3;j++) { int n=t[k+j]; polygon.Add(new CutVertex {p=v[n],n=normals[n],uv=uv[n]}); }
+                Emit(Clip(polygon,normal,height,true),upper);
+                Emit(Clip(polygon,normal,height,false),lower);
+            }
+            mesh.Clear(); mesh.SetVertices(resultV); mesh.SetNormals(resultN); mesh.SetUVs(0,resultUV);
+            mesh.subMeshCount=2; mesh.SetTriangles(upper,0); mesh.SetTriangles(lower,1); mesh.RecalculateBounds();
+            EditorUtility.SetDirty(mesh);
+            Debug.Log($"[INT_LIGHT_SETUP] wall_foot_tris={lower.Count/3} brighten=1.10");
+        }
+        interior.pewEnds=Lit("M_InteriorPewEnd",new Color(107/255f*1.1f,74/255f*1.1f,50/255f*1.1f),new Color(.06f,.05f,.04f));
+        interior.pewEnds.CopyPropertiesFromMaterial(interior.pewWood);
+        c=interior.pewWood.GetColor("_BaseColor");
+        interior.pewEnds.SetColor("_BaseColor",new Color(c.r*1.1f,c.g*1.1f,c.b*1.1f,c.a));
+        foreach(var r in interior.pews)
+        {
+            var f=r.GetComponent<MeshFilter>(); var mesh=f.sharedMesh; var body=new List<int>(); var feet=new List<int>(); var ends=new List<int>();
+            var v=mesh.vertices; var t=mesh.triangles;
+            for(int k=0;k<t.Length;k+=3)
+            {
+                var a=f.transform.TransformPoint(v[t[k]]); var b=f.transform.TransformPoint(v[t[k+1]]); var d=f.transform.TransformPoint(v[t[k+2]]);
+                var n=Vector3.Cross(b-a,d-a).normalized;
+                var slot=(a.y+b.y+d.y)/3<interior.FloorY+.38f?feet:Mathf.Abs(n.x)>.8f?ends:body;
+                slot.AddRange(new[]{t[k],t[k+1],t[k+2]});
+            }
+            mesh.subMeshCount=3; mesh.SetTriangles(body,0); mesh.SetTriangles(feet,1); mesh.SetTriangles(ends,2);
+            r.sharedMaterials=new[]{interior.pewWood,interior.pewLegs,interior.pewEnds};
+            EditorUtility.SetDirty(mesh);
+        }
+        for(int i=0;i<15;i++)
+        {
+            var mat=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_InteriorSlab_"+i+".mat");
+            // Preserve subtle per-slab variation around the specified stone palette.
+            mat.SetColor("_BaseColor",(Color)new Color32(185,167,142,255)*(1+(i-7)*.01f));
+            mat.SetFloat("_Smoothness",.22f); EditorUtility.SetDirty(mat);
+        }
+        var aisle=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_InteriorAisle.mat");
+        aisle.SetFloat("_Smoothness",.22f); EditorUtility.SetDirty(aisle);
+        EditorUtility.SetDirty(foot); EditorUtility.SetDirty(interior.pewEnds); EditorUtility.SetDirty(interior);
     }
     static GameObject Primitive(Transform parent,string name,PrimitiveType type,Vector3 position,Vector3 scale,Material material)
     {
@@ -496,8 +616,8 @@ public static class ChurchInteriorBuilder
     static void BuildFloor(Transform parent,ChurchInterior interior)
     {
         var mats=new Material[15];
-        for(int i=0;i<mats.Length;i++) mats[i]=Lit("M_InteriorSlab_"+i,(Color)new Color32(143,133,121,255)*(1+(i-7)*.01f),new Color(.32f,.29f,.24f));
-        var aisle=Lit("M_InteriorAisle",new Color32(110,101,91,255),new Color(.24f,.21f,.18f));
+        for(int i=0;i<mats.Length;i++) mats[i]=Lit("M_InteriorSlab_"+i,(Color)new Color32(120,110,98,255)*(1+(i-7)*.01f),new Color(.11f,.10f,.085f));   // 自发光 0.32 让石板变纯白
+        var aisle=Lit("M_InteriorAisle",new Color32(110,101,91,255),new Color(.09f,.08f,.07f));
         var grout=Lit("M_InteriorGrout",new Color32(65,59,53,255),new Color(.03f,.025f,.02f));
         var bed=new GameObject("Interior_GroutBed"); bed.transform.SetParent(parent,true);
         bed.transform.SetPositionAndRotation(interior.floor.transform.position+Vector3.down*.008f,interior.floor.transform.rotation);
@@ -531,7 +651,7 @@ public static class ChurchInteriorBuilder
     static void DressPews(Transform church,Transform detail,ChurchInterior interior)
     {
         // Separate asset path avoids touching M_Wood used by exterior props.
-        var wood=Lit("M_InteriorPewWood",new Color32(107,74,50,255),new Color(.32f,.26f,.19f)); wood.name="M_Wood"; EditorUtility.SetDirty(wood);
+        var wood=Lit("M_InteriorPewWood",new Color32(107,74,50,255),new Color(.06f,.05f,.04f));   // 木头上加 0.32 自发光 = 塑料感 wood.name="M_Wood"; EditorUtility.SetDirty(wood);
         var legs=Lit("M_InteriorPewLeg",new Color32(78,54,36,255),new Color(.19f,.14f,.09f));
         var edge=Lit("M_InteriorPewEdge",new Color32(122,87,60,255),new Color(.36f,.29f,.21f));
         var grain=new Texture2D(128,32,TextureFormat.RGBA32,false) {name="Interior_WoodGrain",wrapMode=TextureWrapMode.Repeat};

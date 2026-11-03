@@ -47,7 +47,7 @@ public static class StaticArtBatching
         var outdoor=interior.pewOutdoorMaterials[0];
         if(!Array.TrueForAll(interior.pewOutdoorMaterials,m=>m==outdoor)) return;
         var slots=new List<CombineInstance>(); long expected=0;
-        for(int slot=0;slot<2;slot++)
+        for(int slot=0;slot<3;slot++)
         {
             var parts=new List<CombineInstance>();
             foreach(var r in interior.pews)
@@ -61,18 +61,18 @@ public static class StaticArtBatching
         }
         var combined=new Mesh {name="StaticPewBatch",indexFormat=IndexFormat.UInt32};
         combined.CombineMeshes(slots.ToArray(),false,false); combined.RecalculateBounds();
-        long actual=0; for(int i=0;i<2;i++) actual+=(long)combined.GetIndexCount(i)/3;
+        long actual=0; for(int i=0;i<3;i++) actual+=(long)combined.GetIndexCount(i)/3;
         if(actual!=expected) throw new InvalidOperationException("Pew batching changed triangle count");
         foreach(var slot in slots) UnityEngine.Object.Destroy(slot.mesh);
         var go=new GameObject("StaticPewBatch"); go.transform.SetParent(interior.transform,false);
         go.layer=interior.pews[0].gameObject.layer;
         go.AddComponent<MeshFilter>().sharedMesh=combined;
-        var renderer=go.AddComponent<MeshRenderer>(); renderer.sharedMaterials=new[]{outdoor,outdoor};
+        var renderer=go.AddComponent<MeshRenderer>(); renderer.sharedMaterials=new[]{outdoor,outdoor,outdoor};
         renderer.shadowCastingMode=interior.pews[0].shadowCastingMode; renderer.receiveShadows=interior.pews[0].receiveShadows;
         renderer.renderingLayerMask=interior.pews[0].renderingLayerMask;
         interior.pewBatch=renderer;
         foreach(var r in interior.pews) r.forceRenderingOff=true;
-        Debug.Log($"[STATIC_PEW_BATCH] sources={interior.pews.Length} meshes=1 source_tris={expected} merged_tris={actual} material_slots=2");
+        Debug.Log($"[STATIC_PEW_BATCH] sources={interior.pews.Length} meshes=1 source_tris={expected} merged_tris={actual} material_slots=3");
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

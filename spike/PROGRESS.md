@@ -396,4 +396,7 @@
 | 14:50 | 尖峰化（Codex PEAK） | `flat_top_px_max=9`、峰数 12/13/14/15、`snow_cap_offset_max=2.83px` | 平顶台面消失 |
 | 14:50 | 雾中远脉（Codex MIST + 我回调） | Codex 给 `haze=0.34/0.54/0.70/0.84`→ 我降到 **0.20/0.40/0.58/0.74** | 全雾化时山完全没形体；回调后山脉既有轮廓又不剪纸 |
 | 14:50 | 天空球 UV 接缝（我定位并修） | 穹顶 `rotation.y=37°` | 画面左侧那条竖直暗带消失；探针 `ProbeTallProps` 证明场景里没有高瘦物体，排除 3D 物件 |
+| 15:21 | 室内打光（Codex INT_LIGHT + 我两轮回调） | 最终 `nave_luma=0.0488`（linear）、`wall=0.0114`、`bench=0.0117`、`headroom=0.359`、`interior_luma=0.164` | Codex 首版把 key 提到 1.9 + 墙/地/木自发光 0.32 → 白墙现代厅；我降到 key .95 / fill .60 / 自发光 .13 与石板 #786E62 后，才像昏暗石造教堂 |
+| 15:21 | 修三个连带问题 | ①室内落蓝色脚印（改用几何区域判断，不再靠材质名）②`[INTERIOR_COLLIDE]` 里硬编码的 key=1.9 断言 ③`luma>=.18` 门限与新暗调冲突 | 三处都是"参数改了但判据没跟着改"，属自检脚本滞后，不是画面 bug |
+| 15:21 | 十一项演示 + 截图全绿 | `rc=0 bad=0` ×11、`cap=0` | `[INT_PASS] light=True … obstacles=True walked=True` |
 
