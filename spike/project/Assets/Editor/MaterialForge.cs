@@ -295,7 +295,6 @@ public static class MaterialForge
         }
         var indoor=church.GetComponent<ChurchInterior>();
         ApplyRollout(indoor);
-        Style11Atlas.Apply(indoor);
         // Style11Atlas 只认它认识的材质族；台地墙（Stone_Sub_Coping / Stone_Sub_Steps）没被认出来，
         // 于是仍走世界投影着色（_Style11UV=0）→ 渲染成黑砖。这里强制切到图集 UV 模式。
         foreach(var r in UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
@@ -305,8 +304,34 @@ public static class MaterialForge
             if(!n.StartsWith("Stone_Sub")) continue;
             // 决定性测试：直接把台地墙/台阶换成教堂石材材质（它已经被验证走图集 UV、渲染正确）
             var churchMat=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_ChurchStone.mat");
-            if(churchMat!=null) r.sharedMaterial=churchMat;
+            if(churchMat!=null) r.sharedMaterial = churchMat;
         }
+        Style11Atlas.Apply(indoor);
+
+        // 图集 Apply 会把同族渲染器的材质统一回 churchMat，所以"台地墙更深一档"必须在它之后再盖一次。
+        {
+            Material tintedMat = null;
+            int tinted = 0;
+            foreach (var r in UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            {
+                if (!(r.name.StartsWith("TerraceWall") || r.name.StartsWith("TerraceStep"))) continue;
+                if (r.sharedMaterial == null) continue;
+                if (tintedMat == null)
+                {
+                    tintedMat = new Material(r.sharedMaterial);
+                    tintedMat.name = "M_ChurchStone_Terrace";
+                    if (tintedMat.HasProperty("_BaseColor"))
+                    {
+                        var c = tintedMat.GetColor("_BaseColor");
+                        tintedMat.SetColor("_BaseColor", new Color(c.r * .68f, c.g * .68f, c.b * .70f, c.a));
+                    }
+                }
+                r.sharedMaterial = tintedMat;
+                tinted++;
+            }
+            Debug.Log($"[TERRACE_MAT] tinted={tinted}");
+        }
+
         AssetDatabase.SaveAssets();
         ExportManifest(doorWidth);
     }
@@ -332,5 +357,22 @@ public static class MaterialForge
             texels_per_meter=densities[i],tiling_x=densities[i]/AssetDatabase.LoadAssetAtPath<Texture2D>(Root+extraNames[i]+"_Albedo.png").width,tiling_y=densities[i]/AssetDatabase.LoadAssetAtPath<Texture2D>(Root+extraNames[i]+"_Albedo.png").width,forge_surface=2 });
         data.materials=entries.ToArray();
         File.WriteAllText(Root+"manifest.json",JsonUtility.ToJson(data,true));
+
     }
+        static Material terraceMat;
+
+        // 台地墙/台阶：复用教堂的手绘图集（UV 已重投影），但用同一材质的一份深色实例，
+        // 让它在明度上比教堂低一档——"同色相、不同深浅"，不是贴图不同。
+        static Material TerraceMat(Material src)
+        {
+            if (terraceMat != null) return terraceMat;
+            terraceMat = new Material(src);
+            terraceMat.name = "M_ChurchStone_Terrace";
+            if (terraceMat.HasProperty("_BaseColor"))
+            {
+                var c = terraceMat.GetColor("_BaseColor");
+                terraceMat.SetColor("_BaseColor", new Color(c.r * .68f, c.g * .68f, c.b * .70f, c.a));
+            }
+            return terraceMat;
+        }
 }

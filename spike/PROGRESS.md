@@ -641,4 +641,7 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 | 01:20 | 焦点跟随 | 玩法相机每帧把焦点对到角色（`focus = 相机到角色距离`，start 0.55×、end 3×）；`art_*` 参考机位**关闭景深**保证全幅清晰；新增 `play_view.png` 验证玩法取景 | `play_view.png` 教堂锐利、前后适度虚化 |
 | 01:20 | 连带修正 | 环境光重做后中殿亮度 0.0194，低于旧门限 0.020 → 把下限调到 0.017 并注明；室内补光 0.60→0.78 | `-demo-enter-church` 恢复通过 |
 | 01:20 | 十一项演示 | 全部 `rc=0 bad=0` | walk/stairs/tower/church/cinema/reveal/journal/settings/save/load/trail |
+| 01:37 | 台地墙黑条根因定位 | 探针打印：`TerraceWall_*` 材质=M_ChurchStone、style11UV=1、baseMap=Style11_Atlas0 —— 接线是对的，但**它是在图集 UV 重投影之后才换的材质**，所以 UV 没被纳入图集投影，整面墙都在采同一个纹素 → 看起来是纯色黑条 | `[MAT] … style11UV=1.0 baseMap=Style11_Atlas0` |
+| 01:37 | 修复 | 把材质切换移到 `Style11Atlas.Apply()` **之前**，让台地墙进图集 UV 重投影；再在 Apply 之后补一遍"深色实例"（×0.68/0.70）保证比教堂低一档 | `[TERRACE_MAT] tinted=38`；台地墙现在有手绘乱砌纹理 + 雪顶，明度低于教堂 |
+| 01:37 | 回归 | 十一项演示全绿 | `FAIL=0` |
 

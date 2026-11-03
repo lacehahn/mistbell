@@ -34,7 +34,13 @@ public static class ProbeTallProps
         }
         foreach (var r in Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
             if (r.name.StartsWith("TerraceWall_") || r.name.StartsWith("TerraceStep_"))
-                sb.AppendLine($"[MAT] name={r.name} mat={(r.sharedMaterial!=null?r.sharedMaterial.name:"null")} shader={(r.sharedMaterial!=null&&r.sharedMaterial.shader!=null?r.sharedMaterial.shader.name:"null")}");
+            {
+                var m=r.sharedMaterial;
+                string tex = m!=null && m.HasProperty("_BaseMap") && m.GetTexture("_BaseMap")!=null ? m.GetTexture("_BaseMap").name : "null";
+                string uv = m!=null && m.HasProperty("_Style11UV") ? m.GetFloat("_Style11UV").ToString("F1") : "n/a";
+                string surf = m!=null && m.HasProperty("_StoneSurface") ? m.GetFloat("_StoneSurface").ToString("F1") : "n/a";
+                sb.AppendLine($"[MAT] name={r.name} mat={(m!=null?m.name:"null")} shader={(m!=null&&m.shader!=null?m.shader.name:"null")} style11UV={uv} surface={surf} baseMap={tex}");
+            }
         sb.AppendLine($"[TALL] done count={count}");
         Debug.Log(sb.ToString());
     }
