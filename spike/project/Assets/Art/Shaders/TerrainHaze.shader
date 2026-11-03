@@ -4,6 +4,8 @@ Shader "Mistbell/TerrainHaze"
     {
         [MainTexture] _BaseMap ("Grass", 2D) = "white" {}
         [MainColor] _BaseColor ("Tint", Color) = (1,1,1,1)
+        _ForgeSurface ("Forge sample: 0 off / 1 snow / 2 stone / 3 wood", Float) = 0
+        _ForgeRoughness ("Forge roughness", 2D) = "white" {}
         _SnowMedium ("Snow 256px middle", 2D) = "gray" {}
         _SnowLow ("Snow 1024px low", 2D) = "gray" {}
         _SnowRelief ("Snowfield relief only", Float) = 0
@@ -46,13 +48,14 @@ Shader "Mistbell/TerrainHaze"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_ForgeRoughness); SAMPLER(sampler_ForgeRoughness);
             TEXTURE2D(_SnowMedium); SAMPLER(sampler_SnowMedium);
             TEXTURE2D(_SnowLow); SAMPLER(sampler_SnowLow);
             TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap);
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor, _FarHazeColor;
                 float _FarHazeStrength;
-                float _SnowRelief;
+                float _SnowRelief, _ForgeSurface;
                 float _StoneSurface, _SnowAlbedo, _RockSnowCap, _Footprint, _RockOnly;
                 float _NormalScale, _Metallic, _Smoothness;
                 float _HazeStart, _HazeEnd, _HazePower, _HazeStrength;
@@ -126,6 +129,52 @@ Shader "Mistbell/TerrainHaze"
             }
             half4 Frag(Varyings input) : SV_Target
             {
+                // Opt-in samples only. World metre projection avoids stretched imported FBX UVs.
+                // One axis (no triplanar blend) preserves palette hard edges; no procedural noise.
+                if (_ForgeSurface > .5)
+                {
+                    half3 n = NormalizeNormalPerPixel(input.normalWS);
+                    float3 an = abs(n);
+                    float2 uv = _ForgeSurface < 1.5 ? input.positionWS.xz :
+                        (an.y > max(an.x,an.z) ? input.positionWS.xz :
+                        (an.x > an.z ? input.positionWS.zy : input.positionWS.xy));
+                    if (_ForgeSurface > 2.5)
+                    {
+                        // Door grain follows the leaf/hinge instead of swimming when the door opens.
+                        float4x4 m = GetObjectToWorldMatrix();
+                        float3 scale = float3(length(m._m00_m10_m20),length(m._m01_m11_m21),length(m._m02_m12_m22));
+                        float3 local = TransformWorldToObject(input.positionWS) * scale;
+                        float3 localNormal = abs(mul(n,(float3x3)m));
+                        uv = localNormal.y > max(localNormal.x,localNormal.z) ? local.xz :
+                            (localNormal.x > localNormal.z ? local.zy : local.xy);
+                    }
+                    uv = uv * _BaseMap_ST.xy + _BaseMap_ST.zw;
+                    half3 albedo = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb;
+                    half rough = SAMPLE_TEXTURE2D(_ForgeRoughness,sampler_ForgeRoughness,uv).r;
+                    Light key = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
+                    // Diffuse only: the roughness map bounds diffuse energy; no smooth PBR highlight.
+                    half3 irradiance = SampleSH(n) + key.color * saturate(dot(n,key.direction)) * key.shadowAttenuation;
+                    #if defined(_ADDITIONAL_LIGHTS)
+                        uint count = GetAdditionalLightsCount();
+                        for(uint li=0;li<count;li++)
+                        {
+                            Light light = GetAdditionalLight(li,input.positionWS,half4(1,1,1,1));
+                            irradiance += light.color * saturate(dot(n,light.direction)) * light.distanceAttenuation * light.shadowAttenuation;
+                        }
+                    #endif
+                    // Preserve broad lighting and real cast shadows; quantize illumination to three steps.
+                    half value = dot(irradiance,half3(.299,.587,.114));
+                    half shade = value < .55 ? .66 : (value < 1.2 ? .86 : 1.0);
+                    half3 color = albedo * shade * lerp(.98,1.0,rough);
+                    float d=distance(input.positionWS.xz,_WorldSpaceCameraPos.xz);
+                    float low=(1-smoothstep(0,15,input.positionWS.y))*step(0,input.positionWS.y);
+                    float mist=pow(saturate((d-_HazeStart)/max(.001,_HazeEnd-_HazeStart)),_HazePower)*_HazeStrength*low;
+                    color=lerp(color,_HazeColor.rgb,mist);
+                    float far=smoothstep(600,1100,d)*_FarHazeStrength;
+                    float elevation=normalize(input.positionWS-_WorldSpaceCameraPos).y;
+                    float crest=smoothstep(55,85,d)*(1-smoothstep(.10,.24,elevation))*saturate(_FarHazeStrength/.85);
+                    return half4(lerp(color,_FarHazeColor.rgb,max(far,crest)),1);
+                }
                 half3 normalWS = NormalizeNormalPerPixel(input.normalWS);
                 #if defined(_NORMALMAP)
                     half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv), _NormalScale);

@@ -94,6 +94,7 @@ public static class SpikeScene
         var stairRamp = BuildTerrace(church, terrainCollider, stone);
         BuildWarmDetails();
         ChurchInteriorBuilder.Build(church, terrainCollider);
+        MaterialForge.ApplySamples(terrainCollider, church);
         var cameraPosition = EyeAt(5f, -82f);   // 走近到 ~74m：参考图里教堂占画面 55%+，96m 时只占 30%
         var cameraRotation = Quaternion.LookRotation(new Vector3(0f, 13f, 0f) - cameraPosition);
 

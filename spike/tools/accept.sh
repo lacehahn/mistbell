@@ -24,6 +24,10 @@ caffeinate -dimu -t 3600 sleep 3600 &
 CAFF=$!
 trap 'kill $CAFF 2>/dev/null; pkill -x Mistbell 2>/dev/null' EXIT
 
+# Keep the task-specified canonical source in sync with Unity's supported compile path.
+if ! cmp -s spike/editor/MaterialForge.cs "$PROJ/Assets/Editor/MaterialForge.cs"; then
+  cp spike/editor/MaterialForge.cs "$PROJ/Assets/Editor/MaterialForge.cs"
+fi
 step "1/5 生成场景"
 "$UNITY" -batchmode -quit -projectPath "$PROJ" -executeMethod SpikeScene.Run -logFile "$LOGDIR/accept_scene.log" >/dev/null 2>&1
 check $? "SpikeScene.Run"

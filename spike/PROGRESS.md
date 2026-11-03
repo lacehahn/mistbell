@@ -408,3 +408,32 @@
 | 15:42 | 存档迁移回归用例（新增） | `spike/tools/test_save_migration.sh` → `PASS=4 FAIL=0` | 覆盖：①两个旧路径都有档时只搬一份（Lot 优先）②新档存在时**不覆盖**③同一次只迁移一次 |
 | 15:42 | 自查踩坑并修 | 第一版用例脚本按 `basename` 备份，`$NEW`/`$LOT` 的 basename 都是 `Mistbell` → 备份互相覆盖，恢复时把旧目录**嵌套**进新目录 | 已改成 `backup/new|lot|com` 三段式；真实存档目录已还原为 `~/Library/Application Support/Mistbell/`（bench.json / bench_frames / save / settings 齐全） |
 
+
+## 2026-11-03 材质风格第一阶段：三小样，等待用户确认
+范围：仅 Snow（雪地）、Stone（教堂外墙及同类台地石材）、Wood（门扇）。其余 Roof_Slate / Rock / Grass / InteriorStone 未生成、未接入。玩法、相机、关卡布局、UI、measure_shot.py、AGENTS.md 未修改；未安装依赖、未 commit。
+实现：`spike/editor/MaterialForge.cs` 为权威源码，`spike/project/Assets/Editor/MaterialForge.cs` 为 Unity 编译副本，`accept.sh` 在建场景前用 cmp/cp 同步。固定种子 731，输出 6 张 256×256 PNG（Albedo + 线性粗糙度），Point / Repeat / no mipmaps / 无压缩；不生成法线。输出目录 `Assets/Art/MaterialForge/`（工程生成物）。场景通过 `MaterialForge.ApplySamples` 重建。石材三阶 × 块级 -8%/0/+8% 共 9 色，其他各 3 色；无连续噪声、无额外 dither。
+接入：雪地覆盖 M_GroundHaze / M_Snow2Terrain；Stone 复用同一小样于 M_ChurchStone / M_TerraceAshlar；Wood 只接入 M_InteriorDoorWood，纹理跟随门扇局部米制坐标。外墙和雪地使用世界米制主轴投影，避免导入 FBX UV 拉伸。不改室内石材，室内 clone 在接入外墙样本之前创建。光照、雾、景深不改，样本材质只使用三阶漫反射光照、不用平滑 PBR 高光。
+密度公式：`texels_per_meter = 256 × repeats_per_meter`，因此 `_BaseMap.tiling = texels_per_meter / 256`（任务原倒数表达式量纲有歧义，以此米制投影实际公式执行）。Wood 的主轴为门扇局部米制，其余为世界米制。量测同时读取实际 .mat YAML 的 tiling 并与 manifest 对照，不只读取常量。
+量测口径：step_ratio 是四邻域中触及不同 ramp 明暗阶的像素占比（块级 ±8% 不是额外阶）；seam_grad 是对应两侧边界 RGB 最大差 /255。hf_energy 沿用 measure_shot.py 的横向 2px RGB 绝对差 /255，应用于明确 ROI 全部采样行。hf_spread=(max-min)/min。固定 ROI 见 `spike/editor/material_style_regions.json`，包含既有景深与透视影响，不按结果挑区域。
+| 材质 | palette | texel/m | step_ratio | seam_grad | 贴图检查 |
+|---|---:|---:|---:|---:|---|
+| Snow | 3 | 20 | 0.1890 | 0.0000 | 通过 |
+| Stone | 9 | 28 | 0.1926 | 0.0000 | 通过 |
+| Wood | 3 | 24 | 0.2227 | 0.0000 | 通过 |
+
+实际命令与证据：
+- `python3 -m py_compile spike/tools/measure_style.py`、`bash -n spike/tools/accept.sh`、`git diff --check`、`cmp spike/editor/MaterialForge.cs spike/project/Assets/Editor/MaterialForge.cs` 均通过。
+- `bash spike/tools/accept.sh` 最终 exit=0；日志 `spike/logs/accept_155758.log`，场景 `SpikeScene.Run` 成功，macOS / Windows Mono 两包成功，11 项演示全部 rc=0 bad=0，三张运行时截图成功。未直接运行 app 二进制。前一轮的 251 drawcall 曾触发既有 ≤250 门槛；最终台地复用样本后为 250，既有门槛也通过。
+- 1920×1080 性能：z01 226.81 fps / 250 drawcall；terrace 235.21 / 233；interior 223.09 / 231。`BENCH_GATE pass=True`，同时满足本任务 ≥200 fps / ≤330 drawcall。
+- `measure_shot.py` 原口径：snow_ratio=0.5930，white_clip_ratio=0.0004，magenta_px=0。固定远山 ROI (.05,.32,.30,.42) display Rec.601 平均亮度=0.500988（0.42–0.60 内）。
+- `-demo-enter-church` 已重跑，通过；本版该参数实际产出 `interior_entry.png` / `interior_inside.png` / `interior_lookup.png` 三图，均为本轮新图。旧 `interior_poi_p04.png` 不冒充本轮产物；本轮没有提前同步室内石材。
+- `python3 spike/tools/measure_style.py` 输出见 `spike/logs/style_measure_final.log`；脚本 exit=0 表示三张贴图规则通过，不表示整个风格门槛通过。
+- `sips -z 270 480 spike/project/Shots/art_close.png --out spike/project/Shots/style_480.png`，标准库逐像素最近邻 ×4 保存 `style_480_upscaled.png`；已核对每个 4×4 像素块完全等于源像素，分辨率分别 480×270 / 1920×1080。
+
+截图 HF（未通过，不能称风格全绿）：
+- native: Stone=0.013707, Wood=0.009871, Snow=0.001727；spread=6.935856。
+- 480: Stone=0.031383, Wood=0.024637, Snow=0.001156；spread=26.146946。
+
+`[STYLE_GATE] palette_ok=True texel_ok=True hf_spread=26.146946 pass=False scope=phase1_incomplete`。三小样的 HF 已超过 0.20，尤其雪地经既有景深/缩图后比石木更平；这是实际未达标项，不以未实施其余材质为由判通过。整帧 ≤48 主色尚未量化验收，四元素 HF 和全 7 材质验收也未完成。
+
+交付：`spike/project/Shots/art_close.png`（近景）、`art_runtime.png`（雪地与教堂全景）、`style_480.png`、`style_480_upscaled.png`。三种贴图原图在 `Assets/Art/MaterialForge/*_Albedo.png`。**停止在三小样，等用户确认手感后再继续；不自动铺开其余四种。**
