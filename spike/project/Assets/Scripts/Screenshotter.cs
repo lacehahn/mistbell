@@ -113,6 +113,9 @@ public class Screenshotter : MonoBehaviour
                     ScreenCapture.CaptureScreenshot(file);
                     yield return new WaitForSecondsRealtime(0.4f);
                     Debug.Log("[SHOT] written " + file + " exists=" + File.Exists(file) + " bytes=" + (File.Exists(file) ? new FileInfo(file).Length : 0));
+                    if(p.name=="art_close" && Array.IndexOf(Environment.GetCommandLineArgs(),"-style3-family")>=0)
+                        yield return CaptureStoneFamily(shotsDir,file);
+
                 }
                 Application.Quit();
                 yield break;
@@ -128,6 +131,37 @@ public class Screenshotter : MonoBehaviour
 
         yield return null;
         Application.Quit();
+    }
+
+    // Opt-in measurement only: same wall, camera, lighting and post stack, changing only stone.
+    // No scene assets or gameplay state are written. All renderer bindings are restored.
+    IEnumerator CaptureStoneFamily(string dir,string churchShot)
+    {
+        var renderers=UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+        Material sub=null;
+        foreach(var r in renderers) foreach(var m in r.sharedMaterials)
+            if(m!=null && m.name=="Stone_Sub") sub=m;
+        if(sub==null) {Debug.LogError("[STYLE3_CAPTURE] Stone_Sub missing");yield break;}
+        File.Copy(churchShot,Path.Combine(dir,"style3_family_church.png"),true);
+        var originals=new System.Collections.Generic.Dictionary<MeshRenderer,Material[]>();
+        try
+        {
+            foreach(var r in renderers)
+            {
+                var original=r.sharedMaterials; var changed=(Material[])original.Clone(); bool swap=false;
+                for(int i=0;i<changed.Length;i++) if(changed[i]!=null && changed[i].name=="M_ChurchStone")
+                {changed[i]=sub;swap=true;}
+                if(swap) {originals[r]=original;r.sharedMaterials=changed;}
+            }
+            if(originals.Count==0) {Debug.LogError("[STYLE3_CAPTURE] church wall missing");yield break;}
+            yield return null; yield return null; yield return null;
+            string path=Path.Combine(dir,"style3_family_sub.png");
+            if(File.Exists(path))File.Delete(path);
+            ScreenCapture.CaptureScreenshot(path);
+            yield return new WaitForSecondsRealtime(.4f);
+            Debug.Log("[STYLE3_CAPTURE] same_wall=True swapped_renderers="+originals.Count+" file="+path);
+        }
+        finally {foreach(var pair in originals)pair.Key.sharedMaterials=pair.Value;}
     }
 
     /// <summary>运行时构建 HD-2D 后期栈：ACES + Bloom + Bokeh 移轴感 + 调色 + 暗角 + 颗粒。</summary>

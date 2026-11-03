@@ -469,3 +469,37 @@ UV：外墙/台阶/围墙统一世界米制主轴投影，`_BaseMap` scale=28/25
 - 已观察近景、480 最近邻放大图与全景；原始像素图灰缝连续，块内上下阶清楚，木门为纵向板/纹，雪为块状蓝灰阴影。保留现有近远景景深，未修改机位。
 
 交付截图：`project/Shots/art_close.png`、`project/Shots/style_480.png`、`project/Shots/style_480_upscaled.png`、`project/Shots/art_runtime.png` 与上述室内三图。停在三小样，不自动铺开其他材质。
+
+## 2026-11-03 材质小样 v3：保雪、冷灰石材、Stone_Sub、木门分缝
+
+范围：严格执行 `tasks/material_style_v3.md`。只改 Stone / 新增 Stone_Sub / Wood；Snow 的生成逻辑与外观参数不变，已有 `Snow_Albedo.png` 不重写。室内仅既有 `M_IndoorShell` / `M_InteriorWallFoot` 接入 Stone_Sub，再乘 0.82；没有铺开屋顶、岩、草、室内其他材质。未改玩法、相机、关卡几何、UI、`measure_shot.py`、AGENTS.md；不安装依赖、不 commit。
+
+实现与取舍：
+- 权威源码 `editor/MaterialForge.cs` 与 Unity 编译副本同步。Stone 保留 1 px 连续灰缝、1 px 倒角、三阶硬边和半块错缝。每皮固定 4/11 冷块，由种子 731 的散列打乱位置，优先避免冷块相邻；不按行列分色。冷暖相邻比例为 72.73%。暖 / 冷各自以指定最暗色作为大面积块身，中阶作为窄亮边；最亮色只用于稀疏磨损边，阴影阶为块身 ×0.94。这样保留指定六色，又避免把每块倒角都铺最亮色后 HF 超标。灰缝 `#8C7F6E`，两套石材共用生成逻辑。
+- 新增独立材质资产 `Assets/Settings/Stone_Sub.mat`，替换既有台地挡土墙 / 围墙的材质引用；`Stone_Sub_Steps.mat` 绑定全部 9 个既有 TerraceStep。仅上向面增加 1.08 倍 Albedo，侧面仍为 Stone_Sub；没有改变网格、碰撞或通行坡面。Stone_Sub 的全部色板在 8-bit sRGB 中乘 0.80，实际整张贴图 Rec.601 平均亮度下降 19.5262%。
+- 木门保留原局部米制投影，改用独立 `#2E2018` 贯通深缝；实际门宽 2.56 m / 61.44 texel（量测覆盖 62 列）内有 2 条内部缝，位于第 22 / 43 列。木纹仍为 `#3A281D`，4 px 宽、纵向 1 px 抖动，最大板内横向覆盖率 22.22%。
+- 雪 SHA-256：`8a13e96e9daef38854d7d92157246fd3d1d38412de97338bc5f967a2deeb3375`，前后字节一致。基线贴图、v2 HSV 饱和度与旧亮度 HF 留在 `logs/style3_baseline/`，校验文件为 `logs/style3_snow_sha256.txt`。
+
+可复现量测：`python3 spike/tools/measure_style.py`。HF 为 Albedo 三个 RGB 通道等权的 `mean(abs(original-GaussianBlur))/255`；σ=1、半径 3、归一化离散核、周期边界。旧 Rec.601 亮度残差仅在 DETAILS 中另列，不混入本轮 RGB spread。spread=(max−min)/min，范围为任务打印指定的 Stone / Wood / Snow；Stone_Sub 也独立打印 HF，但不冒充三者之一。`step_ratio_scope=block_interior`：四邻域不同明暗阶的触边像素比例，仅对 Stone / Stone_Sub 统计；排除各块 1 px 灰缝及四周 1 px 倒角，且邻居也须属于块内。Wood / Snow 没有砌块内部，因此不套此项。
+
+| 材质 | palette | texel/m | block_px | mortar_px | cool_block_pct | mean_sat | seam_grad | 块内 step_ratio | RGB HF σ=1 |
+|---|---:|---:|---|---:|---:|---:|---:|---:|---:|
+| Stone | 9 | 28 | 23–24×16 | 1 | 0.363636（64/176） | 0.208838 | 0 | 0.153846 | 0.013645 |
+| Stone_Sub | 9 | 24 | 23–24×12–13 | 1 | 0.500000（110/220） | 0.187322 | 0 | 0.204082 | 0.012588 |
+| Wood | 4 | 24 | — | — | — | 0.482309 | 0 | — | 0.012827 |
+| Snow | 5 | 20 | — | — | — | 0.066449 | 0 | — | 0.011814 |
+
+Stone 平均 HSV saturation 比 v2 的 0.271584 下降 **23.1037%**；整面平均 RGB 的 HSV hue=**34.8814°**，仍在暖侧。Stone_Sub 整面 hue=35.2177°。三样 HF spread=**0.154951 ≤0.20**；雪 HF 位于 [0.010,0.016]。两套石材砌块内部 step_ratio 均位于 [0.08,0.25]。各样本 Point / Repeat / 无 mipmap / 无压缩，贴图仍为 256×256。
+
+family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-family`，再运行量测。截图器只在显式测量参数下，对现有 art_close 同机位的同一教堂墙面临时替换材质（10 个 renderer），截图后通过 finally 恢复全部原材质，不写场景或游戏状态。A/B 都缩至 480×270，取原固定 Stone ROI `[0.55,0.23,0.74,0.47]`，sRGB→线性 RGB→D65 XYZ→Lab，比较该区域平均 Lab 的 CIE76 欧氏距离。并非拿不同光照的两面墙或贴图均值比较。实测 **ΔE=12.121404 ∈[6,18]**；区域平均 Lab：教堂 `[32.713386,1.528733,7.535077]`，次级石材 `[20.969193,0.929418,4.595148]`。证据为 `Shots/style3_family_church_480.png` / `style3_family_sub_480.png`，原图同名去掉 `_480`；运行时记录 `logs/20_runtime_174725.log` 中 `same_wall=True`。
+
+最终整帧：`snow_ratio=0.6437`、`white_clip_ratio=0.0070`、`magenta_px=0`。山体使用 v3 截图前选定的无遮挡左侧固定 ROI `[0.02,0.32,0.20,0.40]`，Rec.601 平均亮度 `/255` 为 **0.484867**（门槛 0.42–0.60）；ROI 与所有公式随量测脚本保留。整帧其他三项沿用原 `measure_shot.py` 口径与阈值。
+
+最终验收：
+- `bash spike/tools/accept.sh --fast` **exit=0**：`logs/style3_accept_final.log` / `logs/accept_174332.log`。场景通过，macOS / Windows Mono 两次构建成功，11 项演示均 `rc=0 bad=0`，运行时三图完成。按 --fast 跳过性能，不声称性能已重测。
+- `bash spike/tools/capture_runtime.sh --style3-family` **exit=0**：`logs/style3_family_capture.log`。
+- 额外单独 `bash spike/tools/run_demos.sh "-demo-enter-church"` **exit=0**：`logs/style3_interior_final.log`；本轮三图 `Shots/interior_entry.png` / `interior_inside.png` / `interior_lookup.png` 已目视检查，墙壳保持深色、冷暖石块可辨，不发白；其他室内材质保留原状。
+- `python3 spike/tools/measure_style.py` **exit=0**：`logs/style3_measure_final.log`；已打印全部 STYLE3 / STYLE3_HF / STYLE3_FAMILY / STYLE3_GATE；最终 `[STYLE3_GATE] palette_ok=True hf_ok=True family_ok=True wood_seams=2 pass=True`。报告 `Assets/Art/MaterialForge/measurement.json`；四样本全部硬项已纳入 gate，七材质铺开仍不在本轮范围。
+- `python3 -m py_compile spike/tools/measure_style.py`、`bash -n spike/tools/capture_runtime.sh`、`git diff --check`、两份 MaterialForge 的 `cmp`、雪的 `shasum -a 256 -c` 均通过。所有播放器都由脚本 `open -n -a` + caffeinate 启动，未直接执行二进制。
+
+交付预览：`Shots/art_close.png`、`Shots/art_runtime.png`、`Shots/style_480.png`、`Shots/style_480_upscaled.png`。本轮无未通过硬项，停止在本次批准的材质范围。

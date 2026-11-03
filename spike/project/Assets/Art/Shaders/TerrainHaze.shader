@@ -5,6 +5,7 @@ Shader "Mistbell/TerrainHaze"
         [MainTexture] _BaseMap ("Grass", 2D) = "white" {}
         [MainColor] _BaseColor ("Tint", Color) = (1,1,1,1)
         _ForgeSurface ("Forge sample: 0 off / 1 snow / 2 stone / 3 wood", Float) = 0
+        _ForgeTopGain ("Secondary step top polish", Float) = 1
         _ForgeRoughness ("Forge roughness", 2D) = "white" {}
         _SnowMedium ("Snow 256px middle", 2D) = "gray" {}
         _SnowLow ("Snow 1024px low", 2D) = "gray" {}
@@ -55,7 +56,7 @@ Shader "Mistbell/TerrainHaze"
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor, _FarHazeColor;
                 float _FarHazeStrength;
-                float _SnowRelief, _ForgeSurface;
+                float _SnowRelief, _ForgeSurface, _ForgeTopGain;
                 float _StoneSurface, _SnowAlbedo, _RockSnowCap, _Footprint, _RockOnly;
                 float _NormalScale, _Metallic, _Smoothness;
                 float _HazeStart, _HazeEnd, _HazePower, _HazeStrength;
@@ -153,6 +154,7 @@ Shader "Mistbell/TerrainHaze"
                     // on one metre grid, independent of their mesh UVs and object scales.
                     uv = (floor((uv * _BaseMap_ST.xy + _BaseMap_ST.zw) * 256.0) + .5) / 256.0;
                     half3 albedo = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb * _BaseColor.rgb;
+                    if (_ForgeSurface > 1.5 && _ForgeSurface < 2.5 && n.y > .9) albedo *= _ForgeTopGain;
                     half rough = SAMPLE_TEXTURE2D(_ForgeRoughness,sampler_ForgeRoughness,uv).r;
                     Light key = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
                     // Diffuse only: the roughness map bounds diffuse energy; no smooth PBR highlight.
