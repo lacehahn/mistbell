@@ -15,7 +15,7 @@ public static class TweakInteriorMats
             if (m == null) continue;
             m.SetColor("_EmissionColor", new Color(.028f, .024f, .020f, 1f));
             m.SetFloat("_Smoothness", .30f);
-            m.SetColor("_BaseColor", new Color(.40f, .345f, .28f, 1f));   // 暖石色，别偏冷灰
+            m.SetColor("_BaseColor", new Color(.47f, .37f, .27f, 1f));   // 暖石色：0.40 那版在冷环境光下仍显灰
             EditorUtility.SetDirty(m);
             n++;
         }
@@ -23,6 +23,10 @@ public static class TweakInteriorMats
         if (aisle != null)
         {
             aisle.SetColor("_EmissionColor", new Color(.022f, .019f, .016f, 1f));
+            // 探针发现：大多数地板块其实挂的是 M_InteriorAisle（底色 0.55/0.50/0.44 偏冷灰），
+            // 之前只改了 M_InteriorSlab_*，所以地板一直是灰的。
+            aisle.SetColor("_BaseColor", new Color(.44f, .355f, .265f, 1f));
+            aisle.SetFloat("_Smoothness", .30f);
             EditorUtility.SetDirty(aisle);
             n++;
         }

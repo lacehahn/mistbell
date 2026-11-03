@@ -855,10 +855,16 @@ public sealed partial class PlayerController : MonoBehaviour
                     lamp.color==(Color)new Color32(232,210,182,255);
                 continue;
             }
+            if(lamp.name=="Interior_AltarWash")
+            {
+                pass &= lamp.enabled && lamp.type==LightType.Spot && Mathf.Abs(lamp.intensity-1.35f)<.001f &&
+                    Mathf.Abs(lamp.range-9)<.01f && lamp.color==(Color)new Color32(255,214,170,255);
+                continue;
+            }
             if(lamp.name=="Interior_FloorBounce")
             {
-                pass &= lamp.enabled && lamp.type==LightType.Point && Mathf.Abs(lamp.range-14)<.01f &&
-                    Mathf.Abs(lamp.intensity-.40f)<.001f && lamp.color==(Color)new Color32(138,106,78,255);
+                pass &= lamp.enabled && lamp.type==LightType.Point && Mathf.Abs(lamp.range-18)<.01f &&
+                    Mathf.Abs(lamp.intensity-.75f)<.001f && lamp.color==(Color)new Color32(138,106,78,255);
                 continue;
             }
             if(lamp.name.StartsWith("Interior_ChandelierCandle_")) { pass &= Mathf.Abs(lamp.range-1.2f)<.001f && Mathf.Abs(lamp.intensity-.35f)<.001f; continue; }
@@ -1148,7 +1154,7 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(.4f);
         bool pass=interiorLightPass && domeLightPass && ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
-            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==17 && interior.shafts.Length==3 &&
+            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==18 && interior.shafts.Length==3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;
         Debug.Log($"[INT_PASS] light={interiorLightPass} domeLight={domeLightPass} ceilingSeen={ceilingSeen} " +
             $"domeSeen={domeSeen} fx={ceilingFx:F3} visible={InteriorVisibility()} obstacles={TestInteriorObstacles()} " +

@@ -265,10 +265,21 @@ public static class ChurchInteriorBuilder
             key.shadows=LightShadows.None; key.renderMode=LightRenderMode.ForcePixel;
             lamps.Add(key);
         }
+        // 祭坛洗光：祭坛在远处、只有烛光时整块是黑的，加一盏低强度暖光把它"提"出来。
+        {
+            var wash=new GameObject("Interior_AltarWash").AddComponent<Light>();
+            wash.transform.SetParent(interior.detailRoot.transform,true);
+            wash.transform.position=new Vector3(-2f,2.3f,-7.4f);
+            wash.transform.rotation=Quaternion.Euler(62f,0f,0f);
+            wash.type=LightType.Spot; wash.spotAngle=62f; wash.innerSpotAngle=34f;
+            wash.range=9f; wash.intensity=1.35f; wash.color=new Color32(255,214,170,255);
+            wash.shadows=LightShadows.None; wash.renderMode=LightRenderMode.ForcePixel;
+            lamps.Add(wash);
+        }
         var bounce=new GameObject("Interior_FloorBounce").AddComponent<Light>();
         bounce.transform.SetParent(interior.detailRoot.transform,true);
         bounce.transform.position=new Vector3(-2,interior.FloorY+.6f,1);
-        bounce.type=LightType.Point; bounce.range=14; bounce.intensity=.40f;
+        bounce.type=LightType.Point; bounce.range=18; bounce.intensity=.75f;   // 冷环境光下地板发灰，靠地面反弹光把暖调补回来
         bounce.color=new Color32(138,106,78,255); bounce.shadows=LightShadows.None;
         lamps.Add(bounce);
         foreach(var lamp in lamps) if(lamp.name.StartsWith("Interior_Candle_")) lamp.range=6;

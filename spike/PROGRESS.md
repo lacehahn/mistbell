@@ -649,4 +649,6 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 | 07:50 | 未解 | 地板明度改不动：`Assets/Settings/M_InteriorSlab_*.mat` 的自发光仍是 0.16，说明**室内材质不是由 `SpikeScene.Run` 重建的**（builder 里改成 0.025 已生效但资产没重写），需要查室内资产的生成入口 | — |
 | 08:05 | 室内材质资产收口 | 关键发现：`Assets/Settings/M_InteriorSlab_*.mat` 是被场景直接引用的资产，`ChurchInteriorBuilder.Lit()` 只在首次创建时写入，之后改代码不生效 → 地板一直带着旧的 0.16 自发光，整片发白。新增 `TweakInteriorMats.Run` 直接改资产（自发光 0.028、暖石底色、smoothness 0.30） | `nave_floor 0.0433 → 0.0216`，地面亮度不再压过光柱 |
 | 08:05 | 光斑 | 地面叠加光斑 alpha 0.12 → 0.22 | 三处光斑可见 |
+| 08:35 | 室内材质"改了不生效"的根因 | 探针 `QuickProbe` 打印：地板块大量挂的是 `M_InteriorAisle`（底色 0.55/0.50/0.44 冷灰），且**场景里对该资产的 GUID 引用数为 0**——室内材质是序列化进场景的副本，改 .mat 资产不影响已存的场景；必须先改资产再重建场景再出包 | `[FLOORPROBE] Interior_FloorSlab_0 mat=M_InteriorAisle base=0.55/0.50/0.44` |
+| 08:35 | 固定出包顺序 | 新增 `spike/tools/build_interior.sh`：`SpikeScene.Run → TweakInteriorMats.Run → SpikeBuild.Run`（顺序错了地板会回到 0.16 自发光、整片发白的版本） | `bash spike/tools/build_interior.sh` |
 
