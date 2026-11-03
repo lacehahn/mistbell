@@ -534,3 +534,32 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
   门槛沿用现有 bench 的平均 FPS ≥200、drawcall ≤330；1% low 如实记录，不作为已达 200 FPS 的指标。
 - `python3 spike/tools/measure_style6.py --bench spike/logs/style6_bench.json` exit=0：`logs/style6_measure_final.log`；所有 STYLE6 / STYLE6_HF / STYLE6_UNCHANGED / STYLE6_GATE 已打印，最终 pass=True（含整帧与性能）。报告 `project/Assets/Art/MaterialForge/measurement_style6.json`。
 - Python 语法检查、shell `bash -n`、权威/编译源码 `cmp` 与 `git diff --check` 均通过。
+
+## 2026-11-03 材质风格 v10：去逐块白边与厚倒角，恢复深色挡土墙
+
+执行 `tasks/material_style_v10_delego2.md`。仅重做 Stone / Roof_Slate / Stone_Sub / Stone_Interior 的 1024×1024 Albedo 与配套 Roughness；材质按实际贴图宽度计算米制投影，四样本为 112 texel/m。Snow / Wood / Rock / Grass 的 Albedo 字节基线存于 `tools/style10_frozen.json`，不重写。无依赖安装、无 commit；未改玩法、相机、关卡几何、UI 或 AGENTS.md。
+
+实现与量测口径：
+
+- `tools/forge_style10.py` 确定性生成 26 层、每层 20 块；每层块宽三个区间的数量恰为 40% / 35% / 25%。整层共享起伏边界，雪厚 2–6 px、少量 1–2 px 下垂，与块的左右边界独立。只保留朝光上边缘 1 px 亮边；没有包围每块的厚倒角或黑框。恰好 25% 的竖向界面省去灰缝。挡土墙 coping shader 原先强制替换成亮灰色，现保留原深色纹理，只乘 1.04。
+- `size_cv` 采用块宽的总体标准差 / 均值；不能用被限定在 0.26–0.46 m 的块高 CV 代替（该有界高度范围不可能达到 0.40）。块高报告遍历每个横向 texel，计算相邻层共同起伏后**实际局部高度**，不只检查名义层高。
+- `joint_ratio` 从实际 Albedo 灰缝 texel 与同块邻近正文 texel 的显示 RGB Rec.709 亮度比计算，沿用前任务“块色乘系数”的含义；不把它冒充渲染色调。`chips_pct` 为带可见小崩损块的数量占比，像素占比另存 `chip_pixel_pct`。
+- `grid_score` 从实际 Albedo 的水平 / 垂直 RGB 变化边缘统计，遍历与块宽 / 局部块高一致的整数格距及所有相位，取落在完全等距格线上的边缘最大比例。不是对随机种子写死一个分数。布局与每个输出像素均由验收器复核。
+- **全部色调门槛只用渲染后的截图**，逐像素 sRGB→线性→D65 XYZ→CIELab，再取区域均值。固定区域见 `tools/style10_regions.json`，带框证据为 `project/Shots/style10_roi_{church,roof,sub,interior}.png`；不按颜色过滤像素。教堂沿用既有墙面 ROI；首轮图发现挡土墙大矩形混入墙下前景雪地，依实际墙面边界收紧为 `[.58,.75,.93,.83]`，原因已记录在配置，此后保持不变。屋顶使用既有全景锥顶内部区域，室内使用独立入堂截图。
+- `tools/capture_style10.sh` 拒绝旧截图时间戳，重新生成室外与室内三图；近景经 LANCZOS 缩至 480×270，再 NEAREST 放大四倍。`project/Shots/style10_capture.json` 记录本轮材质与截图 SHA，量测拒绝与当前材质不匹配的证据。所有播放器由 `open -n -a` + caffeinate 启动。
+- `accept.sh` 已切换到 v10 生成 / 截图 / 验收，避免旧 v8 生成器覆盖本轮材质。第一次完整验收的屋顶 L*=32.87 未过下限，其余演示与门槛通过；已调整屋顶 Albedo，重新执行完整验收，不放宽阈值。
+
+最终验收与证据：
+
+- `bash spike/tools/accept.sh --fast` **exit=0**：`logs/style10_accept_final.log` / `logs/accept_214847.log`。场景生成、macOS / Windows 两次构建、11 项演示、独立入堂三图、运行时三图及 v10 门槛全绿。
+- 渲染固定区域最终值：`church_L=40.044542`、`church_b=15.528400`、`roof_L=34.527365`、`wall_minus_roof=5.517177`、`sub_L=15.492442`、`interior_L=10.637270`。无源贴图 L* 参与色调 gate。
+- 四样本均为 1024×1024；块宽 `0.223214–0.848214 m`，含起伏的局部块高 `0.267857–0.437500 m`，宽 CV=`0.479783`，灰缝比 `0.849150–0.850611`，雪覆盖=`0.102077`，实际栅格边缘 grid score=`0.076267`。省缝比例恰为 0.25，宽度三档比例恰为 0.40 / 0.35 / 0.25。四张冻结 Albedo SHA 全部一致。
+- 整帧：`snow_ratio=0.6517`、`white_clip_ratio=0.0070`、`magenta_px=0`、`mountain_luma=0.484981`，全部通过。
+- `bash spike/tools/bench_style10.sh` **exit=0**：`logs/style10_validation_final.log`；开发构建 `logs/style10_perf_build.log`，原始性能日志 / 数据为 `logs/style10_bench.log` / `logs/style10_bench.json`。以 caffeinate + `open -n -a` 独立运行 1920×1080 `-bench -bench-foreground`：
+  - z01：平均 FPS=228.85，1% low=171.06，drawcall=263。
+  - terrace：平均 FPS=235.71，1% low=170.52，drawcall=252。
+  - interior：平均 FPS=229.47，1% low=153.92，drawcall=250。
+  - 本任务沿用既有 benchmark 的平均 FPS ≥200 / drawcall ≤330 门槛；未把 1% low 声称为 ≥200。
+- `python3 spike/tools/measure_style10.py --bench spike/logs/style10_bench.json` 随性能脚本执行，打印全部指定标签；最终 `[STYLE10_GATE] ... tone_ok=True ... performance_ok=True pass=True`。机器可读报告：`project/Assets/Art/MaterialForge/measurement_style10.json`。
+- 已核对四材质实际 PNG GUID 绑定；Python 编译、三个 shell 脚本 `bash -n`、权威 / Unity 源码 `cmp`、`git diff --check` 均通过。另独立逐字节验证 480 图确为本轮 art_close 的 LANCZOS 缩图，放大图确为其 NEAREST ×4。
+- 已目视检查最终近景、全景、480 放大图及室内墙面；挡土墙为深色、逐块白边与厚倒角已去掉。交付：`project/Shots/art_close.png`、`art_runtime.png`、`style_480.png`、`style_480_upscaled.png`、`interior_entry.png`、`interior_inside.png`、`interior_lookup.png`。全套源图 SHA 留在 `project/Shots/style10_capture.json`。

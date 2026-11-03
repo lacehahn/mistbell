@@ -29,8 +29,8 @@ if ! cmp -s spike/editor/MaterialForge.cs "$PROJ/Assets/Editor/MaterialForge.cs"
   cp spike/editor/MaterialForge.cs "$PROJ/Assets/Editor/MaterialForge.cs"
 fi
 step "1/5 生成场景"
-python3 spike/tools/forge_style8.py
-check $? "STYLE8 生成（冻结七张参考贴图）"
+python3 spike/tools/forge_style10.py
+check $? "STYLE10 生成（冻结四张参考贴图）"
 "$UNITY" -batchmode -quit -projectPath "$PROJ" -executeMethod SpikeScene.Run -logFile "$LOGDIR/accept_scene.log" >/dev/null 2>&1
 check $? "SpikeScene.Run"
 grep -aoE "\[SNOW\][^\"]{0,80}" "$LOGDIR/accept_scene.log" | tail -1
@@ -52,33 +52,10 @@ grep -ahoE "\[(REVEAL|JOURNAL_CHECK|SAVE)\] [^\"]{0,110}" "$LOGDIR"/run_*_"$STAM
 
 step "4/5 截图 + 量测"
 CAPTURE_START=$(date +%s)
-bash spike/tools/capture_runtime.sh > "$LOGDIR/accept_capture_$STAMP.log" 2>&1
-check $? "capture_runtime.sh（3 张）"
-python3 - "$CAPTURE_START" <<'PY'
-import hashlib, json, sys
-from pathlib import Path
-from PIL import Image
-shots = Path('spike/project/Shots')
-evidence = {}
-for name in ('art_close.png', 'art_runtime.png'):
-    path = shots/name
-    assert path.stat().st_mtime >= int(sys.argv[1]), 'Stale capture: '+name
-    evidence[name] = hashlib.sha256(path.read_bytes()).hexdigest()
-with Image.open(shots/'art_close.png') as source:
-    small = source.resize((480,270), Image.Resampling.LANCZOS)
-    small.save(shots/'style_480.png')
-    up = small.resize((1920,1080), Image.Resampling.NEAREST)
-    up.save(shots/'style_480_upscaled.png')
-    with Image.open(shots/'style_480_upscaled.png') as encoded:
-        assert encoded.tobytes() == up.tobytes()
-evidence['style_480_upscaled.png'] = hashlib.sha256((shots/'style_480_upscaled.png').read_bytes()).hexdigest()
-(shots/'style8_capture.json').write_text(json.dumps(evidence,indent=2)+'\n')
-print('[STYLE8_CAPTURE] '+json.dumps(evidence), flush=True)
-PY
-check $? "STYLE8 本轮截图 / LANCZOS → NEAREST ×4"
-python3 spike/tools/measure_shot.py spike/project/Shots/art_runtime.png | tail -1
-python3 spike/tools/measure_style8.py
-check $? "STYLE8 材质 / SHA / 整帧门槛"
+bash spike/tools/capture_style10.sh > "$LOGDIR/accept_capture_$STAMP.log" 2>&1
+check $? "capture_style10.sh（本轮外景、室内与480放大图）"
+python3 spike/tools/measure_style10.py
+check $? "STYLE10 布局 / 渲染色调 / SHA / 整帧门槛"
 
 if [ "$FAST" -eq 0 ]; then
   step "5/5 满分辨率性能（1920×1080）"

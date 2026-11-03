@@ -162,7 +162,7 @@ Shader "Mistbell/TerrainHaze"
                     {
                         float capDepth=-dot(float4(input.positionWS,1),_ForgeCopingPlane);
                         if (_ForgeCopingPlane.y > .5 && capDepth >= -.02 && capDepth <= .25)
-                            albedo=half3(.144128,.144128,.144128)*_BaseColor.rgb; // sRGB #6A6A6A, one tier brighter
+                            albedo *= 1.04; // retain dark rubble texture in coping band
                         if(n.y > .9) albedo *= _ForgeTopGain;
                     }
                     half rough = SAMPLE_TEXTURE2D(_ForgeRoughness,sampler_ForgeRoughness,uv).r;

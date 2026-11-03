@@ -1,0 +1,40 @@
+{
+  "method": "mean per-pixel D65 CIELab on rendered fixed rectangular regions, no pixel filtering",
+  "church": {
+    "shot": "art_close.png",
+    "rect": [
+      0.55,
+      0.23,
+      0.74,
+      0.47
+    ]
+  },
+  "roof": {
+    "shot": "art_runtime.png",
+    "rect": [
+      0.465,
+      0.37,
+      0.49,
+      0.41
+    ]
+  },
+  "sub": {
+    "shot": "art_close.png",
+    "rect": [
+      0.58,
+      0.75,
+      0.93,
+      0.83
+    ],
+    "reason": "Stone face only; first capture showed previous rectangle included foreground snow below the wall. Corrected geometrically before second render, without threshold tuning; subsequent iterations fixed."
+  },
+  "interior": {
+    "shot": "interior_inside.png",
+    "rect": [
+      0.12,
+      0.34,
+      0.27,
+      0.62
+    ]
+  }
+}
