@@ -697,7 +697,7 @@ public static class ChurchInteriorBuilder
     static void BuildWestWindows(Transform detail,ChurchInterior interior)
     {
         var shaft=Additive("M_InteriorV2Shaft",new Color(2.8f,2.35f,1.85f,.08f));
-        var pool=Additive("M_InteriorV2Pool",new Color(1,.82f,.59f,.12f));
+        var pool=Additive("M_InteriorV2Pool",new Color(1,.84f,.62f,.22f));
         var dust= new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")){name="M_InteriorV2Dust"};
         dust.SetFloat("_Surface",1); dust.SetFloat("_Blend",0); dust.SetFloat("_ZWrite",0);
         dust.SetFloat("_SrcBlend",(float)BlendMode.SrcAlpha); dust.SetFloat("_DstBlend",(float)BlendMode.OneMinusSrcAlpha);
