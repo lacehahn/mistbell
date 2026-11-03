@@ -36,6 +36,8 @@ public static class MountainBackdrop
     // Preserve the previous cards' feet; scaling is anchored here, never at the crest.
     static readonly int[] OriginalCrests = { 888, 920, 896, 904 };
     static float maxPeakStdPct;
+    static int flatTopMax, subPeaks;
+    static float summitSlopeMin, snowCapOffsetMax;
     static readonly float[] LayerLuma = new float[4];
     static readonly int[] RockStreaks = new int[3], SnowGullies = new int[3], PeakCounts = new int[4];
     static readonly int[] SpurCounts = new int[4];
@@ -138,34 +140,37 @@ public static class MountainBackdrop
     static float[] Profile(int layer, Vector2 pixelScale, out int peaks, out float std)
     {
         var rng = new System.Random(Seeds[layer]);
-        peaks = 9 + layer;
+        peaks = 12 + layer;
         var ridge = new float[W];
         var widths = new float[peaks];
         float total = 0;
         for (int i=0;i<peaks;i++) { widths[i]=60+rng.Next(165); total+=widths[i]; }
         int start=0;
         float valley=OriginalCrests[layer]-150;
-        // All crowns and shoulders now use continuous cubic curves.
-        int rounded=peaks;
+        // Keep the irregular cubic flanks, but give each crown an explicit cusp.
+        int rounded=0;
         for(int i=0;i<peaks;i++)
         {
             int end=i==peaks-1?W-1:start+Mathf.RoundToInt(widths[i]/total*(W-1));
-            float apex=Mathf.Lerp(start,end,.36f+(float)rng.NextDouble()*.27f);
+            float apex=Mathf.Round(Mathf.Lerp(start,end,.36f+(float)rng.NextDouble()*.27f));
             float top=OriginalCrests[layer]-2*rng.Next(0,24);
             float nextValley=OriginalCrests[layer]-2*rng.Next(48,95);
             float[] leftY,rightY;
-            var leftX=FlankKnots(start,apex,valley,top,Seeds[layer]+i*101,pixelScale,out leftY);
+            float crownHalf=6f/pixelScale.x, drop=10.2f/pixelScale.y;
+            var leftX=FlankKnots(start,apex-crownHalf,valley,top-drop,Seeds[layer]+i*101,pixelScale,out leftY);
             // Reflect the descending flank to keep the monotone interpolator increasing.
-            var rightX=FlankKnots(0,end-apex,nextValley,top,Seeds[layer]+i*101+509,pixelScale,out rightY);
+            var rightX=FlankKnots(0,end-apex-crownHalf,nextValley,top-drop,Seeds[layer]+i*101+509,pixelScale,out rightY);
             for(int x=start;x<=end;x++)
             {
                 float ridgeSum=0;
                 for(int sample=0;sample<2;sample++)
                 {
                     float sx=Mathf.Clamp(x+(sample==0?-.25f:.25f),start,end);
-                    ridgeSum+=sx<=apex?Flank(sx,leftX,leftY):Flank(end-sx,rightX,rightY);
+                    ridgeSum+=Mathf.Abs(sx-apex)<=crownHalf
+                        ?top-Mathf.Abs(sx-apex)/crownHalf*drop
+                        :sx<apex?Flank(sx,leftX,leftY):Flank(end-sx,rightX,rightY);
                 }
-                ridge[x]=ridgeSum*.5f;
+                ridge[x]=x==(int)apex?top:ridgeSum*.5f;
             }
             start=end; valley=nextValley;
         }
@@ -179,6 +184,24 @@ public static class MountainBackdrop
             if(direction>0 && d<0) heights.Add(ridge[x-1]);
             direction=d;
         }
+        for(int x=1;x<W-1;x++)
+            if(ridge[x]>ridge[x-1] && ridge[x]>ridge[x+1])
+            {
+                float left=(ridge[x]-ridge[x-1])*pixelScale.y/pixelScale.x;
+                float right=(ridge[x]-ridge[x+1])*pixelScale.y/pixelScale.x;
+                summitSlopeMin=Mathf.Min(summitSlopeMin,left+right);
+                int run=1, maxRun=1;
+                float previous=float.NaN;
+                for(int px=-12;px<=12;px++)
+                {
+                    float sample=Mathf.Clamp(x+px/pixelScale.x,0,W-1);
+                    int a=Mathf.FloorToInt(sample);
+                    float y=Mathf.Round(Mathf.Lerp(ridge[a],ridge[Mathf.Min(W-1,a+1)],sample-a)*pixelScale.y);
+                    run=!float.IsNaN(previous) && Mathf.Abs(y-previous)<=1?run+1:1;
+                    maxRun=Math.Max(maxRun,run); previous=y;
+                }
+                flatTopMax=Math.Max(flatTopMax,maxRun);
+            }
         if(heights.Count!=peaks) throw new InvalidOperationException("MTN7 raster peak count");
         float sum=0, sum2=0;
         foreach(float h in heights) {sum+=h;sum2+=h*h;}
@@ -281,7 +304,9 @@ public static class MountainBackdrop
             float slope=Mathf.Abs((ridge[r]-ridge[l])/(float)Mathf.Max(1,r-l));
             float deposit=Mathf.Clamp01(.5f+.5f*Jagged(x,seed+503,12,24)+.25f*Jagged(x,seed+907,4,8));
             float steep=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.2f,1.1f,slope));
-            caps[x]=2f*(Mathf.Lerp(Mathf.Lerp(12,24,deposit),Mathf.Lerp(5,8,deposit),steep));
+            // A thin contour deposit follows every column of the ridge (output px).
+            caps[x]=Mathf.Lerp(1.1f,1.8f,deposit)/pixelScale.y;
+            snowCapOffsetMax=Mathf.Max(snowCapOffsetMax,(caps[x]+1)*pixelScale.y);
             if(layer<3) { minCap=Math.Min(minCap,Mathf.RoundToInt(caps[x]/2)); maxCap=Math.Max(maxCap,Mathf.RoundToInt(caps[x]/2)); }
         }
         int streakCount=layer==0?12:layer==1?14:10;
@@ -604,7 +629,8 @@ public static class MountainBackdrop
             foreach(string tint in new[]{"#5A6878","#6B7888","#7C8896"})
                 delta=Mathf.Min(delta,Luma(Rock(Hex(tint),true,mix,Hex("#DAE5EF")))-Luma(Rock(Hex(tint),false,mix,Hex("#DAE5EF"))));
         // Screenshot-only skyline locator. First sustained sky-to-snow rise,
-        // averaged over 5 columns to reject isolated snowflakes. Measure horizontal
+        // averaged over 5 columns to reject isolated snowflakes. A 0.020 rise
+        // locates the new <=3 px cap after screenshot quantization. Measure horizontal
         // 3px differences around that silhouette, not the snow/rock face contrast.
         int stair=0, magenta=0;
         for(int i=0;i<pixels.Length;i++)
@@ -619,7 +645,7 @@ public static class MountainBackdrop
                 float rise=0;
                 for(int dx=-2;dx<=2;dx++)
                     rise+=Luma(pixels[(h-2-y)*w+x+dx])-Luma(pixels[(h-1-y)*w+x+dx]);
-                if(rise/5>.025f) { edge=y; break; }
+                if(rise/5>.020f) { edge=y; break; }
             }
             if(edge<0) throw new InvalidOperationException("MTN13 missing screenshot ridge at x="+x);
             float jump=0;
@@ -634,7 +660,7 @@ public static class MountainBackdrop
         File.WriteAllText("Shots/mtn13_ridge_samples.csv",samples.ToString());
         double ridgeStair=stair/200.0;
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
-            "[MTN13_MEASURE] ridge_stair_px={0:F6} exceed={1}/200 magenta_px={2} sample_x=0.05..0.95 ridge_search_y=0.14..0.42 locator=first_5col_rise_gt_0.025 radius=1 axis=x delta_px=3 threshold=0.25",ridgeStair,stair,magenta));
+            "[MTN13_MEASURE] ridge_stair_px={0:F6} exceed={1}/200 magenta_px={2} sample_x=0.05..0.95 ridge_search_y=0.14..0.42 locator=first_5col_rise_gt_0.020 radius=1 axis=x delta_px=3 threshold=0.25",ridgeStair,stair,magenta));
         if(ridgeStair>.05 || magenta!=0) throw new InvalidOperationException("MTN13 screenshot gate");
         // Horizontal adjacent-pixel luma differences at screen y=0.63. The
         // side bands exclude church/tower geometry and measure the mountain foot.
@@ -713,6 +739,7 @@ public static class MountainBackdrop
         maxSnowDepth=0; minSnowWidth=float.PositiveInfinity; maxSnowWidth=0; maxSnowReversals=0;
         ridgeBreaks=0; straightSegments=0; maxFacePixels=0;
         minShadowRatio=1; minShadeLuma=1; maxFaceGap=0;
+        flatTopMax=0; subPeaks=0; summitSlopeMin=float.PositiveInfinity; snowCapOffsetMax=0;
         maxPeakStdPct=0; maxFootJump=0; minCap=int.MaxValue; maxCap=0; minFaceDelta=1;
         for(int layer=0;layer<4;layer++)
         {
@@ -810,6 +837,12 @@ public static class MountainBackdrop
                 layer+1,peaks,std,d,width,measured[layer],1-bottom,foot.y));
         }
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
+            "[PEAK] flat_top_px_max={0} peaks={1}/{2}/{3}/{4} summit_slope_delta_min={5:F4} sub_peaks={6} snow_cap_offset_max={7:F4}",
+            flatTopMax,PeakCounts[0],PeakCounts[1],PeakCounts[2],PeakCounts[3],summitSlopeMin,subPeaks,snowCapOffsetMax));
+        if(flatTopMax>12 || summitSlopeMin<.35f || snowCapOffsetMax>3
+            || PeakCounts[0]<12 || PeakCounts[1]<13 || PeakCounts[2]<14 || PeakCounts[3]<15)
+            throw new InvalidOperationException("PEAK summit/contour gate");
+        Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[GULLY] count_l1={0} count_l2={1} max_len_pct={2:F4} max_reversals={3} width_px={4:F0}-{5:F0} side=shadow_only",
             SnowGullies[0],SnowGullies[1],maxSnowDepth,maxSnowReversals,minSnowWidth,maxSnowWidth));
         if(maxSnowDepth>35 || maxSnowReversals>1 || minSnowWidth<3 || maxSnowWidth>7
@@ -832,7 +865,7 @@ public static class MountainBackdrop
         float gradient=LayerLuma[2]-LayerLuma[0];
         if(gradient<.18f || LayerLuma[1]<=LayerLuma[0] || LayerLuma[1]>=LayerLuma[2])
             throw new InvalidOperationException("MTN10 layer luminance gate");
-        if(RockLevels!=3 || minFaceDelta<.05f || minFaceDelta>.26f || minCap!=5 || maxCap!=24 || root.childCount!=4)
+        if(RockLevels!=3 || minFaceDelta<.05f || minFaceDelta>.26f || snowCapOffsetMax>3 || root.childCount!=4)
             throw new InvalidOperationException($"MTN10 drawing gate delta={minFaceDelta} caps={minCap}..{maxCap}");
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN10] layers={0} rock_levels={1} rock_streaks={2}/{3} lit_shadow_delta={4:F6} snowcap_px={5}..{6} snow_gullies={7}/{8} treeline=0.45/0.2/no silhouette_peaks={9}/{10}/{11}",
