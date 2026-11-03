@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""STYLE3 sample measurement: stdlib + existing sips/ffmpeg, no dependency install.
+"""STYLE4 independent raster/serialized material validation (stdlib, no new packages).
 
-Albedo HF: equal-weight RGB absolute Gaussian residual, sigma=1, radius=3,
-periodic boundaries. Spread is (max-min)/min for Stone/Wood/Snow only.
-Stone step_ratio alone excludes 1px mortar + 1px bevel on all block edges.
-Family distance uses the fixed Stone ROI in paired 480x270 runtime renders
-of the SAME church wall, swapping only the material via -style3-family.
-The seven-material scope stays deferred; this gate is only the v3 samples.
+HF = mean(abs(RGB-Gaussian(RGB,sigma=1,radius=3)))/255 with periodic edges;
+spread = (max-min)/min across ALL FOUR materials, including Stone_Sub.
+Block dimensions/tiers come from the deterministic generation manifest but are
+cross-checked against every raster pixel (mortar, bevel, shadow, body and jog).
+Chroma and palette use ALL pixels; luma_steps counts the four BODY tiers only,
+excluding separately identified mortar/bevel/shadows, as required by the task.
+Family delta-E retains the pre-existing fixed same-wall runtime AB ROI/CIE76.
 """
-import colorsys
 import hashlib
 import json
 import math
@@ -61,39 +61,15 @@ def load(path):
     return result, w, h
 
 
-def png(path, rgb, w, h):
-    def chunk(tag, data):
-        return struct.pack('>I', len(data))+tag+data+struct.pack('>I', zlib.crc32(tag+data)&0xffffffff)
-    raw = b''.join(b'\0'+rgb[y*w*3:(y+1)*w*3] for y in range(h))
-    pathlib.Path(path).write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR', struct.pack('>IIBBBBB', w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b''))
-
-
-def runs(values):
-    """Inclusive-start/exclusive-end runs of true samples."""
-    out=[]; start=None
-    for i,v in enumerate(list(values)+[False]):
-        if v and start is None: start=i
-        if not v and start is not None: out.append((start,i)); start=None
-    return out
-
-
-def gaussian_residual(buf,w,h):
-    # Independent albedo calibration: mean absolute luminance residual, sigma=1,
-    # separable radius=3 Gaussian, periodic boundaries, normalized to [0,1].
-    weights=[math.exp(-i*i/2) for i in range(-3,4)]
-    weights=[v/sum(weights) for v in weights]
-    a=[sum(buf[i+c]*v for c,v in enumerate((.299,.587,.114)))/255 for i in range(0,len(buf),3)]
-    temp=[sum(a[y*w+(x+d)%w]*weights[d+3] for d in range(-3,4)) for y in range(h) for x in range(w)]
-    blurred=[sum(temp[((y+d)%h)*w+x]*weights[d+3] for d in range(-3,4)) for y in range(h) for x in range(w)]
-    return sum(abs(a-b) for a,b in zip(a,blurred))/len(a)
-
-
-# v2 reference: generated before this task, immutable original Albedo pixel measurements.
-V2_STONE_SHA256 = 'bc522112655fa48e2d7f546ab62ea54e7c85d4d554282a237798d9b64a5031eb'
-V2_STONE_SAT = 0.2715841509815626
-V2_SNOW_SHA256 = '8a13e96e9daef38854d7d92157246fd3d1d38412de97338bc5f967a2deeb3375'
-WARM = ['8C7C66','A8967C','C2B49A']
-COOL = ['7E848C','9298A0','A9AEB4']
+# Immutable pre-v4 encoded files, recorded before the first generator change.
+PRESERVED = {
+    'Snow_Albedo.png':'8a13e96e9daef38854d7d92157246fd3d1d38412de97338bc5f967a2deeb3375',
+    'Snow_Roughness.png':'ce3920767eb424e83eecf99ee267039cd24eaf0973b6266ae3f6c3ecdfd970e0',
+    'Wood_Albedo.png':'9059633c8b3f92dc3d0a941f717facf05150b0d3e1a1e115800ffdcd9116de2f',
+    'Wood_Roughness.png':'ff20e80b124191e5306cb35918965abebb0f78059d66192a7020083314f6d259',
+}
+RAMPS={'Stone':['3B3B3B','4B4B4B','595959','6B6B6B'],
+       'Stone_Sub':['232323','363636','484848','565656']}
 
 
 def rgb_hex(value, gain=1):
@@ -117,103 +93,81 @@ def gaussian_rgb(buf,w,h):
     return total/(w*h*3*255)
 
 
-def analyze(entry):
-    name=entry['name']; buf,w,h=load(PROJECT/entry['albedo'])
-    pixels=[tuple(buf[i:i+3]) for i in range(0,len(buf),3)]
-    palette=set(pixels)
-    sat=sum((max(p)-min(p))/max(p) if max(p) else 0 for p in pixels)/len(pixels)
-    mean_rgb=[sum(buf[c::3])/len(pixels) for c in range(3)]
-    # Hue of the mean RGB; avoids the wrap-around problem of arithmetic hue means.
-    hue=colorsys.rgb_to_hsv(*(v/255 for v in mean_rgb))[0]*360
-    seam=max(abs(a-b)/255 for p,q in
-             [(pixels[y*w],pixels[y*w+w-1]) for y in range(h)]+
-             [(pixels[x],pixels[(h-1)*w+x]) for x in range(w)] for a,b in zip(p,q))
+def hash32(a,b):
+    n=(a*73856093 ^ b*19349663 ^ 731)&0xffffffff
+    n^=n>>13
+    return (n*1274126177 & 0xffffffff)&0x7fffffff
+
+
+def cv(values):
+    mean=sum(values)/len(values)
+    return math.sqrt(sum((v-mean)**2 for v in values)/len(values))/mean
+
+
+def analyze(entry,manifest):
+    name=entry['name'];buf,w,h=load(PROJECT/entry['albedo'])
+    pixels=[tuple(buf[i:i+3]) for i in range(0,len(buf),3)];palette=set(pixels)
     mat=(PROJECT/entry['material']).read_text()
-    scale=re.search(r'- _BaseMap:.*?m_Scale: \{x: ([\d.eE+-]+), y: ([\d.eE+-]+)\}',mat,re.S)
-    sx,sy=map(float,scale.groups()); density=w*sx
-    serialized_ok=abs(sx-entry['tiling_x'])<1e-6 and abs(sy-entry['tiling_y'])<1e-6
-    projection=re.search(r'- _ForgeSurface: (\d+)',mat)
-    serialized_ok=serialized_ok and int(projection[1])==entry['forge_surface']
-    rough,rw,rh=load(PROJECT/entry['roughness'])
+    sx,sy=map(float,re.search(r'- _BaseMap:.*?m_Scale: \{x: ([\d.eE+-]+), y: ([\d.eE+-]+)\}',mat,re.S).groups())
+    density=w*sx;rough,rw,rh=load(PROJECT/entry['roughness'])
     point=all('filterMode: 0' in (PROJECT/(entry[k]+'.meta')).read_text() and
               'enableMipMap: 0' in (PROJECT/(entry[k]+'.meta')).read_text() for k in ('albedo','roughness'))
-    data=dict(palette=len(palette),texel_per_m=density,seam_grad=seam,mean_sat=sat,
-              mean_hue=hue,mean_rgb=mean_rgb,gaussian_sigma1=gaussian_rgb(buf,w,h),
-              legacy_luma_hf=gaussian_residual(buf,w,h),point_no_mipmap=point,
-              mortar_px=0,block_px=[0,0],cool_block_pct=0,step_ratio=None)
-    if name in ('Stone','Stone_Sub'):
-        sub=name=='Stone_Sub'; gain=.8 if sub else 1
-        mortar=rgb_hex('8C7F6E',gain)
-        levels={}
-        for ramp in (WARM,COOL):
-            body=rgb_hex(ramp[0]);shadow=tuple(round(v*.94) for v in body)
-            levels[tuple(round(v*gain) for v in shadow)]=0
-            levels[rgb_hex(ramp[0],gain)]=1
-            for value in ramp[1:]:levels[rgb_hex(value,gain)]=2
-        expected=set(levels)|{mortar}
-        rows=[y for y in range(h) if all(pixels[y*w+x]==mortar for x in range(w))]
-        heights=[(b-a)%h for a,b in zip(rows,rows[1:]+rows[:1])]
-        widths=[]; temperatures=[]; courses=[]; interior=set()
-        continuous=True
-        for row,top in enumerate(rows):
-            height=heights[row]; y=(top+3)%h
-            cols=[x for x in range(w) if pixels[y*w+x]==mortar]
-            spans=[(b-a)%w for a,b in zip(cols,cols[1:]+cols[:1])]
-            widths.extend(spans); courses.append(cols)
-            temps=[]
-            for left,width in zip(cols,spans):
-                center=pixels[y*w+(left+width//2)%w]
-                cool=center[2]>center[0];temps.append(cool);temperatures.append(cool)
-                # Interior excludes one pixel mortar and one pixel bevel on ALL sides.
-                for yy in range(2,height-1):
-                    for xx in range(2,width-1):interior.add(((top+yy)%h)*w+(left+xx)%w)
-            for yy in range(1,height):
-                line=(top+yy)%h
-                continuous=continuous and all(pixels[line*w+x]==mortar for x in cols)
-        changed=0
-        for idx in interior:
-            y,x=divmod(idx,w)
-            neighbors=[y*w+(x+1)%w,y*w+(x-1)%w,((y+1)%h)*w+x,((y-1)%h)*w+x]
-            changed+=any(j in interior and levels.get(pixels[j])!=levels.get(pixels[idx]) for j in neighbors)
-        # Exclude no pixels from palette/seam/HF; the interior mask applies ONLY to step_ratio.
-        step=changed/max(1,len(interior))
-        bond=all(9<=min((abs(a-b)%w) if abs(a-b)<=w/2 else w-abs(a-b) for b in nxt)<=12
-                 for current,nxt in zip(courses,courses[1:]+courses[:1]) for a in current)
-        bw=(min(widths,default=0),max(widths,default=0));bh=(min(heights,default=0),max(heights,default=0))
-        data.update(mortar_px=1 if rows and continuous else 0,block_px=[bw[1],bh[1]],
-                    block_width_range=bw,block_height_range=bh,cool_block_pct=sum(temperatures)/max(1,len(temperatures)),
-                    cool_blocks=sum(temperatures),blocks=len(temperatures),mortar_continuous=continuous,
-                    staggered_bond=bond,step_ratio=step,step_ratio_scope='block_interior',interior_pixels=len(interior))
-        allowed_height=(10,14) if sub else (16,16)
-        allowed_width=(18,26) if sub else (23,24)
-        data['structure_ok']=(palette==expected and continuous and bond and
-                              allowed_width[0]<=bw[0]<=bw[1]<=allowed_width[1] and
-                              allowed_height[0]<=bh[0]<=bh[1]<=allowed_height[1] and .08<=step<=.25)
-        data['temperature_neighbor_difference']=sum(
-            (pixels[((top+3)%h)*w+(a+3)%w][2]>pixels[((top+3)%h)*w+(a+3)%w][0]) !=
-            (pixels[((top+3)%h)*w+(b+3)%w][2]>pixels[((top+3)%h)*w+(b+3)%w][0])
-            for top,cols in zip(rows,courses) for a,b in zip(cols,cols[1:]+cols[:1]))/max(1,len(temperatures))
-    elif name=='Wood':
-        door=json.loads((ROOT/'manifest.json').read_text())['door']
-        visible=math.ceil(door['width_metres']*door['texels_per_meter'])
-        dark=rgb_hex('2E2018');grain_color=rgb_hex('3A281D')
-        columns=runs(all(pixels[y*w+x]==dark for y in range(h)) for x in range(visible))
-        seams=[a for a,b in columns if b-a==1 and a>0 and b<visible]
-        widths=[b-a for y in range(h) for a,b in runs(pixels[y*w+x]==grain_color for x in range(visible))]
-        board_edges=[0]+seams+[visible];max_density=0
-        for left,right in zip(board_edges,board_edges[1:]):
-            for y in range(h):
-                grain_density=sum(pixels[y*w+x]==grain_color for x in range(left+1,right))/max(1,right-left-1)
-                max_density=max(max_density,grain_density)
-        data.update(wood_seams=len(seams),grain_width_px=[min(widths,default=0),max(widths,default=0)],grain_max_density=max_density,
-                    door_width_texels=visible,seam_columns=seams)
-        data['structure_ok']=2<=len(seams)<=3 and bool(widths) and all(3<=v<=5 for v in widths) and max_density<=.25
-    else:
-        data['sha256']=hashlib.sha256((PROJECT/entry['albedo']).read_bytes()).hexdigest()
-        data['structure_ok']=data['sha256']==V2_SNOW_SHA256
-    target={'Stone':28,'Stone_Sub':24,'Snow':20,'Wood':24}[name]
-    data['texture_ok']=(len(palette)<=12 and seam<=.02 and point and serialized_ok and
-                        abs(density-target)<1e-4 and abs(sy*w-target)<1e-4 and (w,h,rw,rh)==(256,256,256,256))
+    target={'Stone':28,'Stone_Sub':22,'Snow':20,'Wood':24}[name]
+    data=dict(palette=len(palette),texel_per_m=density,gaussian_sigma1=gaussian_rgb(buf,w,h),
+              chroma_ab_max=max(max(abs(v) for v in lab(p)[1:]) for p in palette),
+              luma_steps=0,block_w_m=[0,0],block_h_m=[0,0],size_cv=0,checker_score=0,
+              texture_ok=point and abs(density-target)<1e-4 and abs(sy*h-target)<1e-4 and
+              abs(sx-entry['tiling_x'])<1e-6 and abs(sy-entry['tiling_y'])<1e-6 and (rw,rh)==(w,h))
+    if name not in RAMPS:return data
+    sub=name=='Stone_Sub';blocks=manifest['sub_blocks' if sub else 'church_blocks']
+    ramp=list(map(rgb_hex,RAMPS[name]));mortar=rgb_hex('1A1A1C' if sub else '26262A')
+    allowed=set(ramp)|{mortar}
+    if not sub:allowed|={tuple(round(v*1.12) for v in c) for c in ramp}|{rgb_hex('878787')}
+    expected=[None]*(w*h); coverage=[0]*(w*h);body_tiers=set();adjacent=[];vertical=[];outline_widths=[]
+    for block in blocks:
+        row,col,x,y,bw,bh,tier=(block[k] for k in ('row','col','x','y','w','h','tier'))
+        peers=[b for b in blocks if b['row']==row]
+        prev=next(b for b in peers if b['col']==(col-1)%len(peers))
+        nxt=next(b for b in peers if b['col']==(col+1)%len(peers))
+        left=0 if bw==4 or prev['w']==4 else hash32(col+31,row+9)%2
+        right=0 if bw==4 or nxt['w']==4 else hash32(nxt['col']+31,row+9)%2
+        outline_widths.append(bw+right if sub else bw)
+        for yy in range(bh):
+            jog=left if sub and yy>=bh//2 else 0
+            actual_width=bw+(right-left if sub and yy>=bh//2 else 0)
+            for xx in range(actual_width):
+                idx=(h-1-y-yy)*w+(x+xx+jog)%w;coverage[idx]+=1
+                if yy==0 or xx==0 or (sub and bw>=8 and xx==1):color=mortar
+                elif not sub and (yy==1 or xx==1):
+                    color=rgb_hex('878787') if tier==3 and yy==1 and xx<=2 else tuple(round(v*1.12) for v in ramp[tier])
+                else:
+                    color=ramp[tier]
+                    if pixels[idx]==color:body_tiers.add(tier)
+                expected[idx]=color
+        peers=[b for b in blocks if b['row']==row]
+        nxt=next(b for b in peers if b['col']==(col+1)%len(peers))
+        adjacent.append((tier,nxt['tier']))
+        # Check vertical adjacency over all overlapping spans, including texture wrap.
+        last=max(b['row'] for b in blocks)
+        for above in blocks:
+            if above['row']!=(row+1)%(last+1):continue
+            if any((x+xx-above['x'])%w<above['w'] for xx in range(bw)):
+                vertical.append((tier,above['tier']))
+    widths=[v/density for v in outline_widths];heights=[b['h']/density for b in blocks]
+    chroma_body=max(max(abs(v) for v in lab(p)[1:]) for p in ramp)
+    bound_w=(.15,.45) if sub else (.55,1.15);bound_h=(.15,.45) if sub else (.32,.60)
+    size_ok=(bound_w[0]<=min(widths)<=max(widths)<=bound_w[1] and
+             bound_h[0]<=min(heights)<=max(heights)<=bound_h[1] and
+             min(cv(widths),cv(heights))>=.15 and (not sub or 5<=len(set(b['row'] for b in blocks))<=7))
+    data.update(luma_steps=len(body_tiers),block_w_m=[min(widths),max(widths)],
+                block_h_m=[min(heights),max(heights)],size_cv=min(cv(widths),cv(heights)),
+                width_cv=cv(widths),height_cv=cv(heights),body_tier_counts={str(t):sum(b['tier']==t for b in blocks) for t in range(4)},blocks=len(blocks),rows=len(set(b['row'] for b in blocks)),
+                checker_score=sum({a,b}=={0,3} for a,b in adjacent)/len(adjacent),
+                adjacent_tier_max=max(abs(a-b) for a,b in adjacent+vertical),
+                chroma_body_max=chroma_body,size_ok=size_ok,
+                raster_ok=all(n==1 for n in coverage) and pixels==expected and palette<=allowed,
+                body_luma_range=(sum(ramp[-1])/3-sum(ramp[0])/3)/255,outline_jog_px=1 if sub else 0,
+                body_palette=['#'+v for v in RAMPS[name]],mortar='#1A1A1C' if sub else '#26262A')
     return data
 
 
@@ -230,20 +184,20 @@ def lab(rgb):
 def family_gate(shots,box):
     averages=[];paths=[]
     for name in ('church','sub'):
-        source=shots/f'style3_family_{name}.png';small=shots/f'style3_family_{name}_480.png'
+        source=shots/f'style4_family_{name}.png';small=shots/f'style4_family_{name}_480.png'
         subprocess.run(['sips','-z','270','480',str(source),'--out',str(small)],check=True,stdout=subprocess.DEVNULL)
         buf,w,h=load(small);x0,y0,x1,y1=[round(v*(w if i%2==0 else h)) for i,v in enumerate(box)]
         values=[lab(buf[(y*w+x)*3:(y*w+x)*3+3]) for y in range(y0,y1) for x in range(x0,x1)]
         averages.append([sum(v[c] for v in values)/len(values) for c in range(3)]);paths.append(str(small))
     distance=math.sqrt(sum((a-b)**2 for a,b in zip(*averages)))
-    return dict(delta_e=distance,pass_gate=6<=distance<=18,method='CIE76_D65_mean_Lab_same_wall_AB_480',roi=box,mean_lab=averages,files=paths)
+    return dict(delta_e=distance,pass_gate=8<=distance<=18,method='CIE76_D65_mean_Lab_same_wall_AB_480',roi=box,mean_lab=averages,files=paths)
 
 
 def projection_gate():
     checks={}
-    paths={'M_ChurchStone':('Stone',28,1),'Stone_Sub':('Stone_Sub',24,1),
-           'Stone_Sub_Steps':('Stone_Sub',24,1),'M_IndoorShell':('Stone_Sub',24,.82),
-           'M_InteriorWallFoot':('Stone_Sub',24,.82)}
+    paths={'M_ChurchStone':('Stone',28,2.1),'Stone_Sub':('Stone_Sub',22,2.8),
+           'Stone_Sub_Steps':('Stone_Sub',22,2.8),'Stone_Sub_Coping':('Stone_Sub',22,2.8),'M_IndoorShell':('Stone_Sub',22,2.8*.82),
+           'M_InteriorWallFoot':('Stone_Sub',22,2.8*.82)}
     for name,(texture,density,tint) in paths.items():
         mat=(PROJECT/f'Assets/Settings/{name}.mat').read_text()
         scale=re.search(r'- _BaseMap:.*?m_Texture: \{[^}]*guid: (\w+)[^}]*\}.*?m_Scale: \{x: ([\d.eE+-]+), y: ([\d.eE+-]+)\}.*?m_Offset: \{x: ([\d.eE+-]+), y: ([\d.eE+-]+)\}',mat,re.S)
@@ -251,14 +205,21 @@ def projection_gate():
         expected_guid=re.search(r'guid: (\w+)',(ROOT/(texture+'_Albedo.png.meta')).read_text())[1]
         rgb=list(map(float,re.search(r'- _BaseColor: \{r: ([\d.eE+-]+), g: ([\d.eE+-]+), b: ([\d.eE+-]+)',mat).groups()))
         top=float(re.search(r'- _ForgeTopGain: ([\d.eE+-]+)',mat)[1])
-        ok=(guid==expected_guid and abs(sx*256-density)<1e-4 and abs(sy*256-density)<1e-4 and ox==oy==0
+        ok=(guid==expected_guid and abs(sx*(56 if texture=='Stone_Sub' else 256)-density)<1e-4 and abs(sy*(56 if texture=='Stone_Sub' else 256)-density)<1e-4 and ox==oy==0
             and bool(re.search(r'- _ForgeSurface: 2\b',mat)) and all(abs(v-tint)<1e-5 for v in rgb)
             and abs(top-(1.08 if name=='Stone_Sub_Steps' else 1))<1e-5)
-        checks[name]=dict(texture=texture,texel_per_m=sx*256,tint=rgb,top_gain=top,pass_gate=ok)
+        checks[name]=dict(texture=texture,texel_per_m=sx*(56 if texture=='Stone_Sub' else 256),tint=rgb,top_gain=top,stone_exposure=2.1 if texture=='Stone' else 2.8,interior_relative_gain=tint/(2.1 if texture=='Stone' else 2.8),pass_gate=ok)
+    coping=(PROJECT/'Assets/Settings/Stone_Sub_Coping.mat').read_text()
+    plane=list(map(float,re.search(r'- _ForgeCopingPlane: \{r: ([\d.eE+-]+), g: ([\d.eE+-]+), b: ([\d.eE+-]+), a: ([\d.eE+-]+)',coping).groups()))
+    shader=(PROJECT/'Assets/Art/Shaders/TerrainHaze.shader').read_text()
+    checks['coping_band']=dict(top_plane=plane,height_m=.25,body_srgb='#565656',cap_srgb='#6A6A6A',
+        pass_gate=abs(plane[1]-1)<1e-5 and plane[3]<0 and 'capDepth <= .25' in shader)
     # Verify actual serialized renderer material bindings, including every existing tread.
     scene=(PROJECT/'Assets/Scenes/ArtSpike.unity').read_text()
     step_guid=re.search(r'guid: (\w+)',(PROJECT/'Assets/Settings/Stone_Sub_Steps.mat.meta').read_text())[1]
     checks['step_binding']=dict(renderer_references=scene.count('guid: '+step_guid),pass_gate=scene.count('guid: '+step_guid)==9)
+    coping_guid=re.search(r'guid: (\w+)',(PROJECT/'Assets/Settings/Stone_Sub_Coping.mat.meta').read_text())[1]
+    checks['coping_binding']=dict(renderer_references=scene.count('guid: '+coping_guid),pass_gate=scene.count('guid: '+coping_guid)>0)
     return checks
 
 
@@ -276,42 +237,34 @@ def frame_gate():
 
 def main():
     manifest=json.loads((ROOT/'manifest.json').read_text())
-    results={e['name']:analyze(e) for e in manifest['materials']}
+    results={e['name']:analyze(e,manifest) for e in manifest['materials']}
     for name,r in results.items():
-        print(f"[STYLE3] {name} palette={r['palette']} texel_per_m={r['texel_per_m']:.4f} mortar_px={r['mortar_px']} block_px={r['block_px'][0]}x{r['block_px'][1]} cool_block_pct={r['cool_block_pct']:.6f} mean_sat={r['mean_sat']:.6f}",flush=True)
-        print('[STYLE3_DETAILS] '+name+' '+json.dumps(r),flush=True)
-    residuals={n:results[n]['gaussian_sigma1'] for n in ('Stone','Wood','Snow')}
-    spread=(max(residuals.values())-min(residuals.values()))/min(residuals.values())
-    hf_ok=spread<=.20 and .010<=residuals['Snow']<=.016
-    print('[STYLE3_HF] sigma=1.0 '+' '.join(f'{n}={v:.6f}' for n,v in residuals.items())+f' spread={spread:.6f} method=mean_abs_RGB_gaussian_radius3_wrap',flush=True)
-    shots=PROJECT/'Shots';regions=json.loads((REPO/'spike/editor/material_style_regions.json').read_text())
-    subprocess.run(['sips','-z','270','480',str(shots/'art_close.png'),'--out',str(shots/'style_480.png')],check=True,stdout=subprocess.DEVNULL)
-    sb,sw,sh=load(shots/'style_480.png');up=bytearray()
-    for y in range(sh):
-        row=b''.join(bytes(sb[(y*sw+x)*3:(y*sw+x)*3+3])*4 for x in range(sw))
-        for _ in range(4):up.extend(row)
-    png(shots/'style_480_upscaled.png',up,sw*4,sh*4)
-    try:family=family_gate(shots,regions['normalized_rects']['Stone'])
+        print(f"[STYLE4] {name} palette={r['palette']} texel_per_m={r['texel_per_m']:.4f} luma_steps={r['luma_steps']} chroma_ab_max={r['chroma_ab_max']:.4f} block_w_m={r['block_w_m'][0]:.4f}-{r['block_w_m'][1]:.4f} block_h_m={r['block_h_m'][0]:.4f}-{r['block_h_m'][1]:.4f} size_cv={r['size_cv']:.4f} checker_score={r['checker_score']:.4f}",flush=True)
+        print('[STYLE4_DETAILS] '+name+' '+json.dumps(r),flush=True)
+    residuals={n:results[n]['gaussian_sigma1'] for n in ('Stone','Stone_Sub','Wood','Snow')}
+    spread=(max(residuals.values())-min(residuals.values()))/min(residuals.values());hf_ok=spread<=.20
+    print('[STYLE4_HF] sigma=1.0 '+' '.join(f'{n}={v:.6f}' for n,v in residuals.items())+f' spread={spread:.6f} method=mean_abs_RGB_gaussian_radius3_wrap_all_four',flush=True)
+    regions=json.loads((REPO/'spike/editor/material_style_regions.json').read_text())
+    try:family=family_gate(PROJECT/'Shots',regions['normalized_rects']['Stone'])
     except (FileNotFoundError,subprocess.CalledProcessError) as exc:family=dict(delta_e=None,pass_gate=False,error=str(exc))
-    print('[STYLE3_FAMILY] church_vs_sub ΔE='+str(family['delta_e'])+' '+json.dumps(family),flush=True)
+    print('[STYLE4_FAMILY] church_vs_sub ΔE='+str(family['delta_e'])+' '+json.dumps(family),flush=True)
     projection=projection_gate();frame=frame_gate()
-    print('[STYLE3_PROJECTION] '+json.dumps(projection),flush=True)
-    print('[STYLE3_FRAME] '+json.dumps(frame),flush=True)
-    stone,sub=results['Stone'],results['Stone_Sub']
-    sat_drop=1-stone['mean_sat']/V2_STONE_SAT
-    # Ratios compare each of the identical six family palette slots (8-bit rounding allowed).
-    dark_ratios=[b/a for ramp in (WARM,COOL) for value in ramp for a,b in zip(rgb_hex(value),rgb_hex(value,.8))]
-    luma=lambda rgb:sum(v*c for v,c in zip(rgb,(.299,.587,.114)))
-    sub_darkening=1-luma(sub['mean_rgb'])/luma(stone['mean_rgb'])
-    gates=dict(palette=all(v['palette']<=12 for v in results.values()),textures=all(v['texture_ok'] for v in results.values()),
-               structure=all(v['structure_ok'] for v in results.values()),
-               cool=.30<=stone['cool_block_pct']<=.40 and .45<=sub['cool_block_pct']<=.55,
-               sat_drop=.15<=sat_drop<=.25,mean_hue=0<=stone['mean_hue']<=60,
-               sub_dark=all(.78<=r<=.82 for r in dark_ratios) and .18<=sub_darkening<=.22,hf=hf_ok,family=family['pass_gate'],
-               projection=all(v['pass_gate'] for v in projection.values()),frame=frame['pass'])
-    passed=all(gates.values());print('[STYLE3_CHECKS] '+json.dumps(dict(gates=gates,v2_stone_sha256=V2_STONE_SHA256,sat_drop=sat_drop,sub_mean_luma_darkening=sub_darkening,step_ratio_scope='block_interior')),flush=True)
-    print(f"[STYLE3_GATE] palette_ok={gates['palette']} hf_ok={hf_ok} family_ok={family['pass_gate']} wood_seams={results['Wood']['wood_seams']} pass={passed}",flush=True)
-    report=dict(scope='style3_four_samples',materials=results,hf=residuals,hf_spread=spread,family=family,projection=projection,frame=frame,gates=gates,sat_drop=sat_drop,sub_mean_luma_darkening=sub_darkening,pass_gate=passed)
+    print('[STYLE4_PROJECTION] '+json.dumps(projection),flush=True)
+    print('[STYLE4_FRAME] '+json.dumps(frame),flush=True)
+    preserved={n:dict(sha256=hashlib.sha256((ROOT/n).read_bytes()).hexdigest(),expected=v) for n,v in PRESERVED.items()}
+    for r in preserved.values():r['pass']=r['sha256']==r['expected']
+    print('[STYLE4_PRESERVED] '+json.dumps(preserved),flush=True)
+    stone,sub=results['Stone'],results['Stone_Sub'];stones=(stone,sub)
+    gates=dict(palette=all(v['palette']<=10 for v in stones),
+               mono=all(v['chroma_ab_max']<=6 and v['chroma_body_max']<=3 for v in stones),
+               luma=all(4<=v['luma_steps']<=5 for v in stones) and sub['body_luma_range']>=.18,
+               checker=all(v['checker_score']<=.25 for v in stones) and stone['adjacent_tier_max']<=2,
+               size=all(v['size_ok'] for v in stones),raster=all(v['raster_ok'] for v in stones),
+               textures=all(v['texture_ok'] for v in results.values()),hf=hf_ok,family=family['pass_gate'],
+               projection=all(v['pass_gate'] for v in projection.values()),frame=frame['pass'],preserved=all(v['pass'] for v in preserved.values()))
+    passed=all(gates.values());print('[STYLE4_CHECKS] '+json.dumps(gates),flush=True)
+    print(f"[STYLE4_GATE] palette_ok={gates['palette']} mono_ok={gates['mono']} checker_ok={gates['checker']} size_ok={gates['size']} hf_ok={hf_ok} pass={passed}",flush=True)
+    report=dict(scope='style4_neutral_masonry',materials=results,hf=residuals,hf_spread=spread,family=family,projection=projection,frame=frame,preserved=preserved,gates=gates,pass_gate=passed)
     (ROOT/'measurement.json').write_text(json.dumps(report,indent=2)+'\n')
     return 0 if passed else 1
 

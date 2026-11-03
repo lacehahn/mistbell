@@ -16,7 +16,7 @@ LOG="$PWD/../logs/20_runtime_$(date +%H%M%S).log"
 mkdir -p "$DIR"
 
 SHOT_ARGS=(-shots "$DIR")
-if [ "${1:-}" = "--style3-family" ]; then SHOT_ARGS+=(-style3-family); fi
+if [ "${1:-}" = "--style3-family" ] || [ "${1:-}" = "--style4-family" ]; then SHOT_ARGS+=(-style4-family); fi
 if [ "${1:-}" = "--single" ]; then
   SHOT_ARGS=(-shot "$DIR/art_runtime.png")
 fi

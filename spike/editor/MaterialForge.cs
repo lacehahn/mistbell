@@ -4,11 +4,14 @@ using UnityEditor;
 using UnityEngine;
 
 // Canonical source: spike/editor/MaterialForge.cs. accept.sh syncs the Unity compile copy before building.
-// STYLE3: preserve Snow; church Stone, secondary Stone_Sub, and Door_Leaf Wood only.
+// STYLE4: immutable Snow/Wood; neutral church ashlar and smaller irregular rubble only.
 public static class MaterialForge
 {
     public const int Size = 256;
-    public const float SnowTexelsPerMeter = 20, StoneTexelsPerMeter = 28, WoodTexelsPerMeter = 24, SubTexelsPerMeter = 24;
+    public const float SnowTexelsPerMeter = 20, StoneTexelsPerMeter = 28, WoodTexelsPerMeter = 24, SubTexelsPerMeter = 22;
+    // Material-only exposure calibration for the dark photo-derived ramps under the existing ACES stack.
+    // Same-wall runtime AB constrains the family distance; interior remains .82 of SubExposure.
+    public const float ChurchExposure = 2.1f, SubExposure = 2.8f;
     const string Root = "Assets/Art/MaterialForge/";
     static readonly string[] Names = { "Snow", "Stone", "Wood", "Stone_Sub" };
     static Color32 C(string hex) { ColorUtility.TryParseHtmlString(hex, out var c); return c; }
@@ -16,26 +19,9 @@ public static class MaterialForge
     static Color32 Gain(Color32 c, float gain) => new Color32((byte)Mathf.RoundToInt(c.r*gain),(byte)Mathf.RoundToInt(c.g*gain),(byte)Mathf.RoundToInt(c.b*gain),255);
     static Color32 Pixel(int type, int x, int y, out int step)
     {
-        // Opposite border samples coincide. The pattern itself is periodic; no blurred border.
-        if(x==255) x=0; if(y==255) y=0;
         step=1;
-        if(type==1 || type==3)
-        {
-            bool sub=type==3;
-            StoneCell(sub,x,y,out int row,out int col,out int local,out int yy,out int bw,out int bh);
-            bool cool=CoolBlocks[sub?1:0][row,col];
-            if(yy==0 || local==0) { step=0; return Gain(C("#8C7F6E"),sub?.8f:1); }
-            int lowerEdge=bh-2;
-            step=(yy==1 || local==1) ? 2 : (yy>=lowerEdge || local==bw-1) ? 0 : 1;
-            // Three hard levels per block. Body is the darker family swatch; a narrow
-            // bevel uses the middle swatch, with sparse worn bright edges. This retains
-            // the specified six colours without making every block a high-contrast stripe.
-            Color32 body=C(cool?"#7E848C":"#8C7C66");
-            bool worn=Hash(col,row)%31==0;
-            Color32 bevel=C(cool?(worn?"#A9AEB4":"#9298A0"):(worn?"#C2B49A":"#A8967C"));
-            Color32 color=step==2?bevel:step==0?Gain(body,.94f):body;
-            return Gain(color,sub?.8f:1);
-        }
+        if(type==1 || type==3) return StonePixel(type==3,x,y,out step);
+        if(x==255) x=0; if(y==255) y=0;
         if(type==2)
         {
             int plank=x*12/256, left=(plank*256+11)/12, local=x-left;
@@ -61,44 +47,94 @@ public static class MaterialForge
         if((x%8==1+id%2 && y%8==1+(id/11)%3) || (id%3==0 && x%8==5+(id/13)%2 && y%8==4+(id/19)%3)) { step=0; snow=C("#C3D3E3"); }
         return snow;
     }
-    // Same bond/bevel algorithm; secondary stone uses twenty flatter courses.
-    public static void StoneCell(bool sub,int x,int y,out int row,out int col,out int local,out int yy,out int width,out int height)
+    // Integer texels, deterministic dimensions. Sub's 56px tile contains seven rubble courses.
+    [Serializable] public class Block { public int row, col, x, y, w, h, tier; }
+    static readonly Color32[] ChurchRamp={C("#3B3B3B"),C("#4B4B4B"),C("#595959"),C("#6B6B6B")};
+    static readonly Color32[] SubRamp={C("#232323"),C("#363636"),C("#484848"),C("#565656")};
+    static readonly System.Collections.Generic.List<Block>[] Blocks={MakeBlocks(false),MakeBlocks(true)};
+    static int Tile(bool sub) => sub?56:Size;
+    static int[] Partition(int length,int count,int min,int max,int seed)
     {
-        if(x==255)x=0; if(y==255)y=0;
-        x=(x+8)%256; y=(y+8)%256;
-        int rows=sub?20:16;
-        row=y*rows/256; int top=(row*256+rows-1)/rows;
-        height=((row+1)*256+rows-1)/rows-top; yy=y-top;
-        int xx=(x+(row%2)*12)%256; col=xx*11/256;
-        int left=(col*256+10)/11;
-        width=((col+1)*256+10)/11-left; local=xx-left;
-    }
-    static bool[,] MakeCool(bool sub)
-    {
-        int rows=sub?20:16; var result=new bool[rows,11];
-        for(int row=0;row<rows;row++)
+        var result=new int[count]; int rest=length;
+        for(int i=0;i<count;i++)
         {
-            int count=sub?(row%2==0?5:6):4;
-            // Random starting order, then prefer warm neighbours. Never horizontal/vertical bands.
-            for(int i=0;i<count;i++)
-            {
-                int best=-1; long score=long.MaxValue;
-                for(int col=0;col<11;col++) if(!result[row,col])
-                {
-                    int adjacent=(result[row,(col+10)%11]?1:0)+(result[row,(col+1)%11]?1:0);
-                    long rank=adjacent*3000000000L+Hash(col+31,row+17+(sub?91:0));
-                    if(rank<score) {score=rank;best=col;}
-                }
-                result[row,best]=true;
-            }
+            int lo=Math.Max(min,rest-(count-i-1)*max), hi=Math.Min(max,rest-(count-i-1)*min);
+            result[i]=lo+Hash(seed,i)%(hi-lo+1); rest-=result[i];
         }
         return result;
     }
-    static readonly bool[][,] CoolBlocks={MakeCool(false),MakeCool(true)};
+    static System.Collections.Generic.List<Block> MakeBlocks(bool sub)
+    {
+        int size=Tile(sub); var result=new System.Collections.Generic.List<Block>();
+        var heights=sub?new[]{6,9,8,6,9,9,9}:Partition(size,19,9,16,71);
+        int y=0;
+        for(int row=0;row<heights.Length;row++)
+        {
+            int count=sub?9:10;
+            var widths=Partition(size,count,sub?4:16,sub?8:32,row+137);
+            int x=Hash(row,29)%size;
+            for(int col=0;col<count;col++)
+            {
+                // A predominantly dark field is required by the low-HF reference; the four
+                // tiers are sampled with explicit weights rather than a uniform checkerboard.
+                int roll=Hash(col+37,row+61)%100;
+                int tier=sub?(roll<90?0:roll<95?1:roll<98?2:3):(roll<95?0:roll<98?1:roll<99?2:3);
+                result.Add(new Block {row=row,col=col,x=x,y=y,w=widths[col],h=heights[row],tier=tier});
+                x=(x+widths[col])%size;
+            }
+            y+=heights[row];
+        }
+        // Preserve sampled bright blocks, lifting only touching darkest neighbours.
+        // This checks both horizontal and vertical adjacency, including texture wrap.
+        if(!sub) foreach(var b in result) if(b.tier==3)
+            foreach(var other in result) if(other.tier==0)
+            {
+                bool same=b.row==other.row && ((b.col-other.col+10)%10==1 || (other.col-b.col+10)%10==1);
+                bool vertical=false;
+                if((b.row-other.row+heights.Length)%heights.Length==1 ||
+                   (other.row-b.row+heights.Length)%heights.Length==1)
+                    for(int xx=0;xx<b.w;xx++) if((b.x+xx-other.x+size)%size<other.w) vertical=true;
+                if(same || vertical) other.tier=1;
+            }
+        return result;
+    }
+    static Color32 StonePixel(bool sub,int x,int y,out int step)
+    {
+        int size=Tile(sub); x%=size; y%=size; step=0;
+        var ramp=sub?SubRamp:ChurchRamp;
+        foreach(var b in Blocks[sub?1:0]) if(y>=b.y && y<b.y+b.h)
+        {
+            int yy=y-b.y;
+            // Each boundary has an independent 1px jog, shared by the two touching stones.
+            // Four-texel stones pin their boundaries so the minimum size stays above .15m.
+            int left=0,right=0;
+            if(sub && yy>=b.h/2)
+            {
+                var peers=Blocks[1];
+                Block prev=peers.Find(v=>v.row==b.row && v.col==(b.col+8)%9);
+                Block next=peers.Find(v=>v.row==b.row && v.col==(b.col+1)%9);
+                left=b.w==4 || prev.w==4?0:Hash(b.col+31,b.row+9)%2;
+                right=b.w==4 || next.w==4?0:Hash(next.col+31,b.row+9)%2;
+            }
+            int xx=(x-b.x-left+size)%size;
+            if(xx>=b.w+right-left)continue;
+            if(yy==0 || xx==0 || (sub && b.w>=8 && xx==1)) return C(sub?"#1A1A1C":"#26262A");
+            step=1;
+            if(!sub && (yy==1 || xx==1))
+            {
+                step=2;
+                // A 1px +12% bevel per body tier. Rare worn corners carry the reference highlight.
+                if(b.tier==3 && yy==1 && xx<=2) return C("#878787");
+                return Gain(ramp[b.tier],1.12f);
+            }
+            return ramp[b.tier];
+        }
+        return C(sub?"#1A1A1C":"#26262A");
+    }
     static Texture2D Write(string name, Color32[] pixels, bool linear)
     {
         string path=Root+name+".png";
-        var t=new Texture2D(Size,Size,TextureFormat.RGBA32,false,linear);
+        var t=new Texture2D(name.StartsWith("Stone_Sub")?56:Size,name.StartsWith("Stone_Sub")?56:Size,TextureFormat.RGBA32,false,linear);
         t.SetPixels32(pixels); t.Apply(); File.WriteAllBytes(path,t.EncodeToPNG()); UnityEngine.Object.DestroyImmediate(t);
         AssetDatabase.ImportAsset(path,ImportAssetOptions.ForceUpdate);
         var i=(TextureImporter)AssetImporter.GetAtPath(path);
@@ -107,17 +143,20 @@ public static class MaterialForge
         i.npotScale=TextureImporterNPOTScale.None; i.isReadable=true; i.SaveAndReimport();
         return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
     }
-    [MenuItem("Mistbell/Forge STYLE3 material samples")]
+    [MenuItem("Mistbell/Forge STYLE4 material samples")]
     public static void Generate()
     {
         Directory.CreateDirectory(Root);
         for(int type=0;type<Names.Length;type++)
         {
-            var albedo=new Color32[Size*Size]; var rough=new Color32[Size*Size];
-            for(int y=0;y<Size;y++) for(int x=0;x<Size;x++)
+            // Never regenerate either preserved material, including its roughness bytes.
+            if(type==0 || type==2) continue;
+            int side=type==3?56:Size;
+            var albedo=new Color32[side*side]; var rough=new Color32[side*side];
+            for(int y=0;y<side;y++) for(int x=0;x<side;x++)
             {
-                albedo[y*Size+x]=Pixel(type,x,y,out int s);
-                byte r=(byte)(s==0?250:s==1?242:234); rough[y*Size+x]=new Color32(r,r,r,255);
+                albedo[y*side+x]=Pixel(type,x,y,out int s);
+                byte r=(byte)(s==0?250:s==1?242:234); rough[y*side+x]=new Color32(r,r,r,255);
             }
             // Snow v2 is an immutable visual reference, including encoded PNG bytes.
             if(type!=0 || !File.Exists(Root+"Snow_Albedo.png")) Write(Names[type]+"_Albedo",albedo,false);
@@ -129,15 +168,16 @@ public static class MaterialForge
         m.shader=Shader.Find("Mistbell/TerrainHaze");
         m.SetFloat("_ForgeSurface",type==3?2:type+1);
         m.SetFloat("_ForgeTopGain",1);
+        m.SetVector("_ForgeCopingPlane",Vector4.zero);
         m.SetTexture("_BaseMap",AssetDatabase.LoadAssetAtPath<Texture2D>(Root+Names[type]+"_Albedo.png"));
         m.SetTexture("_ForgeRoughness",AssetDatabase.LoadAssetAtPath<Texture2D>(Root+Names[type]+"_Roughness.png"));
-        float density=interior?24:type==0?SnowTexelsPerMeter:type==1?StoneTexelsPerMeter:type==3?SubTexelsPerMeter:WoodTexelsPerMeter;
+        float density=interior?SubTexelsPerMeter:type==0?SnowTexelsPerMeter:type==1?StoneTexelsPerMeter:type==3?SubTexelsPerMeter:WoodTexelsPerMeter;
         // Shader uses dominant-axis world metres: density = texture width * repeats/metre.
-        m.SetTextureScale("_BaseMap",Vector2.one*(density/Size));
+        m.SetTextureScale("_BaseMap",Vector2.one*(density/(type==3?56:Size)));
         m.SetTextureOffset("_BaseMap",Vector2.zero);
         // Material exposure compensates the quantized diffuse-only sample shading:
         // keep the door readable and snow above the existing frame luminance gate.
-        float gain=interior?.82f:type==0?1.30f:type==2?1.20f:1;
+        float gain=interior?SubExposure*.82f:type==0?1.30f:type==2?1.20f:type==1?ChurchExposure:SubExposure;
         m.SetColor("_BaseColor",new Color(gain,gain,gain,1)); m.SetFloat("_Smoothness",0); m.SetFloat("_Metallic",0);
         m.DisableKeyword("_NORMALMAP"); EditorUtility.SetDirty(m);
     }
@@ -158,11 +198,28 @@ public static class MaterialForge
         stepMaterial.SetFloat("_ForgeTopGain",1.08f);
         const string stepPath="Assets/Settings/Stone_Sub_Steps.mat";
         AssetDatabase.DeleteAsset(stepPath); AssetDatabase.CreateAsset(stepMaterial,stepPath);
+        Material coping=null;
+        foreach(var r in UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+        {
+            if(coping==null && r.name.StartsWith("TerraceWall_"))
+            {
+                var mesh=r.GetComponent<MeshFilter>().sharedMesh;
+                Vector3 n=r.transform.TransformDirection(mesh.normals[0]); n/=n.y;
+                Vector3 point=r.transform.TransformPoint(mesh.vertices[0]);
+                // Existing coping rises .16m above the wall plane; material band extends .25m down.
+                coping=new Material(sub) {name="Stone_Sub_Coping"};
+                coping.SetVector("_ForgeCopingPlane",new Vector4(n.x,n.y,n.z,-Vector3.Dot(n,point)-.16f));
+                const string path="Assets/Settings/Stone_Sub_Coping.mat";
+                AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(coping,path);
+                break;
+            }
+        }
         foreach(var r in UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
         {
             var materials=r.sharedMaterials; bool changed=false;
             for(int i=0;i<materials.Length;i++) if(materials[i]==terrace)
-            { materials[i]=r.name.StartsWith("TerraceStep_")?stepMaterial:sub; changed=true; }
+            { materials[i]=r.name.StartsWith("TerraceStep_")?stepMaterial:
+                (r.name.StartsWith("TerraceWall_") || r.name.StartsWith("TerraceCap_"))?coping:sub; changed=true; }
             if(changed)r.sharedMaterials=materials;
         }
         float doorWidth=0;
@@ -183,7 +240,7 @@ public static class MaterialForge
     }
     [Serializable] class Entry { public string name, albedo, roughness, material, projection="dominant_axis_world_metres"; public float texels_per_meter, tiling_x, tiling_y; public int forge_surface; }
     [Serializable] class Door { public float width_metres, texels_per_meter=WoodTexelsPerMeter; }
-    [Serializable] class Manifest { public Door door; public int size=Size; public string phase="style3_four_samples"; public Entry[] materials; }
+    [Serializable] class Manifest { public Door door; public int size=Size; public string phase="style4_neutral_masonry"; public Block[] church_blocks=Blocks[0].ToArray(), sub_blocks=Blocks[1].ToArray(); public Entry[] materials; }
     public static void ExportManifest(float doorWidth)
     {
         string[] paths={"Assets/Settings/M_Snow2Terrain.mat","Assets/Settings/M_ChurchStone.mat","Assets/Settings/M_InteriorDoorWood.mat","Assets/Settings/Stone_Sub.mat"};
@@ -191,7 +248,7 @@ public static class MaterialForge
         for(int i=0;i<Names.Length;i++)
         {
             var m=AssetDatabase.LoadAssetAtPath<Material>(paths[i]); var scale=m.GetTextureScale("_BaseMap");
-            data.materials[i]=new Entry {name=Names[i], projection=i==2?"dominant_axis_object_metres":"dominant_axis_world_metres", material=paths[i], albedo=Root+Names[i]+"_Albedo.png", roughness=Root+Names[i]+"_Roughness.png", texels_per_meter=Size*scale.x, tiling_x=scale.x, tiling_y=scale.y, forge_surface=(int)m.GetFloat("_ForgeSurface")};
+            data.materials[i]=new Entry {name=Names[i], projection=i==2?"dominant_axis_object_metres":"dominant_axis_world_metres", material=paths[i], albedo=Root+Names[i]+"_Albedo.png", roughness=Root+Names[i]+"_Roughness.png", texels_per_meter=(i==3?56:Size)*scale.x, tiling_x=scale.x, tiling_y=scale.y, forge_surface=(int)m.GetFloat("_ForgeSurface")};
         }
         File.WriteAllText(Root+"manifest.json",JsonUtility.ToJson(data,true));
     }

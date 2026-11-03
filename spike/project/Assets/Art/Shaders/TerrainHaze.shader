@@ -6,6 +6,7 @@ Shader "Mistbell/TerrainHaze"
         [MainColor] _BaseColor ("Tint", Color) = (1,1,1,1)
         _ForgeSurface ("Forge sample: 0 off / 1 snow / 2 stone / 3 wood", Float) = 0
         _ForgeTopGain ("Secondary step top polish", Float) = 1
+        _ForgeCopingPlane ("Secondary coping top plane; 0 disables", Vector) = (0,0,0,0)
         _ForgeRoughness ("Forge roughness", 2D) = "white" {}
         _SnowMedium ("Snow 256px middle", 2D) = "gray" {}
         _SnowLow ("Snow 1024px low", 2D) = "gray" {}
@@ -54,6 +55,7 @@ Shader "Mistbell/TerrainHaze"
             TEXTURE2D(_SnowLow); SAMPLER(sampler_SnowLow);
             TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap);
             CBUFFER_START(UnityPerMaterial)
+                float4 _BaseMap_TexelSize, _ForgeCopingPlane;
                 float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor, _FarHazeColor;
                 float _FarHazeStrength;
                 float _SnowRelief, _ForgeSurface, _ForgeTopGain;
@@ -152,9 +154,15 @@ Shader "Mistbell/TerrainHaze"
                     }
                     // A shared world origin and exact texel centres keep terrace/wall faces
                     // on one metre grid, independent of their mesh UVs and object scales.
-                    uv = (floor((uv * _BaseMap_ST.xy + _BaseMap_ST.zw) * 256.0) + .5) / 256.0;
+                    uv = (floor((uv * _BaseMap_ST.xy + _BaseMap_ST.zw) * _BaseMap_TexelSize.zw) + .5) / _BaseMap_TexelSize.zw;
                     half3 albedo = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb * _BaseColor.rgb;
-                    if (_ForgeSurface > 1.5 && _ForgeSurface < 2.5 && n.y > .9) albedo *= _ForgeTopGain;
+                    if (_ForgeSurface > 1.5 && _ForgeSurface < 2.5)
+                    {
+                        float capDepth=-dot(float4(input.positionWS,1),_ForgeCopingPlane);
+                        if (_ForgeCopingPlane.y > .5 && capDepth >= -.02 && capDepth <= .25)
+                            albedo=half3(.144128,.144128,.144128)*_BaseColor.rgb; // sRGB #6A6A6A, one tier brighter
+                        if(n.y > .9) albedo *= _ForgeTopGain;
+                    }
                     half rough = SAMPLE_TEXTURE2D(_ForgeRoughness,sampler_ForgeRoughness,uv).r;
                     Light key = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
                     // Diffuse only: the roughness map bounds diffuse energy; no smooth PBR highlight.
