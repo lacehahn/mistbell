@@ -29,6 +29,8 @@ if ! cmp -s spike/editor/MaterialForge.cs "$PROJ/Assets/Editor/MaterialForge.cs"
   cp spike/editor/MaterialForge.cs "$PROJ/Assets/Editor/MaterialForge.cs"
 fi
 step "1/5 生成场景"
+python3 spike/tools/forge_style6.py
+check $? "STYLE6 生成（冻结四张参考贴图）"
 "$UNITY" -batchmode -quit -projectPath "$PROJ" -executeMethod SpikeScene.Run -logFile "$LOGDIR/accept_scene.log" >/dev/null 2>&1
 check $? "SpikeScene.Run"
 grep -aoE "\[SNOW\][^\"]{0,80}" "$LOGDIR/accept_scene.log" | tail -1
@@ -52,6 +54,8 @@ step "4/5 截图 + 量测"
 bash spike/tools/capture_runtime.sh > "$LOGDIR/accept_capture_$STAMP.log" 2>&1
 check $? "capture_runtime.sh（3 张）"
 python3 spike/tools/measure_shot.py spike/project/Shots/art_runtime.png | tail -1
+python3 spike/tools/measure_style6.py
+check $? "STYLE6 材质 / SHA / 整帧门槛"
 
 if [ "$FAST" -eq 0 ]; then
   step "5/5 满分辨率性能（1920×1080）"

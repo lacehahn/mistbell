@@ -5,6 +5,7 @@ Shader "Mistbell/TerrainHaze"
         [MainTexture] _BaseMap ("Grass", 2D) = "white" {}
         [MainColor] _BaseColor ("Tint", Color) = (1,1,1,1)
         _ForgeSurface ("Forge sample: 0 off / 1 snow / 2 stone / 3 wood", Float) = 0
+        _ForgeEmission ("Preserved interior stone emission", Color) = (0,0,0,0)
         _ForgeTopGain ("Secondary step top polish", Float) = 1
         _ForgeCopingPlane ("Secondary coping top plane; 0 disables", Vector) = (0,0,0,0)
         _ForgeRoughness ("Forge roughness", 2D) = "white" {}
@@ -56,6 +57,7 @@ Shader "Mistbell/TerrainHaze"
             TEXTURE2D(_NormalMap); SAMPLER(sampler_NormalMap);
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_TexelSize, _ForgeCopingPlane;
+                float4 _ForgeEmission;
                 float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor, _FarHazeColor;
                 float _FarHazeStrength;
                 float _SnowRelief, _ForgeSurface, _ForgeTopGain;
@@ -181,7 +183,7 @@ Shader "Mistbell/TerrainHaze"
                     // Snow's dark facet tier carries a restrained surface-occlusion step.
                     // It survives the existing depth of field without adding fine noise.
                     half occlusion = _ForgeSurface < 1.5 && rough > .97 ? .73 : 1.0;
-                    half3 color = albedo * shade * lerp(.98,1.0,rough) * occlusion;
+                    half3 color = albedo * shade * lerp(.98,1.0,rough) * occlusion + _ForgeEmission.rgb;
                     float d=distance(input.positionWS.xz,_WorldSpaceCameraPos.xz);
                     float low=(1-smoothstep(0,15,input.positionWS.y))*step(0,input.positionWS.y);
                     float mist=pow(saturate((d-_HazeStart)/max(.001,_HazeEnd-_HazeStart)),_HazePower)*_HazeStrength*low;

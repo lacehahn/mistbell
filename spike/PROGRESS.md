@@ -503,3 +503,34 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - `python3 -m py_compile spike/tools/measure_style.py`、`bash -n spike/tools/capture_runtime.sh`、`git diff --check`、两份 MaterialForge 的 `cmp`、雪的 `shasum -a 256 -c` 均通过。所有播放器都由脚本 `open -n -a` + caffeinate 启动，未直接执行二进制。
 
 交付预览：`Shots/art_close.png`、`Shots/art_runtime.png`、`Shots/style_480.png`、`Shots/style_480_upscaled.png`。本轮无未通过硬项，停止在本次批准的材质范围。
+
+## 2026-11-03 材质风格 v6：铺开四类，冻结四张参考贴图
+
+执行 `tasks/material_style_v6_rollout.md`：仅屋顶石板、裸岩、枯草/枯枝、室内石材。新增独立 `Stone_Interior_Albedo.png`；Stone / Stone_Sub / Snow / Wood 的 Albedo SHA-256 全部与任务开始时一致，既有粗糙度也未重写。未改玩法、相机、关卡几何、草形状与密度（前景仍为 16 丛）、UI 或 AGENTS.md；不安装包、不 commit。
+
+实现：`tools/forge_style6.py` 确定性生成四类贴图，`editor/MaterialForge.cs` 与 Unity 编译副本只导入并绑定。`accept.sh` 已接入生成和 STYLE6 门槛。屋顶 8×4 px 错缝叠瓦、下缘 +12% 的 1 px 亮边与上缘深边；Rock 为周期 Voronoi 硬块面与稀疏 1 px 裂纹，无灰缝；Grass 仅替换既有线状网格的明度阶梯；室内复制教堂砌块并将正文色阶乘 0.82，灰缝单独压暗以匹配 HF，循环边界移到砌块内而不复制灰缝。
+
+规格中的屋顶最高档 `#646C75` 按既有 Lab 算法得到 |b*|=6.044488，超过硬门槛 6；因此蓝通道只减 1，使用 `#646C74`，其余正文色阶照表。室内新 shader 的直接 1:1 自发光映射曾使穹顶偏亮，最终材质自发光增益校准为 0.40；墙壳维持零自发光，所有灯光参数不变。最终独立室内演示中 nave_luma=0.0366、wall_luma=0.0314、headroom_luma≈0.2872（旧基准 0.3592），原室内门槛全部通过，未放宽阈值。
+
+量测沿用 STYLE5：等权 RGB mean(abs(original − Gaussian σ=1/radius=3))/255，周期边界；spread_all=(max−min)/min，包含打印清单的全部 **8** 张（任务文字写七张，但列了八张）。luma_steps 只计四个正文档，排除灰缝/倒角；seam_grad 为两组周期边界 RGB 跳变均值的最大值 /255。
+
+| 材质 | palette | steps | mean L* | chroma_ab_max | texel/m | HF | seam_grad |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Roof_Slate | 11 | 4 | 27.660066 | 5.535555 | 26.000000 | 0.013167 | 0.000000 |
+| Rock | 4 | 4 | 37.104953 | 3.440317 | 24.000000 | 0.011703 | 0.000000 |
+| Grass | 4 | 4 | 30.858767 | 7.672620 | 33.333332 | 0.012897 | 0.000000 |
+| Stone_Interior | 9 | 4 | 37.770595 | 0.000010 | 28.000000 | 0.013659 | 0.011075 |
+
+全 8 张 spread_all=0.193175；教堂 mean L*=45.938238，室内低 8.167643。整帧 snow_ratio=0.6443、white_clip_ratio=0.007、magenta_px=0、mountain_luma=0.484929，全部达标。
+
+最终验收与证据：
+
+- `bash spike/tools/accept.sh --fast` exit=0：`logs/accept_200805.log`；场景、macOS / Windows Mono 两次构建、11 演示、截图、STYLE6 gate 全绿。
+- `bash spike/tools/capture_style6.sh` exit=0：`logs/style6_capture_final.log`；独立室内演示原始日志 `logs/run_201159_-demo-enter-church.log`。重新拍摄 art_close / art_runtime / 室内三图，按 LANCZOS 480×270 → NEAREST ×4 重做 style_480_upscaled；脚本逐张拒绝旧 mtime，`project/Shots/style6_capture.json` 保留源 SHA 与新输出 SHA。已目视核对近景、全景、480 图、室内与穹顶。
+- 通过 `open -n -a` + caffeinate 独立运行 `-bench -bench-foreground -screen-width 1920 -screen-height 1080 -screen-fullscreen 0`：`logs/style6_bench_final.log` / `logs/style6_bench.json`。
+  z01: 平均 FPS=229.46，1% low=173.42，drawcall=262。
+  terrace: 平均 FPS=213.54，1% low=20.33，drawcall=251。
+  interior: 平均 FPS=239.04，1% low=168.95，drawcall=249。
+  门槛沿用现有 bench 的平均 FPS ≥200、drawcall ≤330；1% low 如实记录，不作为已达 200 FPS 的指标。
+- `python3 spike/tools/measure_style6.py --bench spike/logs/style6_bench.json` exit=0：`logs/style6_measure_final.log`；所有 STYLE6 / STYLE6_HF / STYLE6_UNCHANGED / STYLE6_GATE 已打印，最终 pass=True（含整帧与性能）。报告 `project/Assets/Art/MaterialForge/measurement_style6.json`。
+- Python 语法检查、shell `bash -n`、权威/编译源码 `cmp` 与 `git diff --check` 均通过。

@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEngine;
 
 // Canonical source: spike/editor/MaterialForge.cs. accept.sh syncs the Unity compile copy before building.
-// STYLE5: only church stone is regenerated; v4 secondary stone, snow and wood are immutable.
+// STYLE6: the four frozen references are never regenerated; only four rollout families are applied.
 public static class MaterialForge
 {
     public const int Size = 256;
@@ -143,24 +143,81 @@ public static class MaterialForge
         i.npotScale=TextureImporterNPOTScale.None; i.isReadable=true; i.SaveAndReimport();
         return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
     }
-    [MenuItem("Mistbell/Forge STYLE5 material samples")]
+    [MenuItem("Mistbell/Import STYLE6 material samples")]
     public static void Generate()
     {
-        Directory.CreateDirectory(Root);
-        for(int type=0;type<Names.Length;type++)
+        // forge_style6.py authors only rollout assets; accept.sh runs it before Unity.
+        // In particular, never re-encode the frozen Stone/Sub/Snow/Wood PNGs.
+        foreach(string name in new[]{"Roof_Slate","Rock","Grass","Stone_Interior"})
+        foreach(string suffix in new[]{"_Albedo","_Roughness"})
         {
-            // Never regenerate any of the three preserved materials, including roughness bytes.
-            if(type!=1) continue;
-            int side=type==3?56:Size;
-            var albedo=new Color32[side*side]; var rough=new Color32[side*side];
-            for(int y=0;y<side;y++) for(int x=0;x<side;x++)
+            string path=Root+name+suffix+".png";
+            if(!File.Exists(path)) throw new FileNotFoundException("Run python3 spike/tools/forge_style6.py first",path);
+            AssetDatabase.ImportAsset(path,ImportAssetOptions.ForceUpdate);
+            var i=(TextureImporter)AssetImporter.GetAtPath(path);
+            i.sRGBTexture=suffix=="_Albedo"; i.filterMode=FilterMode.Point; i.mipmapEnabled=false;
+            i.textureCompression=TextureImporterCompression.Uncompressed; i.wrapMode=TextureWrapMode.Repeat;
+            i.npotScale=TextureImporterNPOTScale.None; i.isReadable=true; i.SaveAndReimport();
+        }
+    }
+    static void RolloutMaterial(Material m,string texture,float density,float gain=1)
+    {
+        // Calibrate authored Lit emission for this diffuse-only shader (0.40 gain);
+        // direct 1:1 energy made the dome brighter than the old display baseline.
+        // Existing forged walls never used Lit emission. No lights change.
+        Color emission=m.name!="M_IndoorShell" && m.name!="M_InteriorWallFoot" &&
+            m.shader.name=="Universal Render Pipeline/Lit" && m.IsKeywordEnabled("_EMISSION")
+            ?m.GetColor("_EmissionColor")*.40f:Color.black;
+        m.shader=Shader.Find("Mistbell/TerrainHaze");
+        m.SetColor("_ForgeEmission",emission);
+        m.SetFloat("_ForgeSurface",2); m.SetFloat("_ForgeTopGain",1);
+        m.SetVector("_ForgeCopingPlane",Vector4.zero);
+        m.SetTexture("_BaseMap",AssetDatabase.LoadAssetAtPath<Texture2D>(Root+texture+"_Albedo.png"));
+        m.SetTexture("_ForgeRoughness",AssetDatabase.LoadAssetAtPath<Texture2D>(Root+texture+"_Roughness.png"));
+        m.SetTextureScale("_BaseMap",Vector2.one*(density/Size)); m.SetTextureOffset("_BaseMap",Vector2.zero);
+        m.SetColor("_BaseColor",new Color(gain,gain,gain,1));
+        m.SetFloat("_Smoothness",0); m.SetFloat("_Metallic",0);
+        m.DisableKeyword("_NORMALMAP"); m.DisableKeyword("_EMISSION");
+        m.SetColor("_EmissionColor",Color.black); EditorUtility.SetDirty(m);
+    }
+    static Material ForegroundMaterial(string texture,float density,int mode)
+    {
+        var m=new Material(Shader.Find("Mistbell/ForegroundSnowfield")){name="M_STYLE6_"+texture};
+        m.SetTexture("_BaseMap",AssetDatabase.LoadAssetAtPath<Texture2D>(Root+texture+"_Albedo.png"));
+        m.SetTextureScale("_BaseMap",Vector2.one*(density/Size));
+        m.SetFloat("_Style6Density",density); m.SetFloat("_Style6Mode",mode);
+        string path="Assets/Settings/"+m.name+".mat";
+        AssetDatabase.DeleteAsset(path); AssetDatabase.CreateAsset(m,path); return m;
+    }
+    static void ApplyRollout(ChurchInterior indoor)
+    {
+        RolloutMaterial(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_Roof.mat"),"Roof_Slate",26);
+        foreach(string name in new[]{"M_WinterRock","M_WinterRockShade"})
+            RolloutMaterial(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/"+name+".mat"),"Rock",24);
+        RolloutMaterial(indoor.indoorStone,"Stone_Interior",28,ChurchExposure*.82f);
+        RolloutMaterial(indoor.wallFootStone,"Stone_Interior",28,ChurchExposure*.82f);
+        foreach(string guid in AssetDatabase.FindAssets("t:Material",new[]{"Assets/Settings"}))
+        {
+            var m=AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid)); string n=m.name;
+            if(n=="M_InteriorStone" || n=="M_InteriorDrum" || n=="M_InteriorDome" ||
+               n=="M_InteriorAisle" || n.StartsWith("M_InteriorSlab_"))
+                RolloutMaterial(m,"Stone_Interior",28,ChurchExposure*.82f);
+        }
+        var grass=ForegroundMaterial("Grass",100f/3,1); var rock=ForegroundMaterial("Rock",24,2);
+        var stems=new Material(Shader.Find("Mistbell/TerrainHaze")){name="M_STYLE6_Stems"};
+        RolloutMaterial(stems,"Grass",100f/3);
+        const string stemsPath="Assets/Settings/M_STYLE6_Stems.mat";
+        AssetDatabase.DeleteAsset(stemsPath); AssetDatabase.CreateAsset(stems,stemsPath);
+        var rockMat=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_WinterRock.mat");
+        foreach(var r in UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+        {
+            if(r.name.StartsWith("FGD_Grass")) r.sharedMaterial=grass;
+            else if(r.name=="FGD_Bedrock" || r.name=="FGD_Cairns") r.sharedMaterial=rock;
+            else if(r.name.StartsWith("DryGrass_") || r.name.StartsWith("TrailShrub_")) r.sharedMaterial=stems;
+            else if(r.name.StartsWith("Rock_") && r.transform.parent.name.StartsWith("TerraceRockpile_"))
             {
-                albedo[y*side+x]=Pixel(type,x,y,out int s);
-                byte r=(byte)(s==0?250:s==1?242:234); rough[y*side+x]=new Color32(r,r,r,255);
+                var mats=r.sharedMaterials; mats[0]=rockMat; mats[2]=rockMat; r.sharedMaterials=mats;
             }
-            // Snow v2 is an immutable visual reference, including encoded PNG bytes.
-            if(type!=0 || !File.Exists(Root+"Snow_Albedo.png")) Write(Names[type]+"_Albedo",albedo,false);
-            Write(Names[type]+"_Roughness",rough,true);
         }
     }
     static void Apply(Material m, int type, bool interior=false)
@@ -184,7 +241,7 @@ public static class MaterialForge
     public static void ApplySamples(MeshCollider terrain, Transform church)
     {
         Generate();
-        // Interior follows the brightened church stone at 18% lower linear material gain.
+        // Existing four sample bindings remain unchanged; rollout is material-only.
         Apply(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat"),0);
         Apply(terrain.GetComponent<Renderer>().sharedMaterial,0);
         Apply(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_ChurchStone.mat"),1);
@@ -233,14 +290,13 @@ public static class MaterialForge
             r.sharedMaterial.SetTextureOffset("_BaseMap",new Vector2(-bounds.min.x*scale.x*WoodTexelsPerMeter/Size,0));
         }
         var indoor=church.GetComponent<ChurchInterior>();
-        Apply(indoor.indoorStone,1,true);
-        Apply(indoor.wallFootStone,1,true);
+        ApplyRollout(indoor);
         AssetDatabase.SaveAssets();
         ExportManifest(doorWidth);
     }
     [Serializable] class Entry { public string name, albedo, roughness, material, projection="dominant_axis_world_metres"; public float texels_per_meter, tiling_x, tiling_y; public int forge_surface; }
     [Serializable] class Door { public float width_metres, texels_per_meter=WoodTexelsPerMeter; }
-    [Serializable] class Manifest { public Door door; public int size=Size; public string phase="style5_bright_church"; public Block[] church_blocks=Blocks[0].ToArray(), sub_blocks=Blocks[1].ToArray(); public Entry[] materials; }
+    [Serializable] class Manifest { public Door door; public int size=Size; public string phase="style6_rollout"; public Block[] church_blocks=Blocks[0].ToArray(), sub_blocks=Blocks[1].ToArray(); public Entry[] materials; }
     public static void ExportManifest(float doorWidth)
     {
         string[] paths={"Assets/Settings/M_Snow2Terrain.mat","Assets/Settings/M_ChurchStone.mat","Assets/Settings/M_InteriorDoorWood.mat","Assets/Settings/Stone_Sub.mat"};
@@ -250,6 +306,15 @@ public static class MaterialForge
             var m=AssetDatabase.LoadAssetAtPath<Material>(paths[i]); var scale=m.GetTextureScale("_BaseMap");
             data.materials[i]=new Entry {name=Names[i], projection=i==2?"dominant_axis_object_metres":"dominant_axis_world_metres", material=paths[i], albedo=Root+Names[i]+"_Albedo.png", roughness=Root+Names[i]+"_Roughness.png", texels_per_meter=(i==3?56:Size)*scale.x, tiling_x=scale.x, tiling_y=scale.y, forge_surface=(int)m.GetFloat("_ForgeSurface")};
         }
+        var entries=new System.Collections.Generic.List<Entry>(data.materials);
+        string[] extraNames={"Roof_Slate","Rock","Grass","Stone_Interior"};
+        string[] extraPaths={"M_Roof","M_WinterRock","M_STYLE6_Grass","M_IndoorShell"};
+        float[] densities={26,24,100f/3,28};
+        for(int i=0;i<extraNames.Length;i++) entries.Add(new Entry {
+            name=extraNames[i], material="Assets/Settings/"+extraPaths[i]+".mat",
+            albedo=Root+extraNames[i]+"_Albedo.png",roughness=Root+extraNames[i]+"_Roughness.png",
+            texels_per_meter=densities[i],tiling_x=densities[i]/Size,tiling_y=densities[i]/Size,forge_surface=2 });
+        data.materials=entries.ToArray();
         File.WriteAllText(Root+"manifest.json",JsonUtility.ToJson(data,true));
     }
 }
