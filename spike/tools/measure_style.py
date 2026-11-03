@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""STYLE4 independent raster/serialized material validation (stdlib, no new packages).
+"""STYLE5 independent raster/serialized material validation (stdlib, no new packages).
 
 HF = mean(abs(RGB-Gaussian(RGB,sigma=1,radius=3)))/255 with periodic edges;
 spread = (max-min)/min across ALL FOUR materials, including Stone_Sub.
@@ -61,14 +61,16 @@ def load(path):
     return result, w, h
 
 
-# Immutable pre-v4 encoded files, recorded before the first generator change.
+# Immutable v4 encoded files; Snow/Wood retain their pre-v4 baselines.
 PRESERVED = {
+    'Stone_Sub_Albedo.png':'92c64dad301c95d40fe6f0d9540f6ae0ab5536a87dba803fba20826d83e3ef4e',
+    'Stone_Sub_Roughness.png':'ea885450d25823dd5e3c858e79bf519c663749caa00554dee27013480ec7bfca',
     'Snow_Albedo.png':'8a13e96e9daef38854d7d92157246fd3d1d38412de97338bc5f967a2deeb3375',
     'Snow_Roughness.png':'ce3920767eb424e83eecf99ee267039cd24eaf0973b6266ae3f6c3ecdfd970e0',
     'Wood_Albedo.png':'9059633c8b3f92dc3d0a941f717facf05150b0d3e1a1e115800ffdcd9116de2f',
     'Wood_Roughness.png':'ff20e80b124191e5306cb35918965abebb0f78059d66192a7020083314f6d259',
 }
-RAMPS={'Stone':['3B3B3B','4B4B4B','595959','6B6B6B'],
+RAMPS={'Stone':['6C6C6C','787878','848484','909090'],
        'Stone_Sub':['232323','363636','484848','565656']}
 
 
@@ -115,14 +117,15 @@ def analyze(entry,manifest):
     target={'Stone':28,'Stone_Sub':22,'Snow':20,'Wood':24}[name]
     data=dict(palette=len(palette),texel_per_m=density,gaussian_sigma1=gaussian_rgb(buf,w,h),
               chroma_ab_max=max(max(abs(v) for v in lab(p)[1:]) for p in palette),
+              mean_L=sum(lab(p)[0] for p in pixels)/len(pixels),
               luma_steps=0,block_w_m=[0,0],block_h_m=[0,0],size_cv=0,checker_score=0,
               texture_ok=point and abs(density-target)<1e-4 and abs(sy*h-target)<1e-4 and
               abs(sx-entry['tiling_x'])<1e-6 and abs(sy-entry['tiling_y'])<1e-6 and (rw,rh)==(w,h))
     if name not in RAMPS:return data
     sub=name=='Stone_Sub';blocks=manifest['sub_blocks' if sub else 'church_blocks']
-    ramp=list(map(rgb_hex,RAMPS[name]));mortar=rgb_hex('1A1A1C' if sub else '26262A')
+    ramp=list(map(rgb_hex,RAMPS[name]));mortar=rgb_hex('1A1A1C' if sub else '595959')
     allowed=set(ramp)|{mortar}
-    if not sub:allowed|={tuple(round(v*1.12) for v in c) for c in ramp}|{rgb_hex('878787')}
+    if not sub:allowed|={tuple(round(v*1.12) for v in c) for c in ramp}
     expected=[None]*(w*h); coverage=[0]*(w*h);body_tiers=set();adjacent=[];vertical=[];outline_widths=[]
     for block in blocks:
         row,col,x,y,bw,bh,tier=(block[k] for k in ('row','col','x','y','w','h','tier'))
@@ -138,8 +141,8 @@ def analyze(entry,manifest):
             for xx in range(actual_width):
                 idx=(h-1-y-yy)*w+(x+xx+jog)%w;coverage[idx]+=1
                 if yy==0 or xx==0 or (sub and bw>=8 and xx==1):color=mortar
-                elif not sub and (yy==1 or xx==1):
-                    color=rgb_hex('878787') if tier==3 and yy==1 and xx<=2 else tuple(round(v*1.12) for v in ramp[tier])
+                elif not sub and yy==1:
+                    color=tuple(round(v*1.12) for v in ramp[tier])
                 else:
                     color=ramp[tier]
                     if pixels[idx]==color:body_tiers.add(tier)
@@ -159,7 +162,8 @@ def analyze(entry,manifest):
     size_ok=(bound_w[0]<=min(widths)<=max(widths)<=bound_w[1] and
              bound_h[0]<=min(heights)<=max(heights)<=bound_h[1] and
              min(cv(widths),cv(heights))>=.15 and (not sub or 5<=len(set(b['row'] for b in blocks))<=7))
-    data.update(luma_steps=len(body_tiers),block_w_m=[min(widths),max(widths)],
+    data.update(bright_px_pct=sum(p in {ramp[-1],tuple(round(v*1.12) for v in ramp[-1])} for p in pixels)/len(pixels),
+                luma_steps=len(body_tiers),block_w_m=[min(widths),max(widths)],
                 block_h_m=[min(heights),max(heights)],size_cv=min(cv(widths),cv(heights)),
                 width_cv=cv(widths),height_cv=cv(heights),body_tier_counts={str(t):sum(b['tier']==t for b in blocks) for t in range(4)},blocks=len(blocks),rows=len(set(b['row'] for b in blocks)),
                 checker_score=sum({a,b}=={0,3} for a,b in adjacent)/len(adjacent),
@@ -167,7 +171,7 @@ def analyze(entry,manifest):
                 chroma_body_max=chroma_body,size_ok=size_ok,
                 raster_ok=all(n==1 for n in coverage) and pixels==expected and palette<=allowed,
                 body_luma_range=(sum(ramp[-1])/3-sum(ramp[0])/3)/255,outline_jog_px=1 if sub else 0,
-                body_palette=['#'+v for v in RAMPS[name]],mortar='#1A1A1C' if sub else '#26262A')
+                body_palette=['#'+v for v in RAMPS[name]],mortar='#1A1A1C' if sub else '#595959')
     return data
 
 
@@ -190,14 +194,14 @@ def family_gate(shots,box):
         values=[lab(buf[(y*w+x)*3:(y*w+x)*3+3]) for y in range(y0,y1) for x in range(x0,x1)]
         averages.append([sum(v[c] for v in values)/len(values) for c in range(3)]);paths.append(str(small))
     distance=math.sqrt(sum((a-b)**2 for a,b in zip(*averages)))
-    return dict(delta_e=distance,pass_gate=8<=distance<=18,method='CIE76_D65_mean_Lab_same_wall_AB_480',roi=box,mean_lab=averages,files=paths)
+    return dict(delta_e=distance,pass_gate=20<=distance<=40,method='CIE76_D65_mean_Lab_same_wall_AB_480',roi=box,mean_lab=averages,files=paths)
 
 
 def projection_gate():
     checks={}
-    paths={'M_ChurchStone':('Stone',28,2.1),'Stone_Sub':('Stone_Sub',22,2.8),
-           'Stone_Sub_Steps':('Stone_Sub',22,2.8),'Stone_Sub_Coping':('Stone_Sub',22,2.8),'M_IndoorShell':('Stone_Sub',22,2.8*.82),
-           'M_InteriorWallFoot':('Stone_Sub',22,2.8*.82)}
+    paths={'M_ChurchStone':('Stone',28,1.5),'Stone_Sub':('Stone_Sub',22,2.8),
+           'Stone_Sub_Steps':('Stone_Sub',22,2.8),'Stone_Sub_Coping':('Stone_Sub',22,2.8),'M_IndoorShell':('Stone',28,1.5*.82),
+           'M_InteriorWallFoot':('Stone',28,1.5*.82)}
     for name,(texture,density,tint) in paths.items():
         mat=(PROJECT/f'Assets/Settings/{name}.mat').read_text()
         scale=re.search(r'- _BaseMap:.*?m_Texture: \{[^}]*guid: (\w+)[^}]*\}.*?m_Scale: \{x: ([\d.eE+-]+), y: ([\d.eE+-]+)\}.*?m_Offset: \{x: ([\d.eE+-]+), y: ([\d.eE+-]+)\}',mat,re.S)
@@ -208,7 +212,7 @@ def projection_gate():
         ok=(guid==expected_guid and abs(sx*(56 if texture=='Stone_Sub' else 256)-density)<1e-4 and abs(sy*(56 if texture=='Stone_Sub' else 256)-density)<1e-4 and ox==oy==0
             and bool(re.search(r'- _ForgeSurface: 2\b',mat)) and all(abs(v-tint)<1e-5 for v in rgb)
             and abs(top-(1.08 if name=='Stone_Sub_Steps' else 1))<1e-5)
-        checks[name]=dict(texture=texture,texel_per_m=sx*(56 if texture=='Stone_Sub' else 256),tint=rgb,top_gain=top,stone_exposure=2.1 if texture=='Stone' else 2.8,interior_relative_gain=tint/(2.1 if texture=='Stone' else 2.8),pass_gate=ok)
+        checks[name]=dict(texture=texture,texel_per_m=sx*(56 if texture=='Stone_Sub' else 256),tint=rgb,top_gain=top,stone_exposure=1.5 if texture=='Stone' else 2.8,interior_relative_gain=tint/1.5 if name in ('M_IndoorShell','M_InteriorWallFoot') else tint/(1.5 if texture=='Stone' else 2.8),pass_gate=ok)
     coping=(PROJECT/'Assets/Settings/Stone_Sub_Coping.mat').read_text()
     plane=list(map(float,re.search(r'- _ForgeCopingPlane: \{r: ([\d.eE+-]+), g: ([\d.eE+-]+), b: ([\d.eE+-]+), a: ([\d.eE+-]+)',coping).groups()))
     shader=(PROJECT/'Assets/Art/Shaders/TerrainHaze.shader').read_text()
@@ -239,32 +243,35 @@ def main():
     manifest=json.loads((ROOT/'manifest.json').read_text())
     results={e['name']:analyze(e,manifest) for e in manifest['materials']}
     for name,r in results.items():
-        print(f"[STYLE4] {name} palette={r['palette']} texel_per_m={r['texel_per_m']:.4f} luma_steps={r['luma_steps']} chroma_ab_max={r['chroma_ab_max']:.4f} block_w_m={r['block_w_m'][0]:.4f}-{r['block_w_m'][1]:.4f} block_h_m={r['block_h_m'][0]:.4f}-{r['block_h_m'][1]:.4f} size_cv={r['size_cv']:.4f} checker_score={r['checker_score']:.4f}",flush=True)
-        print('[STYLE4_DETAILS] '+name+' '+json.dumps(r),flush=True)
+        print(f"[STYLE5] {name} palette={r['palette']} texel_per_m={r['texel_per_m']:.4f} luma_steps={r['luma_steps']} chroma_ab_max={r['chroma_ab_max']:.4f} block_w_m={r['block_w_m'][0]:.4f}-{r['block_w_m'][1]:.4f} block_h_m={r['block_h_m'][0]:.4f}-{r['block_h_m'][1]:.4f} size_cv={r['size_cv']:.4f} checker_score={r['checker_score']:.4f}",flush=True)
+        print('[STYLE5_DETAILS] '+name+' '+json.dumps(r),flush=True)
     residuals={n:results[n]['gaussian_sigma1'] for n in ('Stone','Stone_Sub','Wood','Snow')}
     spread=(max(residuals.values())-min(residuals.values()))/min(residuals.values());hf_ok=spread<=.20
-    print('[STYLE4_HF] sigma=1.0 '+' '.join(f'{n}={v:.6f}' for n,v in residuals.items())+f' spread={spread:.6f} method=mean_abs_RGB_gaussian_radius3_wrap_all_four',flush=True)
+    print('[STYLE5_HF] sigma=1.0 '+' '.join(f'{"Sub" if n=="Stone_Sub" else n}={v:.6f}' for n,v in residuals.items())+f' spread={spread:.6f} method=mean_abs_RGB_gaussian_radius3_wrap_all_four',flush=True)
     regions=json.loads((REPO/'spike/editor/material_style_regions.json').read_text())
     try:family=family_gate(PROJECT/'Shots',regions['normalized_rects']['Stone'])
     except (FileNotFoundError,subprocess.CalledProcessError) as exc:family=dict(delta_e=None,pass_gate=False,error=str(exc))
-    print('[STYLE4_FAMILY] church_vs_sub ΔE='+str(family['delta_e'])+' '+json.dumps(family),flush=True)
+    print('[STYLE5_FAMILY] church_vs_sub ΔE='+str(family['delta_e'])+' '+json.dumps(family),flush=True)
     projection=projection_gate();frame=frame_gate()
-    print('[STYLE4_PROJECTION] '+json.dumps(projection),flush=True)
-    print('[STYLE4_FRAME] '+json.dumps(frame),flush=True)
+    print('[STYLE5_PROJECTION] '+json.dumps(projection),flush=True)
+    print('[STYLE5_FRAME] '+json.dumps(frame),flush=True)
     preserved={n:dict(sha256=hashlib.sha256((ROOT/n).read_bytes()).hexdigest(),expected=v) for n,v in PRESERVED.items()}
     for r in preserved.values():r['pass']=r['sha256']==r['expected']
-    print('[STYLE4_PRESERVED] '+json.dumps(preserved),flush=True)
+    print('[STYLE5_PRESERVED] '+json.dumps(preserved),flush=True)
     stone,sub=results['Stone'],results['Stone_Sub'];stones=(stone,sub)
-    gates=dict(palette=all(v['palette']<=10 for v in stones),
+    gates=dict(white=44<=stone['mean_L']<=52 and stone['bright_px_pct']<=.12,
+               palette=all(v['palette']<=10 for v in stones),
                mono=all(v['chroma_ab_max']<=6 and v['chroma_body_max']<=3 for v in stones),
-               luma=all(4<=v['luma_steps']<=5 for v in stones) and sub['body_luma_range']>=.18,
+               luma=all(v['luma_steps']==4 for v in stones) and sub['body_luma_range']>=.18,
                checker=all(v['checker_score']<=.25 for v in stones) and stone['adjacent_tier_max']<=2,
                size=all(v['size_ok'] for v in stones),raster=all(v['raster_ok'] for v in stones),
                textures=all(v['texture_ok'] for v in results.values()),hf=hf_ok,family=family['pass_gate'],
                projection=all(v['pass_gate'] for v in projection.values()),frame=frame['pass'],preserved=all(v['pass'] for v in preserved.values()))
-    passed=all(gates.values());print('[STYLE4_CHECKS] '+json.dumps(gates),flush=True)
-    print(f"[STYLE4_GATE] palette_ok={gates['palette']} mono_ok={gates['mono']} checker_ok={gates['checker']} size_ok={gates['size']} hf_ok={hf_ok} pass={passed}",flush=True)
-    report=dict(scope='style4_neutral_masonry',materials=results,hf=residuals,hf_spread=spread,family=family,projection=projection,frame=frame,preserved=preserved,gates=gates,pass_gate=passed)
+    passed=all(gates.values());print('[STYLE5_CHECKS] '+json.dumps(gates),flush=True)
+    print(f"[STYLE5] Stone palette={stone['palette']} luma_steps={stone['luma_steps']} mean_L={stone['mean_L']:.6f} bright_px_pct={stone['bright_px_pct']:.6f} chroma_ab_max={stone['chroma_ab_max']:.6f} texel_per_m={stone['texel_per_m']:.4f}",flush=True)
+    print('[STYLE5_UNCHANGED] '+' '.join(label+'_sha_same='+str(preserved[name+'_Albedo.png']['pass']) for label,name in [('Sub','Stone_Sub'),('Snow','Snow'),('Wood','Wood')]),flush=True)
+    print(f"[STYLE5_GATE] white_ok={gates['white']} mono_ok={gates['mono']} unchanged_ok={gates['preserved']} hf_ok={hf_ok} pass={passed}",flush=True)
+    report=dict(scope='style5_bright_church',materials=results,hf=residuals,hf_spread=spread,family=family,projection=projection,frame=frame,preserved=preserved,gates=gates,pass_gate=passed)
     (ROOT/'measurement.json').write_text(json.dumps(report,indent=2)+'\n')
     return 0 if passed else 1
 

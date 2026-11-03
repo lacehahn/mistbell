@@ -4,14 +4,14 @@ using UnityEditor;
 using UnityEngine;
 
 // Canonical source: spike/editor/MaterialForge.cs. accept.sh syncs the Unity compile copy before building.
-// STYLE4: immutable Snow/Wood; neutral church ashlar and smaller irregular rubble only.
+// STYLE5: only church stone is regenerated; v4 secondary stone, snow and wood are immutable.
 public static class MaterialForge
 {
     public const int Size = 256;
     public const float SnowTexelsPerMeter = 20, StoneTexelsPerMeter = 28, WoodTexelsPerMeter = 24, SubTexelsPerMeter = 22;
     // Material-only exposure calibration for the dark photo-derived ramps under the existing ACES stack.
-    // Same-wall runtime AB constrains the family distance; interior remains .82 of SubExposure.
-    public const float ChurchExposure = 2.1f, SubExposure = 2.8f;
+    // Same-wall runtime AB constrains the family distance; interior uses the church texture at .82 of ChurchExposure.
+    public const float ChurchExposure = 1.5f, SubExposure = 2.8f;
     const string Root = "Assets/Art/MaterialForge/";
     static readonly string[] Names = { "Snow", "Stone", "Wood", "Stone_Sub" };
     static Color32 C(string hex) { ColorUtility.TryParseHtmlString(hex, out var c); return c; }
@@ -49,7 +49,7 @@ public static class MaterialForge
     }
     // Integer texels, deterministic dimensions. Sub's 56px tile contains seven rubble courses.
     [Serializable] public class Block { public int row, col, x, y, w, h, tier; }
-    static readonly Color32[] ChurchRamp={C("#3B3B3B"),C("#4B4B4B"),C("#595959"),C("#6B6B6B")};
+    static readonly Color32[] ChurchRamp={C("#6C6C6C"),C("#787878"),C("#848484"),C("#909090")};
     static readonly Color32[] SubRamp={C("#232323"),C("#363636"),C("#484848"),C("#565656")};
     static readonly System.Collections.Generic.List<Block>[] Blocks={MakeBlocks(false),MakeBlocks(true)};
     static int Tile(bool sub) => sub?56:Size;
@@ -118,18 +118,18 @@ public static class MaterialForge
             }
             int xx=(x-b.x-left+size)%size;
             if(xx>=b.w+right-left)continue;
-            if(yy==0 || xx==0 || (sub && b.w>=8 && xx==1)) return C(sub?"#1A1A1C":"#26262A");
+            if(yy==0 || xx==0 || (sub && b.w>=8 && xx==1)) return C(sub?"#1A1A1C":"#595959");
             step=1;
-            if(!sub && (yy==1 || xx==1))
+            if(!sub && yy==1)
             {
                 step=2;
-                // A 1px +12% bevel per body tier. Rare worn corners carry the reference highlight.
-                if(b.tier==3 && yy==1 && xx<=2) return C("#878787");
+                // Top-facing 1px +12% bevel; no vertical highlight stripe.
+                // Narrowing the lit edge retains the four-material sigma=1 HF budget.
                 return Gain(ramp[b.tier],1.12f);
             }
             return ramp[b.tier];
         }
-        return C(sub?"#1A1A1C":"#26262A");
+        return C(sub?"#1A1A1C":"#595959");
     }
     static Texture2D Write(string name, Color32[] pixels, bool linear)
     {
@@ -143,14 +143,14 @@ public static class MaterialForge
         i.npotScale=TextureImporterNPOTScale.None; i.isReadable=true; i.SaveAndReimport();
         return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
     }
-    [MenuItem("Mistbell/Forge STYLE4 material samples")]
+    [MenuItem("Mistbell/Forge STYLE5 material samples")]
     public static void Generate()
     {
         Directory.CreateDirectory(Root);
         for(int type=0;type<Names.Length;type++)
         {
-            // Never regenerate either preserved material, including its roughness bytes.
-            if(type==0 || type==2) continue;
+            // Never regenerate any of the three preserved materials, including roughness bytes.
+            if(type!=1) continue;
             int side=type==3?56:Size;
             var albedo=new Color32[side*side]; var rough=new Color32[side*side];
             for(int y=0;y<side;y++) for(int x=0;x<side;x++)
@@ -171,20 +171,20 @@ public static class MaterialForge
         m.SetVector("_ForgeCopingPlane",Vector4.zero);
         m.SetTexture("_BaseMap",AssetDatabase.LoadAssetAtPath<Texture2D>(Root+Names[type]+"_Albedo.png"));
         m.SetTexture("_ForgeRoughness",AssetDatabase.LoadAssetAtPath<Texture2D>(Root+Names[type]+"_Roughness.png"));
-        float density=interior?SubTexelsPerMeter:type==0?SnowTexelsPerMeter:type==1?StoneTexelsPerMeter:type==3?SubTexelsPerMeter:WoodTexelsPerMeter;
+        float density=type==0?SnowTexelsPerMeter:type==1?StoneTexelsPerMeter:type==3?SubTexelsPerMeter:WoodTexelsPerMeter;
         // Shader uses dominant-axis world metres: density = texture width * repeats/metre.
         m.SetTextureScale("_BaseMap",Vector2.one*(density/(type==3?56:Size)));
         m.SetTextureOffset("_BaseMap",Vector2.zero);
         // Material exposure compensates the quantized diffuse-only sample shading:
         // keep the door readable and snow above the existing frame luminance gate.
-        float gain=interior?SubExposure*.82f:type==0?1.30f:type==2?1.20f:type==1?ChurchExposure:SubExposure;
+        float gain=interior?ChurchExposure*.82f:type==0?1.30f:type==2?1.20f:type==1?ChurchExposure:SubExposure;
         m.SetColor("_BaseColor",new Color(gain,gain,gain,1)); m.SetFloat("_Smoothness",0); m.SetFloat("_Metallic",0);
         m.DisableKeyword("_NORMALMAP"); EditorUtility.SetDirty(m);
     }
     public static void ApplySamples(MeshCollider terrain, Transform church)
     {
         Generate();
-        // Apply only the approved samples; indoor walls reuse the secondary stone.
+        // Interior follows the brightened church stone at 18% lower linear material gain.
         Apply(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat"),0);
         Apply(terrain.GetComponent<Renderer>().sharedMaterial,0);
         Apply(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_ChurchStone.mat"),1);
@@ -233,14 +233,14 @@ public static class MaterialForge
             r.sharedMaterial.SetTextureOffset("_BaseMap",new Vector2(-bounds.min.x*scale.x*WoodTexelsPerMeter/Size,0));
         }
         var indoor=church.GetComponent<ChurchInterior>();
-        Apply(indoor.indoorStone,3,true);
-        Apply(indoor.wallFootStone,3,true);
+        Apply(indoor.indoorStone,1,true);
+        Apply(indoor.wallFootStone,1,true);
         AssetDatabase.SaveAssets();
         ExportManifest(doorWidth);
     }
     [Serializable] class Entry { public string name, albedo, roughness, material, projection="dominant_axis_world_metres"; public float texels_per_meter, tiling_x, tiling_y; public int forge_surface; }
     [Serializable] class Door { public float width_metres, texels_per_meter=WoodTexelsPerMeter; }
-    [Serializable] class Manifest { public Door door; public int size=Size; public string phase="style4_neutral_masonry"; public Block[] church_blocks=Blocks[0].ToArray(), sub_blocks=Blocks[1].ToArray(); public Entry[] materials; }
+    [Serializable] class Manifest { public Door door; public int size=Size; public string phase="style5_bright_church"; public Block[] church_blocks=Blocks[0].ToArray(), sub_blocks=Blocks[1].ToArray(); public Entry[] materials; }
     public static void ExportManifest(float doorWidth)
     {
         string[] paths={"Assets/Settings/M_Snow2Terrain.mat","Assets/Settings/M_ChurchStone.mat","Assets/Settings/M_InteriorDoorWood.mat","Assets/Settings/Stone_Sub.mat"};
