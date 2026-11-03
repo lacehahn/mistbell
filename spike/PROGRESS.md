@@ -405,4 +405,6 @@
 | 15:36 | 十一项演示全绿 | `rc=0 bad=0` ×11 | 前景改动没有破坏移动/碰撞/显现/室内 |
 | 15:40 | 存档路径写死 + 自动迁移（我自查发现） | 旧 `~/Library/Application Support/Lot/Mistbell` → 新 `~/Library/Application Support/Mistbell`，`[SAVE] migrated mistbell_save.json/settings` | 根因：同一台机器两版分别落在 `Lot/Mistbell` 与 `com.Lot.Mistbell`（Unity 的 persistentDataPath 跟 companyName/bundleIdentifier 走，`applicationIdentifier` 还是空的）。改成写死目录 + 启动时把旧路径文件搬过来 |
 | 15:40 | 冷启动（无存档）验证 | 无"继续/重开"提示、直接出生、设置默认 0.8/双语 | 首次玩家不会被续玩界面卡住 |
+| 15:42 | 存档迁移回归用例（新增） | `spike/tools/test_save_migration.sh` → `PASS=4 FAIL=0` | 覆盖：①两个旧路径都有档时只搬一份（Lot 优先）②新档存在时**不覆盖**③同一次只迁移一次 |
+| 15:42 | 自查踩坑并修 | 第一版用例脚本按 `basename` 备份，`$NEW`/`$LOT` 的 basename 都是 `Mistbell` → 备份互相覆盖，恢复时把旧目录**嵌套**进新目录 | 已改成 `backup/new|lot|com` 三段式；真实存档目录已还原为 `~/Library/Application Support/Mistbell/`（bench.json / bench_frames / save / settings 齐全） |
 
