@@ -134,7 +134,8 @@ Shader "Mistbell/TerrainHaze"
                 if (_ForgeSurface > .5)
                 {
                     half3 n = NormalizeNormalPerPixel(input.normalWS);
-                    float3 an = abs(n);
+                    float3 projectionNormal = normalize(cross(ddy(input.positionWS),ddx(input.positionWS)));
+                    float3 an = abs(projectionNormal);
                     float2 uv = _ForgeSurface < 1.5 ? input.positionWS.xz :
                         (an.y > max(an.x,an.z) ? input.positionWS.xz :
                         (an.x > an.z ? input.positionWS.zy : input.positionWS.xy));
@@ -144,12 +145,14 @@ Shader "Mistbell/TerrainHaze"
                         float4x4 m = GetObjectToWorldMatrix();
                         float3 scale = float3(length(m._m00_m10_m20),length(m._m01_m11_m21),length(m._m02_m12_m22));
                         float3 local = TransformWorldToObject(input.positionWS) * scale;
-                        float3 localNormal = abs(mul(n,(float3x3)m));
+                        float3 localNormal = abs(mul(projectionNormal,(float3x3)m));
                         uv = localNormal.y > max(localNormal.x,localNormal.z) ? local.xz :
                             (localNormal.x > localNormal.z ? local.zy : local.xy);
                     }
-                    uv = uv * _BaseMap_ST.xy + _BaseMap_ST.zw;
-                    half3 albedo = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb;
+                    // A shared world origin and exact texel centres keep terrace/wall faces
+                    // on one metre grid, independent of their mesh UVs and object scales.
+                    uv = (floor((uv * _BaseMap_ST.xy + _BaseMap_ST.zw) * 256.0) + .5) / 256.0;
+                    half3 albedo = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb * _BaseColor.rgb;
                     half rough = SAMPLE_TEXTURE2D(_ForgeRoughness,sampler_ForgeRoughness,uv).r;
                     Light key = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
                     // Diffuse only: the roughness map bounds diffuse energy; no smooth PBR highlight.
@@ -165,7 +168,10 @@ Shader "Mistbell/TerrainHaze"
                     // Preserve broad lighting and real cast shadows; quantize illumination to three steps.
                     half value = dot(irradiance,half3(.299,.587,.114));
                     half shade = value < .55 ? .66 : (value < 1.2 ? .86 : 1.0);
-                    half3 color = albedo * shade * lerp(.98,1.0,rough);
+                    // Snow's dark facet tier carries a restrained surface-occlusion step.
+                    // It survives the existing depth of field without adding fine noise.
+                    half occlusion = _ForgeSurface < 1.5 && rough > .97 ? .73 : 1.0;
+                    half3 color = albedo * shade * lerp(.98,1.0,rough) * occlusion;
                     float d=distance(input.positionWS.xz,_WorldSpaceCameraPos.xz);
                     float low=(1-smoothstep(0,15,input.positionWS.y))*step(0,input.positionWS.y);
                     float mist=pow(saturate((d-_HazeStart)/max(.001,_HazeEnd-_HazeStart)),_HazePower)*_HazeStrength*low;

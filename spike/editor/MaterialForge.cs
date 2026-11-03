@@ -13,51 +13,52 @@ public static class MaterialForge
     static readonly string[] Names = { "Snow", "Stone", "Wood" };
     static Color32 C(string hex) { ColorUtility.TryParseHtmlString(hex, out var c); return c; }
     static int Hash(int a, int b) { unchecked { uint n=(uint)(a*73856093 ^ b*19349663 ^ 731); n^=n>>13; n*=1274126177; return (int)(n&0x7fffffff); } }
-    static Color32[] Ramp(int type)
+    static Color32 Gain(Color32 c, float gain) => new Color32((byte)Mathf.RoundToInt(c.r*gain),(byte)Mathf.RoundToInt(c.g*gain),(byte)Mathf.RoundToInt(c.b*gain),255);
+    static Color32 Pixel(int type, int x, int y, out int step)
     {
-        string[][] colors = {
-            new[]{"#DCE8F2","#EDF3F8","#F6FAFD"},
-            new[]{"#8C7C66","#A8967C","#C2B49A"},
-            new[]{"#4A3426","#6B4A32","#8A6D52"} };
-        var ramp = new Color32[type==1 ? 9 : 3];
-        for(int v=0;v<ramp.Length/3;v++) for(int s=0;s<3;s++)
-        {
-            var c=C(colors[type][s]); float gain=type==1 ? 1+(v-1)*.08f : 1;
-            ramp[v*3+s]=new Color32((byte)Mathf.RoundToInt(c.r*gain),(byte)Mathf.RoundToInt(c.g*gain),(byte)Mathf.RoundToInt(c.b*gain),255);
-        }
-        return ramp;
-    }
-    static int Step(int type, int x, int y, out int variant)
-    {
-        // Duplicate the first boundary sample, making the exact wrap transition continuous.
+        // Opposite border samples coincide. The pattern itself is periodic; no blurred border.
         if(x==255) x=0; if(y==255) y=0;
-        variant=0;
-        if(type==0)
-        {
-            // Wind along world X. Periodic, drawn 1px contour jitter, no per-pixel photo noise.
-            int edge=(int)Mathf.Round(4*Mathf.Sin(x*Mathf.PI/32)+2*Mathf.Sin(x*Mathf.PI/8));
-            int band=((y+edge+256)%32);
-            if(band==2 && x%31==9) return 0; // sparse blue-grey 1px specks
-            return band<6 ? 0 : band<24 ? 1 : 2;
-        }
+        step=1;
         if(type==1)
         {
-            int row=y/32, offset=(row%2)*32;
-            int jitter=((x/8+row)%3==0)?1:0;
-            int yy=(y+jitter)%32, xx=(x+offset+((y/8)%3==0?1:0))%64;
-            variant=Hash((x+offset)/64%4,row)%3;
-            if(xx==0 || yy==0) return 0; // one pixel mortar
-            if((xx<3 || xx>61) && (yy<3 || yy>29)) return 0; // 2px corner bevel
-            if(yy==1 || (xx==1 && yy<18)) return 2;
-            // Broad hand painted facets; no photograph grain.
-            return (xx>40+(yy/8)%2 && yy>15) ? 0 : 1;
+            // Sixteen 16px courses, eleven 23/24px blocks per course, half-block bond.
+            x=(x+8)%256; y=(y+8)%256;
+            int row=y/16, yy=y%16;
+            int xx=(x+(row%2)*12)%256, col=xx*11/256;
+            int left=(col*256+10)/11;
+            int local=xx-left;
+            if(yy==0 || local==0) { step=0; return C("#5E5245"); }
+            float gain=1+(Hash(col,row)%3-1)*.08f;
+            // Exactly three interior levels: 1px upper bevel, body, 1–2px lower face.
+            // Lower contour varies by one texel per block; no random internal steps.
+            int lowerEdge=14+Hash(col,row)%2;
+            step=yy==1 ? 2 : yy>=lowerEdge ? 0 : 1;
+            return Gain(C(step==2?"#8C7A66":step==0?"#6E6050":"#7D6D5B"),gain);
         }
-        int plank=x/32, local=x%32;
-        int wobble=(int)Mathf.Round(3*Mathf.Sin(y*Mathf.PI/64 + plank*1.7f)+Mathf.Sin(y*Mathf.PI/8+plank));
-        int line=10+wobble;
-        if(local==0 || (plank%2==0 && local>=line && local<line+2)) return 0;
-        if(local>=24+wobble) return 2;
-        return 1;
+        if(type==2)
+        {
+            int plank=x*12/256, left=(plank*256+11)/12, local=x-left;
+            if(local==0) { step=0; return C("#3A281D"); }
+            // Independent long vertical strokes per board. One pixel wobble, no marble swirls.
+            int wobble=(Hash(plank,y/16)%3)-1;
+            int grain=7+(Hash(plank,23)%3)+wobble;
+            if(local>=grain && local<grain+4) { step=0; return C("#3A281D"); }
+            step=local>=20 ? 2 : 1;
+            return C(step==2?"#6B4A32":"#4C3728");
+        }
+        // Wind-shaped, hard-edged snow facets and short 3–6px blue shadow clusters.
+        int edge=(int)Mathf.Round(3*Mathf.Sin(x*Mathf.PI/32)+Mathf.Sin(x*Mathf.PI/8));
+        int band=(y+edge+256)%64;
+        step=band<14?0:band<48?1:2;
+        Color32 snow=C(step==0?"#DCE8F2":step==1?"#EDF3F8":"#F6FAFD");
+        int cx=x/8, cy=y/8, id=Hash(cx,cy);
+        int bx=1+id%3, by=1+(id/7)%3;
+        int width=3+(id/17)%4, height=3+(id/31)%4;
+        if(id%4!=0 && x%8>=bx && x%8<bx+width && y%8>=by && y%8<by+height)
+        { step=0; snow=C("#D5E4F0"); }
+        // One or two isolated 1px accents per 8x8 cluster, about 2.1% coverage.
+        if((x%8==1+id%2 && y%8==1+(id/11)%3) || (id%3==0 && x%8==5+(id/13)%2 && y%8==4+(id/19)%3)) { step=0; snow=C("#C3D3E3"); }
+        return snow;
     }
     static Texture2D Write(string name, Color32[] pixels, bool linear)
     {
@@ -77,45 +78,62 @@ public static class MaterialForge
         Directory.CreateDirectory(Root);
         for(int type=0;type<3;type++)
         {
-            var ramp=Ramp(type); var albedo=new Color32[Size*Size]; var rough=new Color32[Size*Size];
+            var albedo=new Color32[Size*Size]; var rough=new Color32[Size*Size];
             for(int y=0;y<Size;y++) for(int x=0;x<Size;x++)
             {
-                int s=Step(type,x,y,out int v); albedo[y*Size+x]=ramp[v*3+s];
+                albedo[y*Size+x]=Pixel(type,x,y,out int s);
                 byte r=(byte)(s==0?250:s==1?242:234); rough[y*Size+x]=new Color32(r,r,r,255);
             }
             Write(Names[type]+"_Albedo",albedo,false); Write(Names[type]+"_Roughness",rough,true);
         }
     }
-    static void Apply(Material m, int type)
+    static void Apply(Material m, int type, bool interior=false)
     {
         m.shader=Shader.Find("Mistbell/TerrainHaze");
         m.SetFloat("_ForgeSurface",type+1);
         m.SetTexture("_BaseMap",AssetDatabase.LoadAssetAtPath<Texture2D>(Root+Names[type]+"_Albedo.png"));
         m.SetTexture("_ForgeRoughness",AssetDatabase.LoadAssetAtPath<Texture2D>(Root+Names[type]+"_Roughness.png"));
-        float density=type==0?SnowTexelsPerMeter:type==1?StoneTexelsPerMeter:WoodTexelsPerMeter;
+        float density=interior?24:type==0?SnowTexelsPerMeter:type==1?StoneTexelsPerMeter:WoodTexelsPerMeter;
         // Shader uses dominant-axis world metres: density = texture width * repeats/metre.
         m.SetTextureScale("_BaseMap",Vector2.one*(density/Size));
-        m.SetColor("_BaseColor",Color.white); m.SetFloat("_Smoothness",0); m.SetFloat("_Metallic",0);
+        m.SetTextureOffset("_BaseMap",Vector2.zero);
+        // Material exposure compensates the quantized diffuse-only sample shading:
+        // keep the door readable and snow above the existing frame luminance gate.
+        float gain=interior?.82f:type==0?1.30f:type==2?1.20f:1;
+        m.SetColor("_BaseColor",new Color(gain,gain,gain,1)); m.SetFloat("_Smoothness",0); m.SetFloat("_Metallic",0);
         m.DisableKeyword("_NORMALMAP"); EditorUtility.SetDirty(m);
     }
     public static void ApplySamples(MeshCollider terrain, Transform church)
     {
         Generate();
-        // Apply after indoor shell cloning: interior stone and all remaining material categories stay unchanged.
+        // Apply only the three samples plus the same stone logic on the indoor shell.
         Apply(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_GroundHaze.mat"),0);
         Apply(terrain.GetComponent<Renderer>().sharedMaterial,0);
         Apply(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_ChurchStone.mat"),1);
         Apply(AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_TerraceAshlar.mat"),1);
-        foreach(var r in church.GetComponentsInChildren<Renderer>()) if(r.name=="Door_Leaf") Apply(r.sharedMaterial,2);
+        float doorWidth=0;
+        foreach(var r in church.GetComponentsInChildren<Renderer>()) if(r.name=="Door_Leaf")
+        {
+            Apply(r.sharedMaterial,2);
+            // Anchor the board grid to the leaf left edge (61.44 texels across 2.56m).
+            var bounds=r.GetComponent<MeshFilter>().sharedMesh.bounds;
+            var scale=r.transform.lossyScale;
+            doorWidth=bounds.size.x*scale.x;
+            r.sharedMaterial.SetTextureOffset("_BaseMap",new Vector2(-bounds.min.x*scale.x*WoodTexelsPerMeter/Size,0));
+        }
+        var indoor=church.GetComponent<ChurchInterior>();
+        Apply(indoor.indoorStone,1,true);
+        Apply(indoor.wallFootStone,1,true);
         AssetDatabase.SaveAssets();
-        ExportManifest();
+        ExportManifest(doorWidth);
     }
     [Serializable] class Entry { public string name, albedo, roughness, material, projection="dominant_axis_world_metres"; public float texels_per_meter, tiling_x, tiling_y; public int forge_surface; }
-    [Serializable] class Manifest { public int size=Size; public string phase="three_samples_pending_user_review"; public Entry[] materials; }
-    public static void ExportManifest()
+    [Serializable] class Door { public float width_metres, texels_per_meter=WoodTexelsPerMeter; }
+    [Serializable] class Manifest { public Door door; public int size=Size; public string phase="three_samples_pending_user_review"; public Entry[] materials; }
+    public static void ExportManifest(float doorWidth)
     {
         string[] paths={"Assets/Settings/M_Snow2Terrain.mat","Assets/Settings/M_ChurchStone.mat","Assets/Settings/M_InteriorDoorWood.mat"};
-        var data=new Manifest { materials=new Entry[3] };
+        var data=new Manifest { door=new Door {width_metres=doorWidth}, materials=new Entry[3] };
         for(int i=0;i<3;i++)
         {
             var m=AssetDatabase.LoadAssetAtPath<Material>(paths[i]); var scale=m.GetTextureScale("_BaseMap");

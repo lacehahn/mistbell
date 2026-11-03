@@ -437,3 +437,35 @@
 `[STYLE_GATE] palette_ok=True texel_ok=True hf_spread=26.146946 pass=False scope=phase1_incomplete`。三小样的 HF 已超过 0.20，尤其雪地经既有景深/缩图后比石木更平；这是实际未达标项，不以未实施其余材质为由判通过。整帧 ≤48 主色尚未量化验收，四元素 HF 和全 7 材质验收也未完成。
 
 交付：`spike/project/Shots/art_close.png`（近景）、`art_runtime.png`（雪地与教堂全景）、`style_480.png`、`style_480_upscaled.png`。三种贴图原图在 `Assets/Art/MaterialForge/*_Albedo.png`。**停止在三小样，等用户确认手感后再继续；不自动铺开其余四种。**
+
+
+## 2026-11-03 材质小样 v2：只修 Stone / Wood / Snow（含 UV 对齐）
+范围：执行 `tasks/material_style_v2.md` 正文六项（标题称五个，另列 UV 对齐）。仅三小样与复用同一贴图的室内墙壳/墙脚；屋顶、岩、草、室内其他材质未铺开。未改玩法、相机、关卡布局、UI、`measure_shot.py`、固定 ROI、AGENTS.md；未安装依赖、未 commit。
+实现：`editor/MaterialForge.cs` 与 Unity 编译副本同步。Stone 使用连续独立 `#5E5245` 灰缝，1 px；16 px 高、23–24 px 宽，隔行错半块。块内仅上缘 1 px 亮阶（约 +12%）、中部基阶、下缘 1–2 px 暗阶；块间仍 -8%/0/+8%。名义基色 `#7D6D5B` 与灰缝亮度差约 25%，亮/暗阶为 `#8C7A66/#6E6050`，共 10 色（含灰缝）。
+Wood：门扇实测 2.56 m 宽、24 texel/m；左边界锚定后 2 条内部 1 px 分缝，3 块门板；每板独立 4 px 纵向木纹，1 px 抖动，深色 `#3A281D`，其余 `#4C3728/#6B4A32`。不使用整片波浪/大理石场。
+Snow：三阶风向色块 + `#D5E4F0` 的 3–6 px 硬边阴影块 + `#C3D3E3` 的孤立 1 px 斑点，实测密度 2.092%。无照片噪声。6 张 Albedo/粗糙度仍为 256×256、Point、Repeat、无 mipmap、无压缩。三小样材质的量化漫反射校准：Snow 基色乘数 1.30、Wood 1.20、Stone 1.00；雪暗阶表面遮蔽 0.73，保留现有光照、雾、景深。
+UV：外墙/台阶/围墙统一世界米制主轴投影，`_BaseMap` scale=28/256、offset=0；显式取 texel 中心。主轴由几何面法线选择，避免平滑法线造成同一面投影切换；不使用导入 UV。木门沿门扇局部米制投影，开门时纹理跟随。室内仅 `M_IndoorShell` / `M_InteriorWallFoot` 复用 Stone 贴图，24 texel/m、乘色 0.82（暗 18%），其余室内材质不改。
+
+| 材质 | palette | texel/m | step_ratio（旧口径） | seam_grad | 结构 |
+|---|---:|---:|---:|---:|---|
+| Stone | 10 | 28 | 0.392456 | 0.000000 | mortar=1px；block=23–24×16px；灰缝连续、错缝通过 |
+| Wood | 3 | 24 | 0.393188 | 0.000000 | board_seams=2；grain_width=4px |
+| Snow | 5 | 20 | 0.382080 | 0.000000 | speck_density=2.092%；指定两种新增颜色存在 |
+
+最终复量（同一固定 ROI，未筛区域、未改变 HF 定义）：
+- native: Stone=0.013537 / Wood=0.012645 / Snow=0.006842；spread=0.978662。
+- 480: Stone=0.027952 / Wood=0.025569 / Snow=0.024922；spread=0.121556。
+- 直接 Albedo 独立高斯残差：σ=1、半径 3、周期边界、Rec.601 亮度绝对残差均值；Stone=0.015245 / Wood=0.011749 / Snow=0.012651。木 0.009–0.012 与雪 0.008–0.013 校准区间通过。
+- 原口径整帧：snow_ratio=0.6439、white_clip_ratio=0.0070、magenta_px=0，通过。
+- 本轮 v2 明列硬项通过：palette / texel / 接缝 / 灰缝与砌块 / 木门 / 雪 HF / 480 spread / 整帧，以及独立 Albedo 校准。`[STYLE2_DETAILS] v2_hard_gates_pass=True`。
+
+**总体仍未全绿：保留旧 step_ratio 失败，不伪造 `[STYLE2_GATE] pass=True`。** 总规格声明仍有效，其 0.08–0.25 的 step_ratio 上限与 v2 的密集灰缝/倒角/三阶要求冲突：现行定义统计四邻域触及不同阶的两侧像素；16 px 高的一皮石材中，1 px 灰缝、1 px 上亮边、中阶、下暗阶，即使下暗与灰缝归同一暗阶，仅横向边界就至少涉及 5 行，5/16=0.3125，尚未计竖缝。因此本轮不以抹掉灰缝/倒角、修改公式或放宽阈值换通过。实际 Stone/Wood/Snow 为上表约 0.39/0.39/0.38，严格总 gate=False，`measure_style.py` exit=1。旧七材质 gate 继续注明延期，未声称七材质已完成。
+
+验收命令与证据：
+- `bash spike/tools/accept.sh --fast`：最终 exit=0，`logs/accept_165345.log`（完整外层记录 `logs/style2_accept_iteration9.log`）。场景通过，macOS/Windows Mono 均成功，11 演示全部 rc=0 bad=0，运行时三图成功；按 --fast 跳过性能，不声称本轮性能验收。accept 脚本本身不含 STYLE2 gate，不能把它的“全绿”当成材质总 gate 全绿。
+- `python3 spike/tools/measure_style.py`：`logs/style2_measure_final.log`，必需 STYLE2 / STYLE2_HF native、480 / STYLE2_GATE 已打印；严格 exit=1 的原因见上。报告 `project/Assets/Art/MaterialForge/measurement.json`。
+- 单独 `bash spike/tools/run_demos.sh "-demo-enter-church"`：`logs/style2_interior_final.log`；本轮实际三图为 `interior_entry.png` / `interior_inside.png` / `interior_lookup.png`。使用脚本内 caffeinate + open -n -a，未直接启动二进制。
+- `python3 -m py_compile spike/tools/measure_style.py`、`git diff --check`、canonical/compile 副本 cmp 通过。
+- 已观察近景、480 最近邻放大图与全景；原始像素图灰缝连续，块内上下阶清楚，木门为纵向板/纹，雪为块状蓝灰阴影。保留现有近远景景深，未修改机位。
+
+交付截图：`project/Shots/art_close.png`、`project/Shots/style_480.png`、`project/Shots/style_480_upscaled.png`、`project/Shots/art_runtime.png` 与上述室内三图。停在三小样，不自动铺开其他材质。
