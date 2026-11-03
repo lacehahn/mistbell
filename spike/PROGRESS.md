@@ -652,3 +652,11 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 | 08:35 | 室内材质"改了不生效"的根因 | 探针 `QuickProbe` 打印：地板块大量挂的是 `M_InteriorAisle`（底色 0.55/0.50/0.44 冷灰），且**场景里对该资产的 GUID 引用数为 0**——室内材质是序列化进场景的副本，改 .mat 资产不影响已存的场景；必须先改资产再重建场景再出包 | `[FLOORPROBE] Interior_FloorSlab_0 mat=M_InteriorAisle base=0.55/0.50/0.44` |
 | 08:35 | 固定出包顺序 | 新增 `spike/tools/build_interior.sh`：`SpikeScene.Run → TweakInteriorMats.Run → SpikeBuild.Run`（顺序错了地板会回到 0.16 自发光、整片发白的版本） | `bash spike/tools/build_interior.sh` |
 
+
+## 2026-11-04 祭坛模型第二轮（部分验收，十字遮挡待处理）
+
+- 四褶 0.035m / 0.06m、0.16m 烛台及 0.12m 蜡烛、三块 0.30×0.46m 图标板；8880 tris / 2 材质 / 139 px/m。主材质 emission=0、smoothness=.08；祭坛独立 Lit 变体排除屏幕 AO，室外不变。重定位原室内洗光，无新增灯。
+- `[ALTAR_MODEL2] cloth_luma=.13257 trim_luma=.11417 body_luma=.20503 niche_luma=.10027 cloth_over_body=.64662`，固定场景内 ROI、线性 Rec.709，独立 PNG 重算全通过；褶明暗差11.05%，框石顶面纹理+9.98%。
+- `-demo-enter-church` 全绿（obstacles=True）；室内236 drawcalls / 236.84 FPS，bench gate通过。
+- **未通过整项任务**：已按字面 +Z .12m、壁龛下沿+.05m，十字顶端仍被 `Interior_V2NicheBack_1` 挡住。会众实际在-Z，与任务方向说明冲突。需另行确认高壁龛后移方案，未擅自扩大移动量。
+- 详见 [验收报告](artifacts/altar/altar_v2_acceptance.md)，含截图、测量方法、参数和复现命令。未修改 AGENTS.md，未提交。

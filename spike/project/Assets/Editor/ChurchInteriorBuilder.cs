@@ -689,6 +689,8 @@ public static class ChurchInteriorBuilder
         var vertices=new List<Vector3> { new Vector3(0,0,0),new Vector3(-width/2,-height/2,0),new Vector3(width/2,-height/2,0) };
         float radius=width/2, spring=height/2-radius;
         for(int i=0;i<=20;i++) { float a=i*Mathf.PI/20; vertices.Add(new Vector3(Mathf.Cos(a)*radius,spring+Mathf.Sin(a)*radius,0)); }
+        if(name.StartsWith("Interior_V2NicheBack_"))
+            for(int i=0;i<vertices.Count;i++)if(vertices[i].y < -height/2+.001f)vertices[i]+=Vector3.up*.05f;
         var triangles=new List<int>();
         for(int i=1;i<vertices.Count;i++) triangles.AddRange(new[]{0,i==vertices.Count-1?1:i+1,i});
         var mesh=new Mesh {name=name}; mesh.vertices=vertices.ToArray(); mesh.triangles=triangles.ToArray(); mesh.RecalculateNormals(); mesh.RecalculateBounds();
@@ -777,7 +779,7 @@ public static class ChurchInteriorBuilder
                 {
                     // Upper semicircle and straight lower jambs (matching the rear arched panel).
                     float x=Mathf.Cos(q)*(.45f-inset);
-                    float y=Mathf.Sin(q)>=0?.36f+Mathf.Sin(q)*(.45f-inset):-.81f+inset;
+                    float y=Mathf.Sin(q)>=0?.36f+Mathf.Sin(q)*(.45f-inset):-.76f+inset;
                     return center+new Vector3(x,y,z);
                 }
                 int n=v.Count; v.AddRange(new[]{P(a,0,0),P(b,0,0),P(b,.02f,0),P(a,.02f,0),P(a,.02f,.06f),P(b,.02f,.06f)});
@@ -807,13 +809,17 @@ public static class ChurchInteriorBuilder
             string path="Assets/Settings/M_AltarPainted"+(i==0?"":"Recess")+".mat";
             var mat=AssetDatabase.LoadAssetAtPath<Material>(path);
             if(mat==null) {mat=new Material(Shader.Find("Universal Render Pipeline/Lit"));AssetDatabase.CreateAsset(mat,path);}
-            mat.shader=Shader.Find("Universal Render Pipeline/Lit");
-            mat.SetTexture("_BaseMap",texture); mat.SetColor("_BaseColor",Color.white*(i==0?1f:.82f));
+            mat.shader=Shader.Find(i==0?"Mistbell/AltarPainted":"Universal Render Pipeline/Lit");
+            mat.SetTexture("_BaseMap",texture); mat.SetColor("_BaseColor",i==0?new Color(.45f,.45f,.45f,1):Color.white);
+            if(i==0)mat.SetFloat("_ClothAlbedoScale",1.2f);
             mat.SetTextureScale("_BaseMap",Vector2.one); mat.SetTextureOffset("_BaseMap",Vector2.zero);
             mat.SetFloat("_Smoothness",.08f);mat.SetFloat("_Metallic",0);
-            // Low textured bounce retains readability without flattening the stone/cloth pattern.
-            mat.EnableKeyword("_EMISSION");mat.SetTexture("_EmissionMap",texture);
-            mat.SetColor("_EmissionColor",Color.white*(i==0?.13f:.1066f));
+            mat.SetFloat("_ReceiveShadows",i==0?0:1);
+            if(i==0)mat.EnableKeyword("_RECEIVE_SHADOWS_OFF");else mat.DisableKeyword("_RECEIVE_SHADOWS_OFF");
+            // Cloth/stone/trim have no emission. Only inset devotional panels receive textured bounce.
+            mat.SetTexture("_EmissionMap",texture);
+            if(i==0)mat.DisableKeyword("_EMISSION");else mat.EnableKeyword("_EMISSION");
+            mat.SetColor("_EmissionColor",i==0?Color.black:Color.white*.70f);
             EditorUtility.SetDirty(mat);materials[i]=mat;
         }
         const string modelPath="Assets/Art/Church/gergeti_altar.fbx";
@@ -823,7 +829,7 @@ public static class ChurchInteriorBuilder
         var model=(GameObject)PrefabUtility.InstantiatePrefab(prefab);
         PrefabUtility.UnpackPrefabInstance(model,PrefabUnpackMode.Completely,InteractionMode.AutomatedAction);
         model.name="Interior_Altar_Model";model.transform.SetParent(detail,true);
-        model.transform.SetPositionAndRotation(new Vector3(-2,floorY,8.6f),Quaternion.identity);
+        model.transform.SetPositionAndRotation(new Vector3(-2,floorY,8.72f),Quaternion.identity);
         foreach(var r in model.GetComponentsInChildren<MeshRenderer>())
         {r.sharedMaterials=materials;r.gameObject.name="Interior_Altar_Model";GameObjectUtility.SetStaticEditorFlags(r.gameObject,0);}
         // Preserve the legacy obstacle's exact world bounds and its test-visible name.
@@ -836,6 +842,26 @@ public static class ChurchInteriorBuilder
             box.center=legacy.transform.InverseTransformPoint(bounds.center);
             var scale=legacy.transform.lossyScale;
             box.size=new Vector3(bounds.size.x/Mathf.Abs(scale.x),bounds.size.y/Mathf.Abs(scale.y),bounds.size.z/Mathf.Abs(scale.z));
+        }
+        // The existing wash was at the entrance (z=-7.4), beyond its 9m range
+        // from this altar. Aim the same indoor light at its intended surface.
+        var wash=System.Array.Find(church.GetComponentsInChildren<Light>(true),l=>l.name=="Interior_AltarWash");
+        if(wash!=null)
+        {
+            wash.transform.position=new Vector3(-2,floorY+.05f,7.6f);
+            wash.transform.rotation=Quaternion.LookRotation(new Vector3(-2,floorY+.30f,8.72f)-wash.transform.position);
+            wash.spotAngle=100;wash.innerSpotAngle=60;
+        }
+        // Raise only the existing icon wall's lower edge by the permitted 5cm.
+        // Absolute original-height threshold makes repeated altar updates idempotent.
+        foreach(var mf in detail.GetComponentsInChildren<MeshFilter>(true))
+        {
+            if(!mf.name.StartsWith("Interior_V2NicheBack_") && !mf.name.StartsWith("Interior_ArchFrame_"))continue;
+            var mesh=mf.sharedMesh;var vertices=mesh.vertices;bool changed=false;
+            for(int j=0;j<vertices.Length;j++)
+                if(mf.transform.TransformPoint(vertices[j]).y<floorY+1.28f)
+                {vertices[j]+=mf.transform.InverseTransformVector(Vector3.up*.05f);changed=true;}
+            if(changed){mesh.vertices=vertices;mesh.RecalculateBounds();mesh.RecalculateNormals();EditorUtility.SetDirty(mesh);}
         }
         legacy.enabled=false;
         var renderer=model.GetComponentInChildren<MeshRenderer>();
