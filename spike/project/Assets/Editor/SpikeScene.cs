@@ -184,9 +184,9 @@ public static class SpikeScene
         pipeline.shadowCascadeCount = 4;
         EditorUtility.SetDirty(pipeline);
         RenderSettings.ambientMode = AmbientMode.Trilight;
-        RenderSettings.ambientSkyColor = Hex("#849DBB");
-        RenderSettings.ambientEquatorColor = Hex("#637D99");
-        RenderSettings.ambientGroundColor = Hex("#444E64");
+        RenderSettings.ambientSkyColor = Hex("#8C97A6");
+        RenderSettings.ambientEquatorColor = Hex("#7E8794");
+        RenderSettings.ambientGroundColor = Hex("#6B6E73");
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Linear;
         RenderSettings.fogColor = Hex("#DCE2E6");
@@ -233,6 +233,10 @@ public static class SpikeScene
         closeAim.y = closeEye.y + Mathf.Tan(8f * Mathf.Deg2Rad) *
             Vector2.Distance(new Vector2(closeEye.x, closeEye.z), new Vector2(closeAim.x, closeAim.z));
         rig.poses.Add(ShotRig.Look("art_close", closeEye, closeAim, 36f));
+        // 模拟"低机位 + FOV48"的玩法取景，用来验证相机改动（艺术图那几张是固定机位，不受玩法相机影响）
+        var playEye = EyeAt(4f, -30f) + new Vector3(0f, -0.15f, -7.2f);
+        var playAim = new Vector3(0f, GroundY(-18f) + 1.6f, -18f);
+        rig.poses.Add(ShotRig.Look("art_play", playEye, playAim, 48f));
         var groundPose = ShotRig.Look("art_ground", EyeAt(6f, -23f), new Vector3(0f, GroundY(-20f), -20f), 36f);
         rig.poses.Add(groundPose);
 
@@ -1818,7 +1822,7 @@ public static class SpikeScene
         mat.SetColor("_HorizonColor", Hex("#DCE6EF"));
         mat.SetColor("_CloudColor", Hex("#F4F7FA"));
         mat.SetColor("_CloudShadow", Hex("#A9B6C6"));
-        mat.SetFloat("_CloudAmount", .7f);
+        mat.SetFloat("_CloudAmount", .62f);
         mat.SetFloat("_CloudScale", .6f);
         mat.SetFloat("_CloudHeight", .22f);
         AssetDatabase.DeleteAsset("Assets/Settings/M_SkyGradient.mat");
@@ -2334,8 +2338,8 @@ public static class SpikeScene
 
         var dof = profile.Add<DepthOfField>(true);
         dof.mode.Override(DepthOfFieldMode.Bokeh);
-        dof.focusDistance.Override(26f);
-        dof.aperture.Override(2.8f);
+        dof.focusDistance.Override(8f);
+        dof.aperture.Override(1.6f);
         dof.focalLength.Override(50f);
         dof.bladeCount.Override(6);
 

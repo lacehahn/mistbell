@@ -86,7 +86,7 @@ public static class MountainBackdrop
     static int ridgeBreaks, straightSegments, maxFacePixels;
     static float minShadowRatio, minShadeLuma, maxFaceGap;
     static float Luma(Color c) => .2126f*c.r+.7152f*c.g+.0722f*c.b;
-    static readonly float[] MistHaze = { .20f, .40f, .58f, .74f };   // 0.34/0.54/0.70/0.84 雾太重，山完全没形体
+    static readonly float[] MistHaze = { .12f, .26f, .42f, .58f };   // 0.34/0.54/0.70/0.84 雾太重，山完全没形体
     const float MistContrast = .18f, MistBrightness = .84f;
 
     static void ConfigureMist(Material material, int layer, Color horizon)

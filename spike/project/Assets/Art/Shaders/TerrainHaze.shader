@@ -179,7 +179,8 @@ Shader "Mistbell/TerrainHaze"
                     half rough = SAMPLE_TEXTURE2D(_ForgeRoughness,sampler_ForgeRoughness,uv).r;
                     Light key = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
                     // Diffuse only: the roughness map bounds diffuse energy; no smooth PBR highlight.
-                    half3 irradiance = SampleSH(n) + key.color * saturate(dot(n,key.direction)) * key.shadowAttenuation;
+                    half3 sh = max(SampleSH(n), half3(0.10,0.10,0.10));   // 朝下面法线也要有环境光下限
+                    half3 irradiance = sh + key.color * saturate(dot(n,key.direction)) * key.shadowAttenuation;
                     #if defined(_ADDITIONAL_LIGHTS)
                         uint count = GetAdditionalLightsCount();
                         for(uint li=0;li<count;li++)

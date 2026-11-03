@@ -32,8 +32,8 @@ public sealed partial class PlayerController : MonoBehaviour
     public int Row { get; private set; } = 3;
     public static bool CaptureMode => Array.IndexOf(Environment.GetCommandLineArgs(), "-shot") >= 0 ||
         Array.IndexOf(Environment.GetCommandLineArgs(), "-shots") >= 0;
-    public static readonly Vector3 FollowOffset = new Vector3(0, 4.4f, -10.5f);
-    public const float LookHeight = 3.2f;
+    public static readonly Vector3 FollowOffset = new Vector3(0, 1.55f, -7.2f);
+    public const float LookHeight = 1.6f;
     AudioDirector audioDirector;
     int lastSoundFrame = -1;
     Interactable[] pois;
@@ -100,7 +100,7 @@ public sealed partial class PlayerController : MonoBehaviour
         // Playable outdoor rig is 35 degrees; the ShotRig camera table is independent.
         // CaptureMode exits in Awake, so the ShotRig camera table stays unchanged.
         var reveal = GetComponent<MistReveal>();
-        follow.fieldOfView=35;
+        follow.fieldOfView=48;
         Debug.Log($"[CLOSEUP_CAMERA] playable_fov={follow.fieldOfView:F3}");
         followFov = 35;
         // Runtime-only material instance: preserve the art screenshot character.
