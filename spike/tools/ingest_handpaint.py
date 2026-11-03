@@ -19,7 +19,7 @@ from collections import defaultdict
 from PIL import Image, ImageStat
 
 ROOT = Path(__file__).resolve().parents[1] / 'project/Assets/Art/MaterialForge'
-IN = Path(__file__).resolve().parents[1] / 'art-prompts/in'
+IN = Path(__file__).resolve().parents[1] / 'art-prompts/staged'
 SMALL_AREA = 0.25          # m² 以下视为小图表
 FAMILY_SLOTS = {
     'Stone': ['stone_big_a', 'stone_big_b', 'stone_gable', 'stone_tower', 'stone_cornice'],
@@ -91,8 +91,15 @@ def main():
             if c['w'] < 2 or c['h'] < 2:
                 continue
             if c['area'] < SMALL_AREA:
-                col = tuple(int(v) for v in ImageStat.Stat(img).mean)
-                atlases[c['atlas']].paste(Image.new('RGB', (c['w'], c['h']), col), box[:2])
+                # 小图表不能用"平均色平涂"：那样台阶踏面会糊成一块块纯黑/纯白方块。
+                # 改为从贴图里取一小块区域缩放贴上，保持笔触与砌块纹理的连续性。
+                sw, sh = img.size
+                cw = max(16, min(sw, int(sw * 0.35)))
+                chh = max(16, min(sh, int(sh * 0.35)))
+                ox = (counters[slot] * 37) % max(1, sw - cw)
+                oy = (counters[slot] * 53) % max(1, sh - chh)
+                patch = img.crop((ox, oy, ox + cw, oy + chh)).resize((c['w'], c['h']), Image.LANCZOS)
+                atlases[c['atlas']].paste(patch, box[:2])
                 small += 1
             else:
                 atlases[c['atlas']].paste(img.resize((c['w'], c['h']), Image.LANCZOS), box[:2])
