@@ -387,4 +387,6 @@
 | 13:39 | 自动化链路两个隐形坑（已修） | ①`open` 启动的播放器脱离 caffeinate → 显示器一睡主循环停，日志停在 43 行；②残留实例占窗口 | `run_demos.sh` 全程 `caffeinate -dimu -t 1200 sleep`；`capture_runtime.sh` 启动前 `pkill -x Mistbell`；演示统一用 `open -n -a` 启动 |
 | 13:39 | `Application.runInBackground = true` | 失焦不再暂停 | 后台/无人值守跑演示必需 |
 | 13:39 | Codex 配额耗尽（12:39） | `You've hit your usage limit` | 按规则转 DeepSeek harness 接手：修复足迹系统未完成部分、补齐札记验收、修自动化链路 |
+| 13:46 | 脚印跟随玩家（手写重建） | `[TRAIL] spacing=0.75m spawns=31 distance=24.97 paving_skipped=0 uneven_skipped=2 static_kept=64`、`[TRAIL_SHOT] spawns=31 walk_pass=true` | 按**累计位移**每 0.75 m 落一片（0.26×0.44 m、左右脚 ±0.18 m），120 片环形复用不产生 GC；石板/室内地面跳过；单个脚印内地面高差 >0.12 m（台阶边缘）跳过 |
+| 13:46 | 俯视诊断机位 | `footprints_trail_top.png` | 从走位中点上方 16 m 直下拍，脚印串等距、交替左右；但仍偏深（着色器不吃 alpha，颜色靠基色） |
 

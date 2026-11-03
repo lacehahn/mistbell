@@ -42,6 +42,10 @@ public sealed partial class PlayerController : MonoBehaviour
     float animationTime, demoSeconds, elapsed, maxGroundError;
     int frames, misses;
     bool walkingDemo;
+    FootprintTrail footprintTrail;
+    bool trailShot;
+    Vector3 lastTrailPos;
+    bool trailReady;
     Vector3 walkStart;
     bool cinemaDone, cinemaActive, cinemaDemo, suppressCinema;
     bool lookUp;   // 室内按 F 抬头看穹顶/天花板
@@ -64,6 +68,7 @@ public sealed partial class PlayerController : MonoBehaviour
         // 自动化（-demo-* / -shots）常在没有焦点的情况下启动：Unity 默认失焦即暂停，
         // 表现为日志停在启动尾部、进程 0% CPU、演示永不推进。后台也继续跑。
         Application.runInBackground = true;
+        lastTrailPos = transform.position;
         Debug.Log("[BOOT] PlayerController.Awake begin");
         if (CaptureMode) { enabled = false; return; }
         gameObject.layer = PlayerLayer;
@@ -169,6 +174,13 @@ public sealed partial class PlayerController : MonoBehaviour
                     CultureInfo.InvariantCulture, out demoSeconds) || demoSeconds <= 0)
             { Debug.LogError("[PLAY] invalid -demo-walk duration"); Application.Quit(1); return; }
             walkingDemo = true;
+            walkStart = transform.position;
+        }
+        int trailIndex = Array.IndexOf(args, "-demo-trail");
+        if (trailIndex >= 0 && trailIndex + 1 < args.Length &&
+            float.TryParse(args[trailIndex + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out demoSeconds))
+        {
+            walkingDemo = true; trailShot = true;
             walkStart = transform.position;
         }
         if (Array.IndexOf(args, "-demo-walk-stairs") >= 0)
@@ -308,6 +320,7 @@ public sealed partial class PlayerController : MonoBehaviour
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "[PLAY] ground_error_max={0:F6} raycast_misses={1} fps={2:F2} animation_fps=10 frames=6",
                 maxGroundError, misses, fps));
+            if (footprintTrail != null) footprintTrail.LogSummary();
             bool pass;
             if (towerDemo)
             {
@@ -343,6 +356,12 @@ public sealed partial class PlayerController : MonoBehaviour
                 pass = !inside && clearance >= .25f && transform.position.z <= -1.2f && blockedDuringWalk && misses == 0;
             }
             else pass = distance >= 15 && maxGroundError <= .02f && misses == 0;
+            if (trailShot)
+            {
+                walkingDemo = false;
+                StartCoroutine(CaptureTrailPass(pass && Row >= 0 && Row <= 3 && fpsOK));
+                return;
+            }
             Application.Quit(pass && Row >= 0 && Row <= 3 && fpsOK &&
                 audioDirector.ClipsPass && audioDirector.Footsteps >= (churchDemo ? 1 : 6) ? 0 : 1);
             walkingDemo = false;
@@ -656,6 +675,28 @@ public sealed partial class PlayerController : MonoBehaviour
         // 风声随接近教堂而减弱：越靠近，人越"进入"圣地，环境声让位给钟声与脚步。
         float d = Vector2.Distance(new Vector2(transform.position.x, transform.position.z), new Vector2(0f, -9f));
         audioDirector.SetWindScale(Mathf.Lerp(.45f, 1f, Mathf.InverseLerp(20f, 80f, d)));
+
+        // 脚印：按累计位移补贴片；装饰层，任何异常都不能影响移动/相机。
+        if (!trailReady)
+        {
+            trailReady = true;
+            try
+            {
+                footprintTrail = gameObject.AddComponent<FootprintTrail>();
+                footprintTrail.Initialize(audioDirector);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[TRAIL] init failed: " + e.Message);
+                footprintTrail = null;
+            }
+            lastTrailPos = transform.position;
+        }
+        else if (footprintTrail != null)
+        {
+            footprintTrail.RecordMovement(lastTrailPos, transform.position);
+            lastTrailPos = transform.position;
+        }
         // 跟随相机防穿过墙/地形：从头部向理想机位做球形扫掠，撞到东西就拉近。
         if(cinemaActive) return;
         bool inside=interior!=null && interior.Contains(transform.position);
@@ -805,6 +846,34 @@ public sealed partial class PlayerController : MonoBehaviour
         if(Vector2.Distance(new Vector2(transform.position.x,transform.position.z),new Vector2(destination.x,destination.z))>.2f)
         { Debug.LogError("[INTERIOR_U] walk waypoint failed at="+transform.position+" goal="+destination); Application.Quit(1); }
     }
+    IEnumerator CaptureTrailPass(bool walkPass)
+    {
+        // 俯视诊断机位：从走位中点上方 16 m 直下看，脚印串应该清楚可见。
+        var mid = Vector3.Lerp(walkStart, transform.position, .5f);
+        var rig = new GameObject("Trail Diagnostic Camera");
+        var cam = rig.AddComponent<Camera>();
+        cam.CopyFrom(follow);
+        cam.transform.position = mid + Vector3.up * 16f;
+        cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+        cam.fieldOfView = 50f;
+        cam.enabled = true;
+        if (follow != null) follow.enabled = false;
+        yield return new WaitForSecondsRealtime(.6f);
+        yield return new WaitForEndOfFrame();
+        string topPath = InteriorShot("footprints_trail_top");
+
+        // 再回到玩家背后，拍一张人视角的脚印回看。
+        Destroy(rig);
+        if (follow != null) follow.enabled = true;
+        yield return new WaitForSecondsRealtime(.5f);
+        yield return new WaitForEndOfFrame();
+        string path = InteriorShot("footprints_trail");
+
+        int spawns = footprintTrail != null ? footprintTrail.Spawns : 0;
+        Debug.Log($"[TRAIL_SHOT] spawns={spawns} walk_pass={walkPass.ToString().ToLowerInvariant()} shot={Path.GetFileName(path)} top={Path.GetFileName(topPath)}");
+        Application.Quit(walkPass && spawns >= 8 ? 0 : 1);
+    }
+
     string InteriorShot(string name)
     {
         var root=new DirectoryInfo(Application.dataPath);
