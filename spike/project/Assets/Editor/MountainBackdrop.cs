@@ -42,13 +42,23 @@ public static class MountainBackdrop
     struct Branch
     {
         public float x, top, length, lean, width, snowWidth, snowLength;
+        public float bendA,bendB,bendC, knotA,knotB,knotC;
+        public float Bend(float t)
+        {
+            float a,b,u;
+            if(t<knotA) { a=0;b=bendA;u=t/knotA; }
+            else if(t<knotB) { a=bendA;b=bendB;u=(t-knotA)/(knotB-knotA); }
+            else if(t<knotC) { a=bendB;b=bendC;u=(t-knotB)/(knotC-knotB); }
+            else { a=bendC;b=0;u=(t-knotC)/(1-knotC); }
+            return Mathf.Lerp(a,b,Mathf.SmoothStep(0,1,u));
+        }
         // Distances/widths are in output pixels, rather than stretched texture texels.
         public float Mask(int px, int py, Vector2 scale, out float along)
         {
             float dy=(top-py)*scale.y;
             along=dy*Mathf.Sqrt(1+lean*lean);
             if(along<0 || along>=length) return 0;
-            float distance=Mathf.Abs((px-x)*scale.x-dy*lean)/Mathf.Sqrt(1+lean*lean);
+            float distance=Mathf.Abs((px-x)*scale.x-dy*lean-Bend(along/length))/Mathf.Sqrt(1+lean*lean);
             float edge=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(width*.15f,width*.5f,distance));
             float tip=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.65f,1,along/length));
             return edge*tip;
@@ -58,7 +68,62 @@ public static class MountainBackdrop
     static float minFaceDelta;
     const int RockLevels = 3;
     static float maxFootJump;
-    static float[] Profile(int layer, out int peaks, out float std)
+    const float ShadowRatio = .70f, FacetSize = 16f;
+    static int ridgeBreaks, straightSegments, maxFacePixels;
+    static float minShadowRatio, minShadeLuma, maxFaceGap;
+    static float Luma(Color c) => .2126f*c.r+.7152f*c.g+.0722f*c.b;
+    // Monotone cubic interpolation keeps the original peak count while rounding
+    // every secondary bend. Coordinates are continuous until the 2x resolve.
+    static float Flank(float x, float[] xs, float[] ys)
+    {
+        int i=0; while(i<xs.Length-2 && x>xs[i+1]) i++;
+        float span=xs[i+1]-xs[i], t=Mathf.Clamp01((x-xs[i])/span);
+        float slope=(ys[i+1]-ys[i])/span;
+        float a=i==0?slope:(ys[i]-ys[i-1])/(xs[i]-xs[i-1]);
+        float b=i==xs.Length-2?slope:(ys[i+2]-ys[i+1])/(xs[i+2]-xs[i+1]);
+        float m0=a*slope<=0?0:2*a*slope/(a+slope);
+        float m1=b*slope<=0?0:2*b*slope/(b+slope);
+        return (2*t*t*t-3*t*t+1)*ys[i]+(t*t*t-2*t*t+t)*span*m0
+            +(-2*t*t*t+3*t*t)*ys[i+1]+(t*t*t-t*t)*span*m1;
+    }
+    static float[] FlankKnots(float start,float end,float low,float high,int seed,Vector2 scale,out float[] heights)
+    {
+        var xs=new float[5]; heights=new float[5];
+        xs[0]=start; xs[4]=end; heights[0]=low; heights[4]=high;
+        for(int k=1;k<=3;k++)
+        {
+            float sign=Hash(seed+k*29)>.5f?1:-1;
+            float dx=sign*Mathf.Lerp(6,18,Hash(seed+k*41))/scale.x;
+            xs[k]=Mathf.Lerp(start,end,k*.25f)+dx;
+            xs[k]=Mathf.Clamp(xs[k],Mathf.Lerp(start,end,(k-.35f)*.25f),Mathf.Lerp(start,end,(k+.35f)*.25f));
+            float dy=(Hash(seed+k*53)>.5f?1:-1)*Mathf.Lerp(3,8,Hash(seed+k*67))/scale.y;
+            heights[k]=Mathf.Lerp(low,high,(xs[k]-start)/(end-start))+dy;
+            // A narrow projected flank cannot contain the full displacement.
+            heights[k]=Mathf.Clamp(heights[k],Mathf.Lerp(low,high,(k-.4f)*.25f),Mathf.Lerp(low,high,(k+.4f)*.25f));
+        }
+        for(int k=1;k<=3;k++)
+        {
+            float a=(heights[k]-heights[k-1])/(xs[k]-xs[k-1]);
+            float b=(heights[k+1]-heights[k])/(xs[k+1]-xs[k]);
+            if(Mathf.Abs(a-b)>1e-5f) ridgeBreaks++; else straightSegments++;
+        }
+        return xs;
+    }
+    // Shared vertices partition every broad face into continuous triangular
+    // patches of 128 output px². Adjacent patches have no brightness jump;
+    // the complete transition range is 0.04 before atmospheric perspective.
+    static float Facet(float x,float y,int seed)
+    {
+        float gx=x/FacetSize, gy=y/FacetSize;
+        int ix=Mathf.FloorToInt(gx), iy=Mathf.FloorToInt(gy);
+        float u=gx-ix,v=gy-iy;
+        float a=Hash(seed+ix*173+iy*7919), b=Hash(seed+(ix+1)*173+iy*7919);
+        float c=Hash(seed+ix*173+(iy+1)*7919), d=Hash(seed+(ix+1)*173+(iy+1)*7919);
+        float value=u+v<=1?a+(b-a)*u+(c-a)*v:d+(c-d)*(1-u)+(b-d)*(1-v);
+        maxFacePixels=Math.Max(maxFacePixels,Mathf.CeilToInt(FacetSize*FacetSize*.5f));
+        return (value-.5f)*.04f;
+    }
+    static float[] Profile(int layer, Vector2 pixelScale, out int peaks, out float std)
     {
         var rng = new System.Random(Seeds[layer]);
         peaks = 9 + layer;
@@ -68,32 +133,27 @@ public static class MountainBackdrop
         for (int i=0;i<peaks;i++) { widths[i]=60+rng.Next(165); total+=widths[i]; }
         int start=0;
         float valley=OriginalCrests[layer]-150;
-        // About 30% of each layer has rounded crowns (three of nine/ten/eleven).
-        int rounded=Mathf.RoundToInt(peaks*.30f);
+        // All crowns and shoulders now use continuous cubic curves.
+        int rounded=peaks;
         for(int i=0;i<peaks;i++)
         {
             int end=i==peaks-1?W-1:start+Mathf.RoundToInt(widths[i]/total*(W-1));
             float apex=Mathf.Lerp(start,end,.36f+(float)rng.NextDouble()*.27f);
             float top=OriginalCrests[layer]-2*rng.Next(0,24);
             float nextValley=OriginalCrests[layer]-2*rng.Next(48,95);
-            bool round=(i*7%peaks)<rounded;
-            float leftShoulder=.31f+(float)rng.NextDouble()*.21f;
-            float rightShoulder=.31f+(float)rng.NextDouble()*.21f;
-            float leftKnee=.65f+(float)rng.NextDouble()*.18f;
-            float rightKnee=.65f+(float)rng.NextDouble()*.18f;
+            float[] leftY,rightY;
+            var leftX=FlankKnots(start,apex,valley,top,Seeds[layer]+i*101,pixelScale,out leftY);
+            // Reflect the descending flank to keep the monotone interpolator increasing.
+            var rightX=FlankKnots(0,end-apex,nextValley,top,Seeds[layer]+i*101+509,pixelScale,out rightY);
             for(int x=start;x<=end;x++)
             {
-                bool left=x<=apex;
-                float t=left?(x-start)/(apex-start):(end-x)/(end-apex);
-                // Unequal foothills and two shoulders interrupt repeated triangular flanks.
-                float shoulder=left?leftShoulder:rightShoulder;
-                float knee=left?leftKnee:rightKnee;
-                float shape=t<.35f?Mathf.Lerp(0,shoulder,t/.35f):
-                    t<.72f?Mathf.Lerp(shoulder,knee,(t-.35f)/.37f):
-                    Mathf.Lerp(knee,1,round?Mathf.Sin((t-.72f)/.28f*Mathf.PI*.5f):(t-.72f)/.28f);
-                float baseY=left?valley:nextValley;
-                // Quantize the continuous piecewise-linear profile only at half a final texel.
-                ridge[x]=Mathf.Round(Mathf.Lerp(baseY,top,shape)*2f)*.5f;
+                float ridgeSum=0;
+                for(int sample=0;sample<2;sample++)
+                {
+                    float sx=Mathf.Clamp(x+(sample==0?-.25f:.25f),start,end);
+                    ridgeSum+=sx<=apex?Flank(sx,leftX,leftY):Flank(end-sx,rightX,rightY);
+                }
+                ridge[x]=ridgeSum*.5f;
             }
             start=end; valley=nextValley;
         }
@@ -143,10 +203,14 @@ public static class MountainBackdrop
     }
     static Color Rock(Color basis, bool lit, float mix, Color air)
     {
-        // Keep a measurable 0.08 luminance split AFTER atmospheric perspective.
-        float face=(lit?.04f:-.04f)/(1-mix);
-        basis.r+=face; basis.g+=face; basis.b+=face;
-        return Color.Lerp(basis,air,mix);
+        // Snow bounce lifts the shadow into neutral grey-blue. Keep the entire
+        // unsnowed mountain's face range below .26, including different rock beds.
+        float target=Mathf.Lerp(.65f,.67f,Mathf.InverseLerp(.43f,.57f,Luma(basis)));
+        Color shade=Hex("#5F6E80");
+        shade*=target*ShadowRatio/Luma(shade); shade.a=1;
+        Color light=basis; float lift=target-Luma(light);
+        light.r+=lift; light.g+=lift; light.b+=lift;
+        return Color.Lerp(lit?light:shade,air,mix);
     }
     static Texture2D Paint(int layer,float[] ridge,float visibleFoot,Vector2 pixelScale)
     {
@@ -241,6 +305,12 @@ public static class MountainBackdrop
                 float angle=Mathf.Lerp(25,55,Hash(seed+summit*347+i*43))*Mathf.Deg2Rad;
                 spurs.Add(new Branch {x=bx,top=ridge[bx]-4,
                     length=Mathf.Lerp(180,330,Hash(seed+summit*359+i*71)),
+                    bendA=sign*Mathf.Lerp(6,18,Hash(seed+summit+i*179)),
+                    bendB=-sign*Mathf.Lerp(6,18,Hash(seed+summit+i*181)),
+                    bendC=sign*Mathf.Lerp(6,18,Hash(seed+summit+i*191)),
+                    knotA=.25f+Mathf.Lerp(-8,8,Hash(seed+summit+i*193))/180f,
+                    knotB=.5f+Mathf.Lerp(-8,8,Hash(seed+summit+i*197))/180f,
+                    knotC=.75f+Mathf.Lerp(-8,8,Hash(seed+summit+i*199))/180f,
                     lean=sign/Mathf.Tan(angle), width=Mathf.Lerp(8,18,Hash(seed+summit*373+i*89)),
                     snowWidth=Mathf.Lerp(3,8,Hash(seed+summit*389+i*97)),
                     snowLength=Mathf.Lerp(20,60,Hash(seed+summit*397+i*113))});
@@ -250,6 +320,8 @@ public static class MountainBackdrop
                 var a=spurs[i]; var b=spurs[i+1];
                 int bx=Mathf.Clamp(Mathf.RoundToInt((a.x+b.x)*.5f),0,W-1);
                 valleys.Add(new Branch {x=bx,top=ridge[bx]-4,
+                    bendA=(a.bendA+b.bendA)*.5f,bendB=(a.bendB+b.bendB)*.5f,bendC=(a.bendC+b.bendC)*.5f,
+                    knotA=(a.knotA+b.knotA)*.5f,knotB=(a.knotB+b.knotB)*.5f,knotC=(a.knotC+b.knotC)*.5f,
                     lean=(a.lean+b.lean)*.5f,length=(a.length+b.length)*.5f,
                     width=Mathf.Lerp(10,22,Hash(seed+summit*409+i*127))});
             }
@@ -304,6 +376,11 @@ public static class MountainBackdrop
                 }
                 // Save the unsnowed bed so the same geometry cuts rock channels
                 // through both the summit cap and the old decorative snow streaks.
+                if(layer<2)
+                {
+                    float facet=Facet(x*pixelScale.x,y*pixelScale.y,seed+1601)*(1-mix);
+                    c.r+=facet; c.g+=facet; c.b+=facet;
+                }
                 Color bareRock=c;
                 Color snowColor=Color.Lerp(snow,air,mix);
                 Color edgeColor=Color.Lerp(transition,air,mix);
@@ -379,9 +456,17 @@ public static class MountainBackdrop
         {
             RockStreaks[layer]=Array.FindAll(streakDrawn,v=>v).Length;
             SnowGullies[layer]=Array.FindAll(gullyDrawn,v=>v).Length;
-            // Quantized same-bed samples include the actual layer's atmospheric mix.
+            // Same-bed samples include the actual layer's atmospheric mix.
+            float darkest=1,brightest=0;
             foreach(var basis in rock)
+            {
+                Color light=Rock(basis,true,0,air), shade=Rock(basis,false,0,air);
+                minShadowRatio=Mathf.Min(minShadowRatio,Luma(shade)/Luma(light));
+                minShadeLuma=Mathf.Min(minShadeLuma,Luma(shade));
+                darkest=Mathf.Min(darkest,Luma(shade)); brightest=Mathf.Max(brightest,Luma(light));
                 minFaceDelta=Mathf.Min(minFaceDelta,Luma(Rock(basis,true,mix,air))-Luma(Rock(basis,false,mix,air)));
+            }
+            maxFaceGap=Mathf.Max(maxFaceGap,brightest-darkest+.04f); // Include both facet transition extremes.
             if(RockStreaks[layer]<8 || RockStreaks[layer]>14 || SnowGullies[layer]<6 || SnowGullies[layer]>12)
                 throw new InvalidOperationException("MTN10 painted streak/gully count gate");
         }
@@ -475,7 +560,7 @@ public static class MountainBackdrop
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN11] rock_tints=#5A6878/#6B7888/#7C8896 lit_shadow_delta={0:F6} treeline_pct=0.07 treeline_alpha=0.45 overscan=0.12 feather=0.08 seam_max_grad={1:F6} height_scale={2:F6}",delta,seam,HeightScale));
         Debug.Log(string.Format(CultureInfo.InvariantCulture,"[MTN11] mountain_luma={0:F6}",luma));
-        if(luma<.42 || luma>.60 || seam>.035 || delta<.06f || delta>.10f)
+        if(luma<.42 || luma>.60 || seam>.035 || delta<.05f || delta>.26f)
             throw new InvalidOperationException("MTN11 screenshot gate");
     }
     // Repaint the existing scene in isolation; do not regenerate church, interior or cameras.
@@ -510,21 +595,21 @@ public static class MountainBackdrop
                 player+Vector3.up*PlayerController.LookHeight,runtimeFov));
         }
         Array.Clear(SpurContrast,0,4); Array.Clear(GullyContrast,0,4);
+        ridgeBreaks=0; straightSegments=0; maxFacePixels=0;
+        minShadowRatio=1; minShadeLuma=1; maxFaceGap=0;
         maxPeakStdPct=0; maxFootJump=0; minCap=int.MaxValue; maxCap=0; minFaceDelta=1;
         for(int layer=0;layer<4;layer++)
         {
-            float[] ridge=Profile(layer,out int peaks,out float std);
-            PeakCounts[layer]=peaks;
             float d=distances[layer];
             float viewH=2*d*Mathf.Tan(cam.fieldOfView*.5f*Mathf.Deg2Rad);
             float width=viewH*aspect*1.04f,height=width*.5f;
             // Measure maximum alpha only inside the visible viewport (exclude overscan).
             float peak=0; int peakX=0;
-            for(int x=20;x<W-20;x++) if(ridge[x]>peak) {peak=ridge[x];peakX=x;}
+
             float bottom=1-tops[layer]-(OriginalCrests[layer]+1f)/H*height/viewH;
             height*=HeightScale;
             // Current locked shot: the distant ground meets the mountain at 74% screen Y.
-            float visibleFoot=Mathf.Clamp(((1-bottom)-.74f)*viewH/height*H,0,peak-1);
+
             Vector3 center=cam.transform.position+cam.transform.forward*d+
                 cam.transform.up*((bottom-.5f)*viewH+height*.5f)+
                 cam.transform.right*((layer-1.5f)*150f/1920f*viewH*aspect);
@@ -551,7 +636,12 @@ public static class MountainBackdrop
             }
             width=extent*2*(1+Overscan);
             quad.transform.localScale=new Vector3(width,height,1);
-            var texture=Paint(layer,ridge,visibleFoot,new Vector2(width/(viewH*aspect)*1920/W,height/viewH*1080/H));
+            var pixelScale=new Vector2(width/(viewH*aspect)*1920/W,height/viewH*1080/H);
+            float[] ridge=Profile(layer,pixelScale,out int peaks,out float std);
+            PeakCounts[layer]=peaks;
+            for(int x=20;x<W-20;x++) if(ridge[x]>peak) {peak=ridge[x];peakX=x;}
+            float visibleFoot=Mathf.Clamp(((1-bottom)-.74f)*viewH/height*H,0,peak-1);
+            var texture=Paint(layer,ridge,visibleFoot,pixelScale);
             widths[layer]=width; fills[layer]=float.PositiveInfinity;
             foreach(var pose in poses)
             {
@@ -603,6 +693,11 @@ public static class MountainBackdrop
                 "[MTN4_LAYER] L{0} peaks={1} ridge_std_px={2:F2} distance_m={3:F0} width_m={4:F2} top_viewport_y={5:F4} foot_viewport_y={6:F4} foot_world_y={7:F2}",
                 layer+1,peaks,std,d,width,measured[layer],1-bottom,foot.y));
         }
+        Debug.Log(string.Format(CultureInfo.InvariantCulture,
+            "[MTN14] shadow_ratio={0:F6} shade_luma={1:F6} face_luma_gap={2:F6} ridge_breaks={3} max_face_px={4} straight_segments={5}",
+            minShadowRatio,minShadeLuma,maxFaceGap,ridgeBreaks,maxFacePixels,straightSegments));
+        if(minShadowRatio<.66f || maxFaceGap>.26f || ridgeBreaks<6*42 || maxFacePixels>200 || straightSegments!=0)
+            throw new InvalidOperationException("MTN14 face/ridge gate");
         Debug.Log("[MTN13] tex=2048x1024 filter=L1:Point/L2:Point/L3:Bilinear/L4:Bilinear snow_edge_alpha=0.5 supersample=2x foot_haze_pct=10");
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN8] layer_width_m={0:F2}/{1:F2}/{2:F2} screen_fill_pct={3:F4}/{4:F4}/{5:F4} top_y={6:F4}/{7:F4}/{8:F4}",
@@ -615,7 +710,7 @@ public static class MountainBackdrop
         float gradient=LayerLuma[2]-LayerLuma[0];
         if(gradient<.18f || LayerLuma[1]<=LayerLuma[0] || LayerLuma[1]>=LayerLuma[2])
             throw new InvalidOperationException("MTN10 layer luminance gate");
-        if(RockLevels!=3 || minFaceDelta<.06f || minFaceDelta>.10f || minCap!=5 || maxCap!=24 || root.childCount!=4)
+        if(RockLevels!=3 || minFaceDelta<.05f || minFaceDelta>.26f || minCap!=5 || maxCap!=24 || root.childCount!=4)
             throw new InvalidOperationException($"MTN10 drawing gate delta={minFaceDelta} caps={minCap}..{maxCap}");
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[MTN10] layers={0} rock_levels={1} rock_streaks={2}/{3} lit_shadow_delta={4:F6} snowcap_px={5}..{6} snow_gullies={7}/{8} treeline=0.45/0.2/no silhouette_peaks={9}/{10}/{11}",
