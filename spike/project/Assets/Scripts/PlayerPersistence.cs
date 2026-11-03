@@ -29,14 +29,55 @@ public sealed partial class PlayerController
     readonly Dictionary<string,int> visitCounts = new Dictionary<string,int>();
     bool reviewingNote;
     readonly HashSet<string> visited = new HashSet<string>();
-    string SavePath => Path.Combine(Application.persistentDataPath, "mistbell_save.json");
-    string SettingsPath => Path.Combine(Application.persistentDataPath, "mistbell_settings.json");
+    // 存档目录写死，不跟 Unity 的 persistentDataPath 走：那个路径取决于 companyName / bundleIdentifier，
+    // 一次 PlayerSettings 变动就会让老存档"消失"（实测同一天两版分别落在 Lot/Mistbell 与 com.Lot.Mistbell）。
+    static string SaveRoot
+    {
+        get
+        {
+            string appData;
+            if (Application.platform == RuntimePlatform.OSXPlayer || Application.platform == RuntimePlatform.OSXEditor)
+                appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal),
+                                       "Library", "Application Support");
+            else
+                appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            return Path.Combine(appData, "Mistbell");
+        }
+    }
+    string SavePath => Path.Combine(SaveRoot, "mistbell_save.json");
+    string SettingsPath => Path.Combine(SaveRoot, "mistbell_settings.json");
+
+    /// <summary>把旧路径（Unity persistentDataPath 及历史上出现过的两个目录）里的存档搬到 SaveRoot。</summary>
+    void MigrateLegacyFiles()
+    {
+        try
+        {
+            Directory.CreateDirectory(SaveRoot);
+            var legacy = new List<string>();
+            string persistent = Application.persistentDataPath;
+            if (!string.IsNullOrEmpty(persistent)) legacy.Add(persistent);
+            string appSupport = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal),
+                                             "Library", "Application Support");
+            legacy.Add(Path.Combine(appSupport, "Lot", "Mistbell"));
+            legacy.Add(Path.Combine(appSupport, "com.Lot.Mistbell"));
+            foreach (var dir in legacy)
+                foreach (var name in new[] { "mistbell_save.json", "mistbell_settings.json" })
+                {
+                    string from = Path.Combine(dir, name), to = Path.Combine(SaveRoot, name);
+                    if (!File.Exists(from) || File.Exists(to)) continue;
+                    File.Copy(from, to);
+                    Debug.Log($"[SAVE] migrated {name} from {dir}");
+                }
+        }
+        catch (Exception e) { Debug.LogWarning("[SAVE] migrate failed: " + e.Message); }
+    }
     SaveData pendingSave;
     bool choosingContinue, settingsOpen, terraceSaved, interiorSaved, legacyDemo;
     float continueDeadline;
 
     void InitializePersistence(string[] args)
     {
+        MigrateLegacyFiles();
         legacyDemo = Array.Exists(args, a => a.StartsWith("-demo-", StringComparison.Ordinal)) &&
             !Array.Exists(args, a => a == "-demo-save" || a == "-demo-load" || a == "-demo-settings" || a == "-demo-journal");
         try

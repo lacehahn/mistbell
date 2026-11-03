@@ -403,4 +403,6 @@
 | 15:36 | Codex 配额再次耗尽（这次到 2026-11-07 14:45 才恢复） | `You've hit your usage limit … try again at Nov 7th` | 前景雪原只完成一半就被打断；我接手收尾 |
 | 15:36 | 前景雪原（Codex 半成品 + 我修正密度） | `[FGD_LAYOUT] sastrugi_cov=0.23423 rock_clusters=13 rocks=39 grass_patches=16 cairns=3 renderer_batches=4 path_clear_min=3.4` | Codex 原版 77 簇/385 块读起来像散落木箱；我疏到 22 m 网格、每簇 3 块、尺寸缩 30% 后自然了；风蚀雪脊覆盖率 23%，路径净空 3.4 m |
 | 15:36 | 十一项演示全绿 | `rc=0 bad=0` ×11 | 前景改动没有破坏移动/碰撞/显现/室内 |
+| 15:40 | 存档路径写死 + 自动迁移（我自查发现） | 旧 `~/Library/Application Support/Lot/Mistbell` → 新 `~/Library/Application Support/Mistbell`，`[SAVE] migrated mistbell_save.json/settings` | 根因：同一台机器两版分别落在 `Lot/Mistbell` 与 `com.Lot.Mistbell`（Unity 的 persistentDataPath 跟 companyName/bundleIdentifier 走，`applicationIdentifier` 还是空的）。改成写死目录 + 启动时把旧路径文件搬过来 |
+| 15:40 | 冷启动（无存档）验证 | 无"继续/重开"提示、直接出生、设置默认 0.8/双语 | 首次玩家不会被续玩界面卡住 |
 
