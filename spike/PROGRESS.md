@@ -389,4 +389,7 @@
 | 13:39 | Codex 配额耗尽（12:39） | `You've hit your usage limit` | 按规则转 DeepSeek harness 接手：修复足迹系统未完成部分、补齐札记验收、修自动化链路 |
 | 13:46 | 脚印跟随玩家（手写重建） | `[TRAIL] spacing=0.75m spawns=31 distance=24.97 paving_skipped=0 uneven_skipped=2 static_kept=64`、`[TRAIL_SHOT] spawns=31 walk_pass=true` | 按**累计位移**每 0.75 m 落一片（0.26×0.44 m、左右脚 ±0.18 m），120 片环形复用不产生 GC；石板/室内地面跳过；单个脚印内地面高差 >0.12 m（台阶边缘）跳过 |
 | 13:46 | 俯视诊断机位 | `footprints_trail_top.png` | 从走位中点上方 16 m 直下拍，脚印串等距、交替左右；但仍偏深（着色器不吃 alpha，颜色靠基色） |
+| 14:07 | 远山中景硬边（Codex MTN14） | `shadow_ratio=0.68`、`face_luma_gap=0.256`、`ridge_breaks=252`、`straight_segments=0`、`max_face_px=128` | 深蓝三角墙消失；阴面提亮到 0.70、明暗差压到 0.254，山体读成层叠雪脊 |
+| 14:07 | 山脚硬切线 + 竖向杂线（Codex MTN15） | `foot_fade_pct=18`、`stray_strokes=0`、`foot_edge_grad=0.007277`、`mountain_luma=0.570971`、`seam_max_grad=0.007151` | 山脚 18% 渐隐，山与雪原接上；`min_streak_px=4`、`max_streak_contrast=1.0` 去掉 1–2 px 黑竖线 |
+| 14:07 | 十一项演示全绿 | walk/stairs/tower/church/cinema/reveal/journal/settings/save/load/trail 全 `rc=0 bad=0` | 试玩包就绪，入口见 `docs/08-playtest.md` |
 
