@@ -1,0 +1,25 @@
+石板上山路的贴图提示词（给 Lot 去生成，回来按 path_stone_a/b/c/d 命名放到 spike/art-prompts/staged/）
+
+通用技术约束（每条提示词都自带）：
+- 1024×1024 或 2048×2048，**无缝平铺**（四边可拼接）
+- **正俯视平铺**，没有透视、没有画面边缘、没有暗角
+- 手绘 HD-2D 风格：色阶压到 3 档、笔触块状、有限调色板
+- 不烘焙方向光——明暗只来自局部起伏，不能有"太阳从左上来"的渐变
+- 无文字、无水印、无边框、无照片感、无 PBR 反光
+
+A —— 大块石板（0.5–0.8 m 石板，行错缝）
+Use case: stylized-concept. Asset type: seamless tiling game texture, 1024 x 1024, flat orthographic top-down. Primary request: hand-painted HD-2D RPG stone paving for a mountain pilgrim path, filling the whole frame edge to edge, tileable on all four sides. Content: large irregular flagstones, each stone roughly 0.5-0.8 m across (about 180-280 px), laid in staggered courses with visible 8-14 px joints; stones are worn smooth with rounded corners and shallow chipped edges; a few stones are split into two halves, some are set at slight angles, joint lines wander and never run perfectly straight. Palette: cool grey limestone, three posterized value levels only around #7E7A72, #918C82, #6C6861, joints darker #4E4B46, a few warm iron-stain flecks #8A7458 on about 10% of stones. Sparse thin frost in the deepest joints (#D9E2EA, under 8% of the area). Brushwork: chunky hand-painted marks, visible brush clusters 4-8 px, no photographic grain, no smooth gradient. Value contrast modest, no dark vignette, no directional lighting, no baked shadow. No perspective, no borders, no text, no watermark, no objects, no grass, no snow drifts, no 3D render, no gloss, no PBR.
+
+B —— 小块乱铺（0.2–0.35 m，粗粝山路）
+Use case: stylized-concept. Asset type: seamless tiling game texture, 1024 x 1024, flat orthographic top-down. Primary request: hand-painted HD-2D RPG rough cobble paving for an old mountain path, filling the frame edge to edge, tileable on all four sides. Content: small irregular cobbles and flat broken stones, each roughly 0.2-0.35 m across (60-110 px), packed tightly with no regular grid, mixed shapes (angular shards, rounded river stones, flat slabs), joint gaps 5-9 px filled with packed grit and dark earth. Palette: cool grey and slightly warm grey stones, three posterized levels around #8A857C, #75716A, #9A948A, joints #4A4740, grit #5E574C, occasional moss-free lichen speck #9AA091 on under 6%. Brushwork: chunky hand-painted, each stone 2-3 visible brush strokes, hard edges, no photographic texture. No directional lighting, no vignette. Sparse frost in gaps (#D9E2EA, under 8%). No perspective, no borders, no text, no watermark, no grass tufts, no objects, no 3D render, no gloss.
+
+C —— 磨圆阶石（有横向接缝，像被踩出来的台阶）
+Use case: stylized-concept. Asset type: seamless tiling game texture, 1024 x 1024, flat orthographic top-down. Primary request: hand-painted HD-2D RPG worn stone step paving, filling the frame edge to edge, tileable on all four sides. Content: broad worn stone treads with rounded bull-nose front edges, each tread strip about 90-130 px tall, separated by soft 10-16 px shadowed seams; the tread tops are polished by footsteps (slightly lighter oval wear patches), with hairline cracks and shallow chips; small debris and grit collect in the seams. Palette: cool grey limestone, three posterized levels around #8B867E, #767169, #9C968C, seams #4C4842, wear patches #A8A29A. Brushwork: broad flat hand-painted strokes, chunky, limited palette, no photographic detail. No directional lighting, no strong gradients. No perspective, no borders, no text, no watermark, no objects, no 3D render, no gloss.
+
+D —— 积雪压石（路雪半盖，用于上山中段）
+Use case: stylized-concept. Asset type: seamless tiling game texture, 1024 x 1024, flat orthographic top-down. Primary request: hand-painted HD-2D RPG stone paving half covered by trampled snow, filling the frame edge to edge, tileable on all four sides. Content: large stone slabs visible through irregular patches of packed snow; snow covers about 45-60% in soft irregular lobes, thicker along the joints, thin frost dusting on exposed stone; a few boot-packed darker patches in the snow where the path is most walked. Palette: stone three levels #7E7A72, #918C82, #6C6861; snow #EDF3F8 with shadowed snow #CFDAE4; joints #4E4B46. Brushwork: chunky hand-painted snow lobes with hard-ish edges, no soft photographic blur, no sparkle. No directional lighting, no vignette. No perspective, no borders, no text, no watermark, no footprints as literal icons, no 3D render, no gloss.
+
+生成之后：
+1. 每张按 `path_stone_a.png` / `_b` / `_c` / `_d` 放进 `spike/art-prompts/staged/`
+2. 我会跑 `spike/tools/ingest_handpaint.py` 把它们并进图集，先在路面做 2×2 m 世界投影贴一遍给你看
+3. 如果边缘不平铺，我会在接入时用世界坐标投影 + 三档尺度混合盖掉，但**能无缝最好**

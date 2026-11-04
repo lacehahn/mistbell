@@ -35,7 +35,7 @@ for TASK in "$@"; do
   say "开始执行: $TASK"
   OUT=$(bash spike/tools/codex.sh "读 $TASK 并严格按它执行，只做这一件事；完成后按任务书里的验收项自己跑一遍并贴数字。" 2>&1)
   printf '%s\n' "$OUT" | tee -a "$LOG" | tail -20
-  if printf '%s' "$OUT" | grep -qi "usage limit\|hit your usage"; then
+  if printf '%s' "$OUT" | grep -q "ERROR: You.*hit your usage limit"; then
     say "执行中配额耗尽：$TASK 未完成，退出"
     exit 0
   fi

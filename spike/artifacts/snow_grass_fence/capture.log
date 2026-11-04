@@ -1,0 +1,312 @@
+Mono path[0] = '/Users/lance/workspace/mistbell/spike/project/Builds/Mac/Mistbell.app/Contents/Resources/Data/Managed'
+Mono config path = '/Users/lance/workspace/mistbell/spike/project/Builds/Mac/Mistbell.app/Contents/MonoBleedingEdge/etc'
+Found 1 interfaces on host : 0) 192.168.1.23
+Player connection [8458108608]  Target information:
+
+Player connection [8458108608]  * "[IP] 192.168.1.23 [Port] 55000 [Flags] 2 [Guid] 1627132538 [EditorId] 2381136975 [Version] 1048832 [Id] OSXPlayer(1,LancedeMac-Mini.local) [Debug] 0 [PackageName] OSXPlayer [ProjectName] Mistbell" 
+
+Player connection [8458108608] Started UDP target info broadcast (1) on [225.0.0.222:54997].
+
+Input System module state changed to: Initialized.
+[Physics::Module] Initialized fallback backend.
+[Physics::Module] Id: 0xdecafbad
+Initialize engine version: 6000.3.27f2 (22188f149405)
+[Subsystems] Discovering subsystems at path /Users/lance/workspace/mistbell/spike/project/Builds/Mac/Mistbell.app/Contents/Resources/Data/UnitySubsystems
+GfxDevice: creating device client; kGfxThreadingModeThreaded
+ preferred device: Apple M6 (high power)
+Metal devices available: 1
+0: Apple M6 (high power)
+Using device Apple M6 (high power)
+Initializing Metal device caps: Apple M6
+Mac GPU Family: 2
+Apple GPU Family: 9
+MSL Version: 3.0
+Has Float MSAA: 1
+Has Float Filtering: 1
+ReadWrite Texture Tier: 2
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  0.038 seconds
+- Finished resetting the current domain, in  0.001 seconds
+[Physics::Module] Selected backend.
+[Physics::Module] Name: PhysX
+[Physics::Module] Id: 0xf2b8ea05
+[Physics::Module] SDK Version: 4.1.2
+[Physics::Module] Integration Version: 1.0.0
+[Physics::Module] Threading Mode: Multi-Threaded
+Source mesh has over 2,097,152 triangles in it, and is using the Fast Midphase option. This might cause certain collisions to not be detected correctly due to an issue in the physics engine. If you observe that in your project, a workaround could be to turn off the Fast Midphase option for this particular mesh. Source mesh name: Snow2Terrain
+UnloadTime: 0.205542 ms
+[BOOT] PlayerController.Awake begin
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+PlayerController:Awake () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/PlayerController.cs:75)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[PILGRIM] animation fps=10 frames=6 directionRows=down,left,right,up directionCheck=PASS
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+PilgrimAnimator:Awake () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/PilgrimAnimator.cs:45)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[DOME] drum_sides=12 drum_h=3.6 windows=12 ribs=12 cone_h=2.4 aperture=0.8 look_target=10.2
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+ChurchInterior:Awake () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/ChurchInterior.cs:78)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[INTERIOR] shafts=3 pools=3 dust=3 altar_total_h=2.14 pew_rows=6
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+ChurchInterior:Awake () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/ChurchInterior.cs:82)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[PILGRIM] first animated frame=0 row=3
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+PilgrimAnimator:LateUpdate () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/PilgrimAnimator.cs:55)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] pipeline = UniversalRenderPipelineAsset
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:46)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] camera=Main Camera postProcess=True fov=35
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:50)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] found volume Global Volume priority=1 enabled=True comps=6
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:58)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] using scene volume=Global Volume components=6
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:75)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] pose[0] art_runtime pos=(5.0,-6.7,-82.0) fov=35.0
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:122)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[PILGRIM] runtime shot art_close heightPx=60.9 art_runtime heightPx=177.5 frame=3 row=3
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+PilgrimAnimator:ReportMeasurements (ShotRig) (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/PilgrimAnimator.cs:103)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:125)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[FGD_RENDER] new_drawcalls=25 drawcalls=1530.00 fps=239.34 samples=120 resolution=1920x1080
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+ForegroundDetailProbe/<Measure>d__0:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/ForegroundDetailProbe.cs:24)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] written /Users/lance/workspace/mistbell/spike/project/Shots/art_runtime.png exists=True bytes=1387345
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:135)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] pose[1] art_close pos=(6.0,-0.4,-21.5) fov=36.0
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:122)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[PILGRIM] runtime shot art_close heightPx=60.8 art_runtime heightPx=177.4 frame=4 row=0
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+PilgrimAnimator:ReportMeasurements (ShotRig) (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/PilgrimAnimator.cs:103)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:125)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] written /Users/lance/workspace/mistbell/spike/project/Shots/art_close.png exists=True bytes=1228214
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:135)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] pose[2] play_view pos=(4.0,-1.4,-37.2) fov=48.0
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:122)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[PILGRIM] runtime shot art_close heightPx=60.9 art_runtime heightPx=177.5 frame=3 row=0
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+PilgrimAnimator:ReportMeasurements (ShotRig) (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/PilgrimAnimator.cs:103)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:125)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] written /Users/lance/workspace/mistbell/spike/project/Shots/play_view.png exists=True bytes=1263200
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:135)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] pose[3] art_ground pos=(6.0,-0.5,-23.0) fov=36.0
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:122)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[PILGRIM] runtime shot art_close heightPx=60.9 art_runtime heightPx=177.4 frame=1 row=0
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+PilgrimAnimator:ReportMeasurements (ShotRig) (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/PilgrimAnimator.cs:103)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:125)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+[SHOT] written /Users/lance/workspace/mistbell/spike/project/Shots/art_ground.png exists=True bytes=891531
+UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)
+UnityEngine.StackTraceUtility:ExtractStackTrace () (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/StackTrace.cs:35)
+UnityEngine.DebugLogHandler:Internal_Log (UnityEngine.LogType,UnityEngine.LogOption,string,UnityEngine.Object)
+UnityEngine.DebugLogHandler:LogFormat (UnityEngine.LogType,UnityEngine.Object,string,object[]) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/DebugLogHandler.cs:9)
+UnityEngine.Logger:Log (UnityEngine.LogType,object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Logging/Logger.cs:60)
+UnityEngine.Debug:Log (object) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs:123)
+Screenshotter/<Shot>d__2:MoveNext () (at /Users/lance/workspace/mistbell/spike/project/Assets/Scripts/Screenshotter.cs:135)
+UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr) (at /Users/bokken/build/output/unity/unity/Runtime/Export/Scripting/Coroutines.cs:17)
+
+(Filename: /Users/bokken/build/output/unity/unity/Runtime/Export/Debug/Debug.bindings.cs Line: 123)
+
+Thread 0x16d4eb000 may have been prematurely finalized
+[Physics::Module] Cleanup current backend.
+[Physics::Module] Id: 0xf2b8ea05
+Input System module state changed to: ShutdownInProgress.
+Input System polling thread exited.
+Input System module state changed to: Shutdown.
+Thread 0x16c293000 may have been prematurely finalized
+Thread 0x16c31f000 may have been prematurely finalized
+Thread 0x16c4c3000 may have been prematurely finalized
+Thread 0x16c437000 may have been prematurely finalized
+Thread 0x16c3ab000 may have been prematurely finalized
+PlayerConnection::Cleanup##utp:{"type":"MemoryLeaks","version":2,"phase":"Immediate","time":1793782595380,"processId":9184,"allocatedMemory":2379312,"memoryLabels":[{"Default":14161},{"Permanent":1520},{"Thread":39352},{"Manager":15767},{"VertexData":8},{"Geometry":408},{"Texture":16},{"Shader":78377},{"Material":24},{"GfxDevice":38576},{"GfxThread":320},{"Animation":328},{"Audio":3040},{"FreeType":8},{"FontEngine":736},{"Physics":2000},{"Physics2D":16},{"Serialization":624},{"Input":10056},{"JobScheduler":33216},{"TextLib":280},{"Mono":32},{"ScriptingNativeRuntime":128},{"BaseObject":1609216},{"Resource":496},{"Renderer":3528},{"Transform":6485},{"File":816},{"WebCam":32},{"Culling":32},{"Terrain":11250},{"Wind":24},{"String":3132},{"DynamicArray":31512},{"HashMap":10240},{"Utility":300096},{"PoolAlloc":1464},{"AI":40},{"TypeTree":5064},{"ScriptManager":64},{"RuntimeInitializeOnLoadManager":64},{"SpriteAtlas":112},{"GI":7176},{"Director":8152},{"CloudService":144},{"WebRequest":520},{"VR":47442},{"SceneManager":360},{"Video":2080},{"LazyScriptCache":32},{"Camera":9},{"Secure":241},{"SerializationCache":1576},{"APIUpdating":10320},{"Subsystems":336},{"VirtualTexturing":57496},{"Baselib":16},{"Hierarchy":992},{"CoreStats":13192},{"Identifiers":6480},{"Gui":40},{"CoreBusinessMetrics":120},{"AssetReference":32}]}

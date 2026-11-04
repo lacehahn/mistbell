@@ -1,0 +1,22 @@
+{
+    "protected_before": "D4C8B4398C4B458FAAF52AA374E057F2F466F574696B744ACE622D3E2F269FB9",
+    "protected_after": "D4C8B4398C4B458FAAF52AA374E057F2F466F574696B744ACE622D3E2F269FB9",
+    "post_color": "#4A3B2E",
+    "snow_color": "#EDF3F8",
+    "grass_before": 0,
+    "grass_after": 0,
+    "posts": 185,
+    "rails": 366,
+    "snow_caps": 185,
+    "batches": 8,
+    "post_width": 0.10000000149011612,
+    "post_height": 1.0,
+    "post_spacing": 2.200037717819214,
+    "rail_width": 0.05999999865889549,
+    "rail_height": 0.07999999821186066,
+    "rail_gap": 0.4500007629394531,
+    "snow_depth": 0.03999999910593033,
+    "shadow_coverage": 0.625,
+    "spacing_min": 2.1999871730804445,
+    "spacing_max": 2.2000882625579836
+}

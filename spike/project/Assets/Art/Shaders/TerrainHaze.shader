@@ -14,6 +14,7 @@ Shader "Mistbell/TerrainHaze"
         _ForgeRoughness ("Forge roughness", 2D) = "white" {}
         _SnowMedium ("Snow 256px middle", 2D) = "gray" {}
         _SnowLow ("Snow 1024px low", 2D) = "gray" {}
+        _SnowNonrepeat ("Snowfield nonrepeat chunks (opt in)", Float) = 0
         _SnowRelief ("Snowfield relief only", Float) = 0
         _StoneSurface ("Stone surface", Float) = 0
         _RockOnly ("World projected rock texture", Float) = 0
@@ -64,6 +65,7 @@ Shader "Mistbell/TerrainHaze"
                 float4 _ForgeEmission;
                 float4 _BaseMap_ST, _BaseColor, _HazeColor, _SnowShadowColor, _RockColor, _FarHazeColor;
                 float _FarHazeStrength;
+                float _SnowNonrepeat;
                 float _SnowRelief, _ForgeSurface, _ForgeTopGain, _Style11UV;
                 float _StoneSurface, _SnowAlbedo, _RockSnowCap, _Footprint, _RockOnly;
                 float _NormalScale, _Metallic, _Smoothness;
@@ -168,6 +170,18 @@ Shader "Mistbell/TerrainHaze"
                     half3 authored = SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,uv).rgb;
                     if (_Style11UV > .5 && input.atlasIndex > 1.5) authored = SAMPLE_TEXTURE2D(_Style11Atlas2,sampler_BaseMap,uv).rgb;
                     else if (_Style11UV > .5 && input.atlasIndex > .5) authored = SAMPLE_TEXTURE2D(_Style11Atlas1,sampler_BaseMap,uv).rgb;
+                    if (_SnowNonrepeat > .5 && _ForgeSurface < 1.5)
+                    {
+                        // Outdoor-only: one fine fetch and four overlapping broad chunks.
+                        // Smooth broad noise warps and rotates the projection continuously:
+                        // no 4m reset, no hard cell edge, original painted snow palette.
+                        float2 p = input.positionWS.xz;
+                        float2 warp = float2(SnowMound(p/23+13),SnowMound(p/51+79))-.5;
+                        float2 density=_BaseMap_ST.xy;
+                        half3 fine=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,(p+warp*7)*density).rgb;
+                        half3 low=SnowLayer(float2(.39*p.x+.92*p.y,-.92*p.x+.39*p.y)/51.2+warp*.15,0);
+                        authored=.35*fine+.65*low;
+                    }
                     half3 albedo = authored * _BaseColor.rgb;
                     if (_ForgeSurface > 1.5 && _ForgeSurface < 2.5)
                     {

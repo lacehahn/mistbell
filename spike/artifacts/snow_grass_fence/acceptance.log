@@ -1,0 +1,30 @@
+[GRASS_PROBE] name=TrailShrub_0_2 material=M_STYLE6_Stems shader=Mistbell/TerrainHaze alpha=1.000 surface=0 bounds=Center: (5.182, -22.092, -150.694), Extents: (0.092, 0.241, 0.061) reason=opaque_geometry_no_cutout action=delete
+[GRASS] count=0
+[FENCE2] post_color=#4A3B2E rail=2 snow_cap=true shadow_strength=0.625 shadow_method=bayer_coverage posts=185 rail_total=366
+[SNOW_TILE] view=cam_play_1080 grid_score=0.034356 before=0.075261 resolution=480x270 roi=(5, 108, 93, 245) method=autocorrelation_peak_prominence
+[SNOW_TILE] view=art_runtime grid_score=0.085198 before=0.092707 resolution=480x270 roi=(260, 211, 340, 263) method=autocorrelation_peak_prominence
+[BENCH] pos=z01 fps_avg=213.28 fps_p1=167.25 drawcall=285
+[BENCH] pos=terrace fps_avg=225.88 fps_p1=160.45 drawcall=328
+[BENCH] pos=interior fps_avg=215.09 fps_p1=157.97 drawcall=250
+demo_camera bad=0
+demo_walk bad=0
+demo_interior bad=0
+demo_reveal bad=0
+demo_capture bad=0
+demo_bench bad=0
+[CHECK] build=true
+[CHECK] protected=true
+[CHECK] grass_probe=true
+[CHECK] grass=true
+[CHECK] fence=true
+[CHECK] walk=true
+[CHECK] interior=true
+[CHECK] reveal=true
+[CHECK] camera=true
+[CHECK] outdoor_fps=true
+[CHECK] terrace_drawcalls=true
+[CHECK] bad_zero=true
+[CHECK] cam_play_1080=true
+[CHECK] art_runtime=true
+[CHECK] snow_tile=true
+pass=true

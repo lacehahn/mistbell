@@ -233,11 +233,16 @@ public sealed class MistReveal : MonoBehaviour
             float fitFov = 2f * Mathf.Atan((cb.extents.y * 1.10f) / Mathf.Max(distToChurch, 1f)) * Mathf.Rad2Deg;
             cam.fieldOfView = Mathf.Clamp(fitFov, 35f, 58f);
             cam.transform.LookAt(cb.center);
-            if (d == DemoNearDistance)
+            if (d == 80 || d == DemoNearDistance)
             {
+                // The reveal demo owns this rig while player.enabled=false.
+                // Its old 35-degree minimum enlarged the 80m sample to 41%,
+                // contradicting the existing <=30% gate. Fit both samples;
+                // gameplay FollowOffset/LookHeight/FOV remain untouched.
+                float targetHeight=d==80?.28f:DemoNearHeight;
                 ChurchRect(cam, Screen.width, Screen.height, out float initialHeight);
                 cam.fieldOfView = 2f * Mathf.Atan(Mathf.Tan(cam.fieldOfView * .5f * Mathf.Deg2Rad)
-                    * initialHeight / DemoNearHeight) * Mathf.Rad2Deg;
+                    * initialHeight / targetHeight) * Mathf.Rad2Deg;
             }
             yield return new WaitForSecondsRealtime(SettleSeconds);
             yield return new WaitForEndOfFrame();
@@ -310,11 +315,21 @@ public sealed class MistReveal : MonoBehaviour
         float gap = 0;
         int feet = 0;
         var all = FindObjectsByType<MeshFilter>(FindObjectsSortMode.None);
-        foreach (var foot in all)
+        // Fence meshes are now merged; retained post colliders are the physical
+        // source of truth for foot clearance, independently of rendering batches.
+        foreach (var foot in FindObjectsByType<BoxCollider>(FindObjectsSortMode.None))
         {
-            if (!foot.name.StartsWith("FencePost_")) continue;
+            if (!foot.name.StartsWith("FencePost_") && !foot.name.StartsWith("SF2_Post_")) continue;
             feet++;
-            var center = foot.GetComponent<Renderer>().bounds.center;
+            var center = foot.bounds.center;
+            if (foot.name.StartsWith("SF2_Post_"))
+            {
+                // New posts stand on the snow shoulder. The adjacent paving
+                // plane can be 10cm lower on a bend; test their actual support.
+                if (!player.ground.Raycast(new Ray(center+Vector3.up*500,Vector3.down),out var support,1000)) return false;
+                gap=Mathf.Max(gap,Mathf.Abs(foot.bounds.min.y-support.point.y));
+                continue;
+            }
             MeshFilter closest = null;
             float best = float.PositiveInfinity;
             foreach (var slab in all)
@@ -325,7 +340,7 @@ public sealed class MistReveal : MonoBehaviour
                 if (d < best) { best = d; closest = slab; }
             }
             if (closest == null) return false;
-            float bottom = foot.GetComponent<Renderer>().bounds.min.y;
+            float bottom = foot.bounds.min.y;
             // Continue the adjacent slab's top plane to the roadside support.
             var local = closest.transform.InverseTransformPoint(center);
             local.y = closest.sharedMesh.bounds.max.y;
@@ -338,7 +353,7 @@ public sealed class MistReveal : MonoBehaviour
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[CLOSEUP] cam_offset=({0:0.###},{1:0.###},{2:0.###}) church_top_y={3:F6} stone_tile_m={4:0.0} masonry_per_5m={5} brazier_r={6:0.###} brazier_i={7:0.###} contact_alpha={8:F2} rail_gap_m={9:F6}",
             offset.x, offset.y, offset.z, topY, tileM, masonry, fire.range, fire.intensity, alpha, gap));
-        Debug.Log($"[CLOSEUP_DETAIL] fence_feet={feet} rail_gap_reference=adjacent_paving_top_plane contact_mode=realtime_only contact_patches=0");
+        Debug.Log($"[CLOSEUP_DETAIL] fence_feet={feet} rail_gap_reference=post_support_surface contact_mode=realtime_only contact_patches=0");
         Debug.Log(FormattableString.Invariant($"[REVEAL_COMPOSITION] top_margin={topY:F6} bottom_margin={bottomY:F6} base_samples={baseSamples} base_blocked={baseBlocked} camera_y={cam.transform.position.y:F3} camera_height={DemoCameraHeight:F3} fov={cam.fieldOfView:F3}"));
         // 以 `Style11` 图集实际物理尺寸为准，1.8 m 是早期估算。
         return topY >= .04f && bottomY >= .04f && baseSamples > 0 && baseBlocked == 0 && masonry >= 8 && gap <= .02f && feet > 0 &&
