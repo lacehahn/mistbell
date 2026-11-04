@@ -1,0 +1,137 @@
+{
+  "pass": true,
+  "checks": {
+    "fresh_logs": true,
+    "build": true,
+    "protected": true,
+    "share_post": true,
+    "no_duplicate_columns": true,
+    "column_size": true,
+    "embed": true,
+    "brief_embed_003": true,
+    "gap": true,
+    "rail_join_inside_post": true,
+    "snow_columns": true,
+    "snow_bevel": true,
+    "snow_rail_size": true,
+    "snow_rails": true,
+    "snow_color": true,
+    "uv_all_faces": true,
+    "uv_random": true,
+    "variant_ratio": true,
+    "tri_budget": true,
+    "outward_normals": true,
+    "lean": true,
+    "rail_missing": true,
+    "crossing": true,
+    "render_geometry": true,
+    "snow_visible": true,
+    "wood_visible": true,
+    "closeup": true,
+    "screenshots": true,
+    "walk": true,
+    "interior": true,
+    "reveal": true,
+    "bad_zero": true,
+    "camera": true,
+    "outdoor_fps": true,
+    "terrace_drawcall": true
+  },
+  "segments": 181,
+  "posts": 183,
+  "counts": [
+    146,
+    18,
+    17
+  ],
+  "tris_per_variant": [
+    88,
+    88,
+    64
+  ],
+  "total_tris": 15600,
+  "batches": 1,
+  "embed_min": 0.02996984919052036,
+  "embed_max": 0.0300327035552073,
+  "gap_max": 0,
+  "spacing_min": 2.1986082237851137,
+  "spacing_max": 2.2000174269355623,
+  "lean_min": 4.02457283684924,
+  "lean_max": 5.883664950686628,
+  "snow_columns": 183,
+  "snow_PNG_samples": 1048,
+  "snow_PNG_median_L": 100.00000386666655,
+  "snow_rails": 345,
+  "uv_degenerate_triangles": 0,
+  "crossings": 0,
+  "painted_PNG": [
+    {
+      "samples": 776,
+      "median_L": 40.92786359392613
+    },
+    {
+      "samples": 3102,
+      "median_L": 41.89788651883944
+    },
+    {
+      "samples": 134,
+      "median_L": 45.36891317949182
+    }
+  ],
+  "bad": {
+    "camera": 0,
+    "closeup": 0,
+    "walk": 0,
+    "interior": 0,
+    "reveal": 0,
+    "bench": 0
+  },
+  "bench": [
+    {
+      "pos": "z01",
+      "fps_avg": 214.10372924804688,
+      "fps_p1": 166.27450561523438,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 207,
+      "tris": 5945206
+    },
+    {
+      "pos": "terrace",
+      "fps_avg": 222.7166748046875,
+      "fps_p1": 167.5697021484375,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 276,
+      "tris": 6546382
+    },
+    {
+      "pos": "interior",
+      "fps_avg": 215.69656372070312,
+      "fps_p1": 160.7001953125,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 256,
+      "tris": 6479808
+    }
+  ],
+  "shots": {
+    "cam_play_1080": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "ba1ed7432f6f48e90ad72198963081dd975327d179bf96efd975b63abb4ec141",
+      "fresh": true,
+      "magenta": 0
+    },
+    "fence_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "aca4ebcf15d4785fd70bc8294faf35a0ddeaae92f0a0707303776dd2317472e4",
+      "fresh": true,
+      "magenta": 0
+    }
+  },
+  "protected_before": "A78036A1A0AA88F9083EE625CED21A46B7FA52DDAEB9D07C5B13B73F25F917F5",
+  "protected_after": "A78036A1A0AA88F9083EE625CED21A46B7FA52DDAEB9D07C5B13B73F25F917F5"
+}

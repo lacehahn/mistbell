@@ -13,7 +13,7 @@ public static class FenceModelBuild {
  const string Out="../artifacts/fence_model/", Dir="Assets/Settings/";
  static T[] All<T>() where T:Object=>Object.FindObjectsByType<T>(FindObjectsInactive.Include,FindObjectsSortMode.None);
  static bool Fence(Component c)=>c.name.StartsWith("SF2_")||c.name.StartsWith("FT3_Cap")||c.name.StartsWith("FT3_Rail")||c.name.StartsWith("FT3_Batch")||c.name.StartsWith("FencePost_")||c.name.StartsWith("FenceRail_")||c.name.StartsWith("FenceSnow_")||c.name.StartsWith("PostDrift_")||c.name.StartsWith("FM4_");
- static string Protected(){
+ public static string Protected(){
   var rows=new List<string>();foreach(var c in All<Component>()){
    if(c==null||Fence(c))continue;
    rows.Add(c.name+(c is Transform?c.transform.localToWorldMatrix.ToString("F6"):EditorJsonUtility.ToJson(c)));

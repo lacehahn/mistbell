@@ -772,3 +772,13 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - `bash spike/tools/accept_fence_model.sh` exit=0，25/25项通过，构建Succeeded/0errors；walk/enter/reveal全部bad=0，原门槛未改。cam_play_1080.png/fence_closeup.png为新1080p图，近景距2.644334m，已目视复核。8423个受光木面PNG采样三阶L*=31.28073 / 44.43766 / 52.44687，保留木纹，无高光。
 - 前台室外z01=209.09FPS/263dc、台地=219.79FPS/321dc；1%low=164.05/158.43。室内=215.52FPS/256dc。
 - 围栏以外所有保护摘要前后相同，路面/海拔混合、室内/祭坛、人物、玩法与reveal机位、雾与山均未改。AGENTS.md/任务书未改，未安装依赖，未提交。报告 [report.md](artifacts/fence_model/report.md)，详尽数字 [measurements.json](artifacts/fence_model/measurements.json)，日志 `logs/fence_model_*`。
+
+
+### 2026-11-04 围栏细节修正（fence_refine）
+
+- 仅执行本任务。最终 `bash spike/tools/accept_fence_refine.sh` exit=0，35/35 项通过，构建 Succeeded/0 errors；walk/enter/reveal 全部 bad=0，保护摘要相同。
+- 181跨/183共享柱，A/B/C=146/18/17；每跨88/88/64 tris，总15600 tris，1 Renderer；实测外倾4.024549–5.883664°、嵌入0.029970–0.030033m、gap_max=0、路面相交0；183柱帽/345杆顶雪条，四面长轴木纹与UV随机偏移通过。沿当前2.1m道路、1.4m中心偏距重新贴合。
+- 任务尺寸存在冲突：2.2柱距/.09柱宽/.03每端嵌入要求2.17m水平横杆，无法同时满足2.14m。已提出选择，暂优先验收项的.03嵌入，明确保留此规格偏差，未伪称四尺寸同时成立。斜坡实际杆长2.176402–2.223792m。
+- 1920×1080前台平均：z01=214.10FPS/207dc；terrace=222.72FPS/276dc；interior=215.70FPS/256dc。1%low166.27/167.57/160.70，如实列出。3m近景与玩法截图已目视，雪帽/木纹可辨。
+- 首轮揭示因柱脚代理被移除而失败，已为每共享柱恢复一个支撑代理并整套重跑通过；未修改reveal代码/机位/阈值。AGENTS.md未改，未提交。
+- [验收报告](artifacts/fence_refine/acceptance.md) / [测量JSON](artifacts/fence_refine/measurements.json)；日志 `logs/fence_refine_*`。
