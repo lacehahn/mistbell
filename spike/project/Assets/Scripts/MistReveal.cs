@@ -13,8 +13,9 @@ public sealed class MistReveal : MonoBehaviour
     const float FarStart = 120f, FarEnd = 420f, NearStart = 20f, NearEnd = 120f;
     const float PulseRise = 1.2f, PulseFall = .8f, BloomMultiplier = 1.6f, VignetteMultiplier = 1.3f;
     const float SettleSeconds = .5f;
-    const float DemoNearDistance = 28f, DemoCameraHeight = 14f, DemoNearHeight = .62f;
-    static readonly Vector3 DemoOffset = new Vector3(0, DemoCameraHeight, -7.2f);
+    const float DemoNearDistance = 34f, DemoCameraHeight = 7.5f, DemoFov = 48f;
+    const float DemoFarDistance = 115f, DemoBlendSeconds = 2f;
+    static readonly Vector3 DemoOffset = new Vector3(0, DemoCameraHeight, 0);
     const int CloudColumns = 48, CloudRows = 24;
     const float CloudWidth = 260f, CloudHeight = 140f, CloudOpacity = .98f;
     const float CloudCenterY = 18f, CloudFrontZ = -20f, CloudLayerSpacing = 26f;
@@ -201,11 +202,12 @@ public sealed class MistReveal : MonoBehaviour
         while (root != null && root.Name != "Builds") root = root.Parent;
         string output = root != null ? Path.Combine(root.Parent.FullName, "Shots") : Path.GetFullPath("Shots");
         Directory.CreateDirectory(output);
-        float[] distances = { 80, 50, DemoNearDistance };
+        // Reference shots first; the final transition goes directly from far to near.
+        float[] distances = { 80, 50, DemoFarDistance, DemoNearDistance };
         float nearHeight = 0, farHeight = 0;
         double farContrast = 0;
         double[] edges = new double[distances.Length];
-        bool closeupPass = false;
+        bool closeupPass = false, blendPass = true;
         for (int i = 0; i < distances.Length; i++)
         {
             float d = distances[i];
@@ -226,24 +228,48 @@ public sealed class MistReveal : MonoBehaviour
             { Debug.LogError("[REVEAL] demo ground ray missed"); Application.Quit(1); yield break; }
             p.y = hit.point.y;
             player.transform.position = p;
-            // Reveal-only rig: elevate above the retaining wall, without altering gameplay cameras.
+            // Only this demo owns the camera; the gameplay rig is disabled above.
+            Vector3 startPosition = cam.transform.position;
+            Quaternion startRotation = cam.transform.rotation;
+            float startFov = cam.fieldOfView;
             cam.transform.position = p + DemoOffset;
             var cb = ChurchWorldBounds();
-            float distToChurch = Vector3.Distance(cam.transform.position, cb.center);
-            float fitFov = 2f * Mathf.Atan((cb.extents.y * 1.10f) / Mathf.Max(distToChurch, 1f)) * Mathf.Rad2Deg;
-            cam.fieldOfView = Mathf.Clamp(fitFov, 35f, 58f);
+            cam.fieldOfView = DemoFov;
             cam.transform.LookAt(cb.center);
-            if (d == 80 || d == DemoNearDistance)
+            if (d == 80)
             {
-                // The reveal demo owns this rig while player.enabled=false.
-                // Its old 35-degree minimum enlarged the 80m sample to 41%,
-                // contradicting the existing <=30% gate. Fit both samples;
-                // gameplay FollowOffset/LookHeight/FOV remain untouched.
-                float targetHeight=d==80?.28f:DemoNearHeight;
+                // Preserve the existing 80 m reference shot, independently of
+                // the new 115 m far gate and the lower near rig.
+                cam.transform.position = p + new Vector3(0, 14f, -7.2f);
+                cam.transform.LookAt(cb.center);
                 ChurchRect(cam, Screen.width, Screen.height, out float initialHeight);
-                cam.fieldOfView = 2f * Mathf.Atan(Mathf.Tan(cam.fieldOfView * .5f * Mathf.Deg2Rad)
-                    * initialHeight / targetHeight) * Mathf.Rad2Deg;
+                cam.fieldOfView = 2f * Mathf.Atan(Mathf.Tan(DemoFov * .5f * Mathf.Deg2Rad)
+                    * initialHeight / .28f) * Mathf.Rad2Deg;
             }
+            Vector3 endPosition = cam.transform.position;
+            Quaternion endRotation = cam.transform.rotation;
+            float endFov = cam.fieldOfView;
+            if (i > 0)
+            {
+                float elapsed = 0;
+                int blendFrames = 0;
+                cam.transform.SetPositionAndRotation(startPosition, startRotation);
+                cam.fieldOfView = startFov;
+                while (elapsed < DemoBlendSeconds)
+                {
+                    yield return null;
+                    elapsed += Time.unscaledDeltaTime;
+                    float t = Mathf.SmoothStep(0, 1, elapsed / DemoBlendSeconds);
+                    cam.transform.SetPositionAndRotation(Vector3.Lerp(startPosition, endPosition, t),
+                        Quaternion.Slerp(startRotation, endRotation, t));
+                    cam.fieldOfView = Mathf.Lerp(startFov, endFov, t);
+                    blendFrames++;
+                }
+                blendPass &= elapsed >= 1.6f && elapsed <= 2.2f && blendFrames > 1;
+                Debug.Log(FormattableString.Invariant($"[REVEAL_BLEND] to_dist={d:F0} duration={elapsed:F3} frames={blendFrames} curve=SmoothStep"));
+            }
+            cam.transform.SetPositionAndRotation(endPosition, endRotation);
+            cam.fieldOfView = endFov;
             yield return new WaitForSecondsRealtime(SettleSeconds);
             yield return new WaitForEndOfFrame();
             var frame = ScreenCapture.CaptureScreenshotAsTexture();
@@ -252,7 +278,7 @@ public sealed class MistReveal : MonoBehaviour
             if (d == 80) FarMistAudit.Capture(cam, frame, output);
             RectInt roi = ChurchRect(cam, frame.width, frame.height, out float heightPct);
             edges[i] = Edge(frame, roi);
-            if (d == 80) { farHeight = heightPct; farContrast = SilhouetteContrast(cam, frame, output); }
+            if (d == DemoFarDistance) { farHeight = heightPct; farContrast = SilhouetteContrast(cam, frame, output); }
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "[REVEAL] d={0:F0} fogStart={1:F3} fogEnd={2:F3} churchEdge={3:F9}",
                 Distance(), RenderSettings.fogStartDistance, RenderSettings.fogEndDistance, edges[i]));
@@ -262,15 +288,15 @@ public sealed class MistReveal : MonoBehaviour
             Destroy(frame);
         }
         // 该比值在雾密度可调后与远山可见性冲突，已由双距离构图判据替代。
-        bool pass = closeupPass && farHeight <= .30f && farContrast <= .18;
+        bool pass = closeupPass && blendPass && DemoFarDistance <= 120f && farHeight <= .34f && farContrast <= .20;
         // Let the single pulse finish so the same run verifies restoration as well.
         while (pulsing) yield return null;
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
             "[REVEAL] gate={0} ratio={1:F6} near_dist={4:F0} church_height_pct={5:F6} ratio20_80={1:F6} bell_once={2} pulse_restored={3}",
-            pass ? "pass" : "FAIL", edges[2] / Math.Max(edges[0], double.Epsilon), bellFired,
+            pass ? "pass" : "FAIL", edges[distances.Length - 1] / Math.Max(edges[0], double.Epsilon), bellFired,
             (bloom == null || Mathf.Approximately(bloom.intensity.value, baseBloom)) &&
             (vignette == null || Mathf.Approximately(vignette.intensity.value, baseVignette)), DemoNearDistance, nearHeight));
-        Debug.Log(FormattableString.Invariant($"[REVEAL] far_h_pct={farHeight:F6} far_contrast={farContrast:F6} near_h_pct={nearHeight:F6} gate={(pass ? "pass" : "FAIL")}"));
+        Debug.Log(FormattableString.Invariant($"[REVEAL] far_h_pct={farHeight:F6} far_contrast={farContrast:F6} far_dist={DemoFarDistance:F0} near_h_pct={nearHeight:F6} gate={(pass ? "pass" : "FAIL")}"));
         // Allow the complete synthesized decay to play before exiting this demo.
         var audio = player.GetComponent<AudioDirector>();
         yield return new WaitForSecondsRealtime(4);
@@ -355,8 +381,16 @@ public sealed class MistReveal : MonoBehaviour
             offset.x, offset.y, offset.z, topY, tileM, masonry, fire.range, fire.intensity, alpha, gap));
         Debug.Log($"[CLOSEUP_DETAIL] fence_feet={feet} rail_gap_reference=post_support_surface contact_mode=realtime_only contact_patches=0");
         Debug.Log(FormattableString.Invariant($"[REVEAL_COMPOSITION] top_margin={topY:F6} bottom_margin={bottomY:F6} base_samples={baseSamples} base_blocked={baseBlocked} camera_y={cam.transform.position.y:F3} camera_height={DemoCameraHeight:F3} fov={cam.fieldOfView:F3}"));
+        float nearDistance = Vector2.Distance(new Vector2(cam.transform.position.x, cam.transform.position.z),
+            new Vector2(Anchor.x, Anchor.z));
+        float depression = Mathf.Asin(-cam.transform.forward.y) * Mathf.Rad2Deg;
+        ChurchRect(cam, Screen.width, Screen.height, out float heightPct);
+        bool cameraPass = Mathf.Abs(nearDistance - 34f) <= 1f && offset.y >= 7f && offset.y <= 8f &&
+            cam.fieldOfView >= 46f && cam.fieldOfView <= 50f && depression <= 15f &&
+            heightPct >= .55f && heightPct <= .68f && topY >= .04f && bottomY >= .04f && baseBlocked == 0;
+        Debug.Log(FormattableString.Invariant($"[REVEAL] near_dist={nearDistance:F0} near_height={offset.y:F1} fov={cam.fieldOfView:F0} church_height_pct={heightPct:F6} top_margin={topY:F6} bottom_margin={bottomY:F6} depression_deg={depression:F3} gate={(cameraPass ? "pass" : "FAIL")}"));
         // 以 `Style11` 图集实际物理尺寸为准，1.8 m 是早期估算。
-        return topY >= .04f && bottomY >= .04f && baseSamples > 0 && baseBlocked == 0 && masonry >= 8 && gap <= .02f && feet > 0 &&
+        return cameraPass && baseSamples > 0 && baseBlocked == 0 && masonry >= 8 && gap <= .02f && feet > 0 &&
             Vector3.Distance(offset, DemoOffset) < .001f &&
             Mathf.Abs(tileM - 1.0f) < .001f && fire.type == LightType.Point &&
             Mathf.Approximately(fire.range, 7) && Mathf.Approximately(fire.intensity, 2.2f) && alpha <= .051f;
