@@ -763,3 +763,12 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - walk6=15.395m/贴地0/漏射线0；enter全True；reveal gate=pass；三项bad=0，未改门槛。
 - 1920×1080前台平均：z01=212.44FPS/269dc，terrace=221.41FPS/328dc，interior=216.25FPS/256dc；1%low=165.35/160.88/158.13，如实记录。
 - 所有保护项摘要不变；AGENTS.md未改。新截图已目视检查，数据、测量口径（受光面用post=false近景，保留玩法图景深混色极值）、源码与复现说明见 `spike/artifacts/fence_path_tone/report.md`；原始日志 `spike/logs/fence_path_tone_*.log/json`。
+
+
+### 2026-11-04 围栏固定模型（fence_model）
+
+- 仅执行任务书。三个 2.2m 固定网格 A/B/C，各120三角面；复用 staged/fence_wood.jpg 导入1024²三阶木纹、积雪顶点色，共用1材质1贴图；无每柱/横杆渲染对象。沿路每侧1排，183段，A/B/C=146/19/18，总21960三角面，合并1个Renderer。
+- `[FENCE_MESH] segments=183 tris=21960 batches=1 spacing=2.130466..2.343246 crossing=0 variants=3`；逐段/路面真实三角形由编辑器与独立SAT双验，转角净隙0.414281–0.495572m。偏航±3°内、高度±2cm内，B向外7°，C缺下栏且上栏破口不齐。
+- `bash spike/tools/accept_fence_model.sh` exit=0，25/25项通过，构建Succeeded/0errors；walk/enter/reveal全部bad=0，原门槛未改。cam_play_1080.png/fence_closeup.png为新1080p图，近景距2.644334m，已目视复核。8423个受光木面PNG采样三阶L*=31.28073 / 44.43766 / 52.44687，保留木纹，无高光。
+- 前台室外z01=209.09FPS/263dc、台地=219.79FPS/321dc；1%low=164.05/158.43。室内=215.52FPS/256dc。
+- 围栏以外所有保护摘要前后相同，路面/海拔混合、室内/祭坛、人物、玩法与reveal机位、雾与山均未改。AGENTS.md/任务书未改，未安装依赖，未提交。报告 [report.md](artifacts/fence_model/report.md)，详尽数字 [measurements.json](artifacts/fence_model/measurements.json)，日志 `logs/fence_model_*`。

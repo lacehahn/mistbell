@@ -1,0 +1,193 @@
+{
+  "pass": true,
+  "checks": {
+    "build": true,
+    "protected": true,
+    "fresh_logs": true,
+    "variants": true,
+    "tri_budget": true,
+    "outward_normals": true,
+    "length": true,
+    "single_rows": true,
+    "spacing": true,
+    "corner_gaps": true,
+    "jitter": true,
+    "ratio": true,
+    "crossing": true,
+    "batches": true,
+    "texture": true,
+    "wood_grain_visible": true,
+    "closeup": true,
+    "screenshots": true,
+    "walk": true,
+    "interior": true,
+    "reveal": true,
+    "bad_zero": true,
+    "camera": true,
+    "outdoor_fps": true,
+    "terrace_drawcall": true
+  },
+  "bad": {
+    "camera": 0,
+    "closeup": 0,
+    "walk": 0,
+    "interior": 0,
+    "reveal": 0,
+    "bench": 0
+  },
+  "segments": 183,
+  "tris": 21960,
+  "batches": 1,
+  "variants": [
+    {
+      "name": "Fence_A",
+      "tris": 120,
+      "size": {
+        "x": 0.10000000149011612,
+        "y": 1.0350000858306885,
+        "z": 2.1999998092651367
+      }
+    },
+    {
+      "name": "Fence_B",
+      "tris": 120,
+      "size": {
+        "x": 0.2270820289850235,
+        "y": 1.0350000858306885,
+        "z": 2.1999998092651367
+      }
+    },
+    {
+      "name": "Fence_C",
+      "tris": 120,
+      "size": {
+        "x": 0.10000000149011612,
+        "y": 1.0350000858306885,
+        "z": 2.1999998092651367
+      }
+    }
+  ],
+  "counts": [
+    146,
+    19,
+    18
+  ],
+  "spacing_min": 2.1304662430232657,
+  "spacing_max": 2.3432464599609375,
+  "crossing": 0,
+  "corner_gaps": [
+    0.4142814091880085,
+    0.44150525015903697,
+    0.48578140307066775,
+    0.43421594107640016,
+    0.4484918485220627,
+    0.49557247912372165
+  ],
+  "jitter_min": -0.019877245649695396,
+  "jitter_max": 0.019819337874650955,
+  "yaw_min": -2.971343994140625,
+  "yaw_max": 2.8756918907165527,
+  "painted_values_PNG": [
+    {
+      "samples": 1540,
+      "median_L": 31.280730858749877
+    },
+    {
+      "samples": 6659,
+      "median_L": 44.43766423569971
+    },
+    {
+      "samples": 224,
+      "median_L": 52.446874434593724
+    }
+  ],
+  "mesh_signed_volumes": [
+    0.046683646660028444,
+    0.04668633098068634,
+    0.024605978477758583
+  ],
+  "texture_colors": [
+    [
+      37844,
+      [
+        92,
+        74,
+        56
+      ]
+    ],
+    [
+      803739,
+      [
+        74,
+        59,
+        46
+      ]
+    ],
+    [
+      4663,
+      [
+        126,
+        121,
+        106
+      ]
+    ],
+    [
+      202330,
+      [
+        56,
+        44,
+        34
+      ]
+    ]
+  ],
+  "seam_mismatches": 0,
+  "closeup_distance_m": 2.644334,
+  "protected_before": "8FF624E7646D2F351BA88C0673824D9148DB6C51F617B99278F4B5816033F9C4",
+  "protected_after": "8FF624E7646D2F351BA88C0673824D9148DB6C51F617B99278F4B5816033F9C4",
+  "bench": [
+    {
+      "pos": "z01",
+      "fps_avg": 209.09266662597656,
+      "fps_p1": 164.05352783203125,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 263,
+      "tris": 5989695
+    },
+    {
+      "pos": "terrace",
+      "fps_avg": 219.79067993164062,
+      "fps_p1": 158.4287109375,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 321,
+      "tris": 6577494
+    },
+    {
+      "pos": "interior",
+      "fps_avg": 215.5186004638672,
+      "fps_p1": 158.21875,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 256,
+      "tris": 6479802
+    }
+  ],
+  "shots": {
+    "cam_play_1080": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "d7a33dc4d8dd6825a5ed26b69dc73f9ef59ddfdfac53e9560186e85c6a905233",
+      "fresh": true,
+      "magenta": 0
+    },
+    "fence_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "b1cbe8dde06749b7bef368cd7b891ef92cf6dce6af27e21c41543cbc3572a98b",
+      "fresh": true,
+      "magenta": 0
+    }
+  }
+}
