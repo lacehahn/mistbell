@@ -34,7 +34,7 @@ STEPS=(
   "FenceModelBuild.Run:19_fence_model"
   "PathWidthBendBuild.Run:20_path_width"
   "FenceRefineBuild.Run:21_fence_refine"
-  "PerformanceBuild.Run:22_performance"
+  "PerformanceBuild.RunClimb:22_performance"
 )
 
 fail=0

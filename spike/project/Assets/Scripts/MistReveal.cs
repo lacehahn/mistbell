@@ -44,8 +44,18 @@ public sealed class MistReveal : MonoBehaviour
         if (PlayerController.CaptureMode) enabled = false;
     }
 
+    float climbBaseY, climbTopY, climbDensityBase;
+    ChurchInterior climbInterior;
+
     void Start()
     {
+        climbInterior=FindFirstObjectByType<ChurchInterior>();
+        var spawn=ClimbRoute.Spawn;
+        if(player.ground.Raycast(new Ray(spawn+Vector3.up*500,Vector3.down),out var climbHit,1000))climbBaseY=climbHit.point.y+.035f;
+        if(!player.stairDeck.Raycast(new Ray(new Vector3(0,500,-10),Vector3.down),out var topHit,1000))throw new InvalidOperationException("Climb fog plateau support missing");
+        climbTopY=topHit.point.y;
+        climbDensityBase=RenderSettings.fogDensity;
+        Debug.Log(FormattableString.Invariant($"[CLIMB_FOG] density_base={climbDensityBase:F6} density_top=+24% density_top_value={climbDensityBase*1.24f:F6} height_span={climbTopY-climbBaseY:F3} per_10m_pct={240/(climbTopY-climbBaseY):F3} mode=Linear distance_scale_top={1/1.24f:F6}"));
         mistCamera = Camera.main.GetUniversalAdditionalCameraData();
         previousDepthTexture = mistCamera.requiresDepthTexture;
         mistCamera.requiresDepthTexture = true;
@@ -90,6 +100,15 @@ public sealed class MistReveal : MonoBehaviour
         RenderSettings.fogMode = FogMode.Linear;
         RenderSettings.fogStartDistance = Mathf.Lerp(FarStart, NearStart, t);
         RenderSettings.fogEndDistance = Mathf.Lerp(FarEnd, NearEnd, t);
+        // Gameplay-only height gain. Reveal demo owns its independent reference mist;
+        // indoor settings remain owned by ChurchInterior.
+        if(player.enabled && !PlayerController.CaptureMode && (climbInterior==null || !climbInterior.Contains(player.transform.position))) {
+            float gain=1+.24f*Mathf.InverseLerp(climbBaseY,climbTopY,player.transform.position.y);
+            RenderSettings.fogDensity=climbDensityBase*gain;
+            // Linear fog ignores fogDensity: scale both distances to increase optical density.
+            RenderSettings.fogStartDistance/=gain;
+            RenderSettings.fogEndDistance/=gain;
+        }
         RenderSettings.fogColor = Color.Lerp(farFog, nearFog, t);
         RenderSettings.ambientSkyColor = Color.Lerp(farSky, nearSky, t);
         if (cloudMaterial != null)

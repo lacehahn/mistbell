@@ -45,7 +45,7 @@ public sealed partial class PlayerController : MonoBehaviour
     Camera follow;
     Material sprite;
     float animationTime, demoSeconds, elapsed, maxGroundError;
-    int frames, misses;
+    int frames, misses, climbWalkBad;
     bool walkingDemo;
     FootprintTrail footprintTrail;
     DepthOfField dofOverride;
@@ -99,6 +99,7 @@ public sealed partial class PlayerController : MonoBehaviour
     void Start()
     {
         Debug.Log("[BOOT] PlayerController.Start begin");
+        Debug.Log("[CLIMB_CAM] look_start=1.20 look_end=1.45 y_start=2.1 y_end=2.6");
         // Only explicit walking supports: walls, coping and cheek tops are never ground.
         terraceSurfaces = Array.FindAll(stairRamp.transform.parent.GetComponentsInChildren<Collider>(),
             c => c == stairRamp || c == stairDeck || c.name.StartsWith("TerraceFill_", StringComparison.Ordinal) ||
@@ -156,6 +157,8 @@ public sealed partial class PlayerController : MonoBehaviour
         { suppressCinema=true; StartCoroutine(DemoAltar()); return; }
         if (Array.IndexOf(args, "-bench") >= 0)
         { suppressCinema = true; interiorAuto = true; StartCoroutine(Benchmark(args)); return; }
+        if (Array.IndexOf(args, "-demo-climb-feel") >= 0)
+        { suppressCinema=true; StartCoroutine(DemoClimbFeel()); return; }
         cinemaDemo = Array.IndexOf(args,"-demo-cinema")>=0;
         if(cinemaDemo) {
             var cinemaStart=new Vector3(0,0,-40);
@@ -278,6 +281,7 @@ public sealed partial class PlayerController : MonoBehaviour
             ? 1 : Mathf.Max(1, Mathf.CeilToInt(dt / .02f));
         float stepDt = dt / substeps;
         for (int i = 0; i < substeps; i++) grounded = Move(direction, sprint, stepDt);
+        if(walkingDemo && (!grounded || !SurfaceAt(transform.position,out var walkSupport) || Mathf.Abs(transform.position.y-walkSupport.point.y)>.02f))climbWalkBad++;
         ReportBlock(before, frameExpected, transform.position);
         if(TryArrivalCinema(previousZ)) { previousZ=transform.position.z; return; }
         previousZ=transform.position.z;
@@ -316,6 +320,7 @@ public sealed partial class PlayerController : MonoBehaviour
         sprite.SetFloat("_Frame", Moving ? Mathf.FloorToInt(animationTime * 10) % 6 : 0);
         if (walkingDemo && elapsed >= demoSeconds)
         {
+            Debug.Log($"[CLIMB_WALK6] samples={frames} bad={climbWalkBad}");
             maxPathCenterError=Mathf.Max(maxPathCenterError,ClimbRoute.DistanceToCenter(transform.position));
             Debug.Log(FormattableString.Invariant($"[WALK_ALIGN] max_offset={maxPathCenterError:F6}"));
             float distance = Vector3.Distance(walkStart, transform.position);
@@ -661,7 +666,7 @@ public sealed partial class PlayerController : MonoBehaviour
         // The .35m uphill look-ahead recognizes individual .18m treads; a higher
         // face is a wall. A pre-lifted foot already occupies the upcoming tread
         // height: keep that support when .35m spans two .34m tread boundaries.
-        bool probeFound = SurfaceAt(transform.position + direction * StepProbe, out var probe);
+        bool probeFound = SurfaceAt(transform.position + direction * (current.collider==pathSurface ? .30f : StepProbe), out var probe);
         if (!SurfaceAt(candidate, out var next)) { misses++; velocity = Vector3.zero; return false; }
         float supportY = Mathf.Max(current.point.y, transform.position.y);
         if (next.point.y - supportY > StepUpMax + .001f ||
@@ -676,7 +681,8 @@ public sealed partial class PlayerController : MonoBehaviour
         if (probeFound && probe.collider.name.StartsWith("TerraceStep_", StringComparison.Ordinal) &&
             probe.point.y > current.point.y && Vector3.Dot(direction, Vector3.up - current.normal) > -.001f)
             targetY = Mathf.Max(targetY, probe.point.y);
-        candidate.y = Mathf.MoveTowards(transform.position.y, targetY, StepLiftSpeed * dt);
+        candidate.y = next.collider==pathSurface && Mathf.Abs(targetY-transform.position.y)<=.18f
+            ? targetY : Mathf.MoveTowards(transform.position.y, targetY, StepLiftSpeed * dt);
         transform.position = candidate;
         maxGroundError = Mathf.Max(maxGroundError, Mathf.Abs(candidate.y - next.point.y));
         return true;
@@ -736,9 +742,10 @@ public sealed partial class PlayerController : MonoBehaviour
         CheckAutosave(inside);
         follow.fieldOfView=Mathf.MoveTowards(follow.fieldOfView,inside?50:followFov,Time.deltaTime*30);   // 38 装不下"地板+吊灯+天花板"，室内用 50 广角
         // 室内人眼机位只比脚高 1.75 m：看向 +3.2 会把角色和长椅全部推出画面，改看 +2.0（微仰但保人可见）。
-        float look=inside?2.0f:LookHeight;
+        float climbProgress=ClimbFeel.Progress(transform.position.z);
+        float look=inside?2.0f:Mathf.Lerp(LookHeight,1.45f,climbProgress);
         if (inside && lookUp) look = 10.2f;   // 抬头：保持机位与镜头，仅提高目标以纳入鼓座和穹顶
-        Vector3 target = transform.position + (inside?ChurchInterior.CameraOffset:FollowOffset);
+        Vector3 target = transform.position + (inside?ChurchInterior.CameraOffset:FollowOffset+Vector3.up*(.5f*climbProgress));
         Vector3 head = transform.position + Vector3.up * (inside?3.2f:look+.4f);
         Vector3 delta = target - head;
         float span = delta.magnitude;

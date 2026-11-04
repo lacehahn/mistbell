@@ -4,6 +4,13 @@ using UnityEngine;
 
 public static class PerformanceBuild
 {
+    public static void RunClimb()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/ArtSpike.unity");
+        ClimbFeelBuild.Apply();
+        Run();
+    }
+
     // Development enables the render counters; no profiler connection or deep profiling.
     public static void Run()
     {

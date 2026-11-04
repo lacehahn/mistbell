@@ -1,0 +1,18 @@
+阶石贴图（给 Lot 生成；回来命名 stone_step_tread.png / stone_step_riser.png 放到 spike/art-prompts/staged/）
+
+共用要求：1024²，正投影平铺、无透视、三阶明度、手绘扁平笔触、冷灰、无文字无水印。
+
+T —— 台阶踏面（人踩秃的石板，最重要）
+```
+Hand-painted HD-2D RPG worn stone stair tread, flat orthographic top-down, seamless tileable, square 1024. Broad worn stone tread surface with a slightly polished lighter oval where feet land, fine hairline cracks, shallow chipped edges, a few pebbles and grit collected in the corner. Cool grey limestone, three posterized levels #938E85, #7B766E, #615D57, wear highlights #ABA59B, joints #4B4842. Thin frost line along one edge (#D9E2EA, under 10%). Chunky hand-painted brush clusters 4-8 px, hard edges, no photographic grain, no soft gradients, no gloss, no directional lighting, no text, no watermark, no 3D render.
+```
+
+R —— 台阶踢面（立面，比踏面暗、更粗）
+```
+Hand-painted HD-2D RPG rough stone stair riser face, flat orthographic front view, seamless tileable, square 1024. Vertical stone face of a chiseled ashlar block, coarse tool marks, chipped arris on the top edge, hairline vertical cracks, a little snow packed at the bottom 8% of the frame. Cool grey limestone, three posterized levels #6F6A63, #5A554F, #847F76, joints #43403A. Chunky hand-painted strokes, hard edges, no photographic texture, no directional lighting, no gloss, no text, no watermark, no 3D render.
+```
+
+S —— 台阶积雪边（可选，加真实感）
+```
+Hand-painted HD-2D RPG snow drifts packed against a stone stair edge, flat orthographic top-down, seamless tileable, square 1024. Soft irregular snow lobes creeping over a stone edge from one side, snow covering 40-55%, a few boot-packed darker patches, thin crust lines, stone visible in the gaps. Snow #EDF3F8 with shadowed snow #CFDAE4, stone #7B766E. Chunky hand-painted snow lobes with hard-ish edges, no blur, no sparkle, no directional lighting, no text, no watermark, no 3D render.
+```
