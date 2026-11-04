@@ -1,0 +1,30 @@
+{
+  "build": true,
+  "material": true,
+  "protection": true,
+  "walk6": {
+    "rc": 0,
+    "bad_zero": true,
+    "distance": 17.733
+  },
+  "steps": {
+    "rc": 0,
+    "three_pass": true
+  },
+  "enter": {
+    "rc": 0
+  },
+  "reveal": {
+    "rc": 0
+  },
+  "bench": {
+    "rc": 0
+  },
+  "outdoor_fps": {
+    "z01": 217.1326904296875,
+    "terrace": 228.26768493652344
+  },
+  "climb_steps.png": true,
+  "play_view.png": true,
+  "pass": true
+}
