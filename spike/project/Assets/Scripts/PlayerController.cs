@@ -1128,6 +1128,7 @@ public sealed partial class PlayerController : MonoBehaviour
         InteriorBalanceAudit.Inside(interior, follow, lightingFrame);
         InteriorPewsAudit.Inside(interior, follow, lightingFrame);
         InteriorWindowsAudit.Inside(interior, follow, lightingFrame);
+        InteriorToneAudit.Inside(interior, follow, lightingFrame);
         Destroy(lightingFrame);
         // 抬头验证：按 F 的逻辑等价物，把看向点抬到穹顶中心，出一张 interior_lookup.png
         lookUp=true;
@@ -1144,6 +1145,7 @@ public sealed partial class PlayerController : MonoBehaviour
         }
         InteriorBalanceAudit.Dome(interior, follow, domeFrame);
         InteriorWindowsAudit.Dome(interior, follow, domeFrame);
+        InteriorToneAudit.Dome(interior, follow, domeFrame);
         Destroy(domeFrame);
         float headroomLuma=(float)(domeSum/domePixels);
         var windowKey=Array.Find(interior.lamps,l=>l.name=="Interior_WindowKey");
@@ -1173,7 +1175,7 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(.4f);
         bool pass=interiorLightPass && domeLightPass && ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
-            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==18 && interior.shafts.Length==3 &&
+            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==20 && interior.shafts.Length==3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;
         Debug.Log($"[INT_PASS] light={interiorLightPass} domeLight={domeLightPass} ceilingSeen={ceilingSeen} " +
             $"domeSeen={domeSeen} fx={ceilingFx:F3} visible={InteriorVisibility()} obstacles={TestInteriorObstacles()} " +
@@ -1230,6 +1232,8 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSecondsRealtime(1);yield return new WaitForEndOfFrame();
         string path=InteriorShot("pews_closeup");
         Debug.Log(FormattableString.Invariant($"[PEWS_SHOT] distance_m={Vector3.Distance(target,go.transform.position):F3} path={path}"));
+        var materialFrame=ScreenCapture.CaptureScreenshotAsTexture();
+        InteriorMaterialsAudit.Pews(interior,camera,materialFrame);Destroy(materialFrame);
         // Rear-side 45-degree inspection, using only this temporary camera.
         go.transform.position=target+new Vector3(1, .48f, -1).normalized*4;
         go.transform.LookAt(target);

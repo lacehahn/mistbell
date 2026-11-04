@@ -1,0 +1,107 @@
+{
+  "accepted": false,
+  "checks": {
+    "build": true,
+    "protected": true,
+    "pew_base": true,
+    "grain": true,
+    "legs_ends": true,
+    "rail": true,
+    "stone_base": true,
+    "stone_luma_delta": true,
+    "stone_joints": true,
+    "stone_specular": true,
+    "flames": true,
+    "yellow_strip": false,
+    "entry": true,
+    "colliders": true,
+    "budget": true,
+    "shots": true,
+    "fresh_benchmark": true,
+    "no_runtime_exceptions": true,
+    "four_tags": true
+  },
+  "pew": {
+    "base": "#8A6544",
+    "grain_period": 0.2,
+    "contrast": 0.06,
+    "leg_darker": 0.1299999853994931,
+    "rail_brighter": 0.11000001485875543
+  },
+  "altar": {
+    "base": "#8C8478",
+    "luma_delta_percentage_points": 10.333649170200005,
+    "joint_contrast": 0.2
+  },
+  "candles": {
+    "flames": 15,
+    "halos": 15,
+    "flame_alpha": 0.75,
+    "halo_alpha": 0.1
+  },
+  "yellow": [
+    {
+      "name": "Interior_Candle_01",
+      "material": "M_InteriorGold",
+      "pixels": 90,
+      "luma": 0.4611163311546841,
+      "max_luma": 1.0
+    },
+    {
+      "name": "Interior_Candle_03",
+      "material": "M_InteriorGold",
+      "pixels": 76,
+      "luma": 0.47449936016511884,
+      "max_luma": 0.5544690196078431
+    },
+    {
+      "name": "Interior_RoyalDoor_Frame",
+      "material": "M_InteriorV2Gold",
+      "pixels": 58,
+      "luma": 0.5673840297498308,
+      "max_luma": 0.6288603921568627
+    }
+  ],
+  "interior": {
+    "pos": "interior",
+    "fps_avg": 218.32717895507812,
+    "fps_p1": 163.2071533203125,
+    "vram_mb": 489.8719787597656,
+    "drawcalls": 250,
+    "tris": 6481200
+  },
+  "shots": {
+    "pews_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "b8cf81f7847533df8be4161b07257d6a8cdff91ab0bdf709da72f8d977d18fc6",
+      "fresh": true
+    },
+    "altar_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "69053fbdd5bd8ef4e519f0bfcdc76f8a4fbec976e9d455daef81c57fbe2eeb6d",
+      "fresh": true
+    },
+    "interior_inside": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "f53a232c050401789c29b22ceca3a76a641f5f7aa7a74c9a08668eb2491b79a2",
+      "fresh": true
+    }
+  },
+  "logs": [
+    "[PEW_MAT] base=#8A6544 shadow=#5E4230 grain_period=0.2 contrast=0.06 leg_darker=0.13 end_darker=0.13 rail_brighter=0.11 wear_width=0.01 wear_brighter=0.08",
+    "[ALTAR_STONE] base=#8C8478 warm_delta_vs_pew=10.334 hue=cool joint_contrast=0.20 course_height=0.22 joint_width=0.012 roughness=0.85 specular=0.05 atlas_preserved=true",
+    "[CANDLE_GLOW] flames=15 flames_glow=15 halo_alpha=0.10 flame_alpha=0.75 width=0.05 height=0.07 halo_size=0.16 tip_gap=0.03 lamps=20",
+    "[MATERIALS_PROTECTED] floor_exterior_camera_royal_door_icons_pew_geometry_colliders=true",
+    "[INT_PASS] light=True domeLight=True ceilingSeen=True domeSeen=True fx=0.787 visible=True obstacles=True walked=True z=0.43 dy=0.000 fov=50.00 lamps=20 shafts=3",
+    "[YELLOW_STRIP] name=Interior_RoyalDoor_Frame material=M_InteriorV2Gold luma=0.56738 max_luma=0.62886 pixels=58 roi=left_vertical_lower_half identity=royal_door_gilt_frame space=display_rec709"
+  ]
+}

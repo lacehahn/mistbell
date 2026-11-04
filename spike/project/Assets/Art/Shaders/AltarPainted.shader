@@ -3,6 +3,13 @@ Shader "Mistbell/AltarPainted"
 {
     Properties
     {
+        _StoneEnabled("Stone finish enabled", Float) = 0
+        _StoneColor("Stone base", Color) = (.549,.518,.471,1)
+        _JointContrast("Joint contrast", Float) = .20
+        _JointWidth("Joint width metres", Float) = .012
+        _CourseHeight("Course height metres", Float) = .22
+        _FloorY("Floor height", Float) = .37402
+        _Specular("Stone specular", Float) = .05
         _ClothAlbedoScale("Cloth albedo scale", Range(0,4)) = 1.2
         _AltarUVScale("Original atlas UV scale", Float) = 1
         // Specular vs Metallic workflow
@@ -178,6 +185,9 @@ Shader "Mistbell/AltarPainted"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
+            float _StoneEnabled, _JointContrast, _JointWidth, _CourseHeight, _FloorY, _Specular;
+            float4 _StoneColor;
+            static float3 altarPositionWS;
             float _ClothAlbedoScale;
             float _AltarUVScale;
             void InitializeAltarSurfaceData(float2 uv, out SurfaceData surfaceData)
@@ -185,9 +195,35 @@ Shader "Mistbell/AltarPainted"
                 InitializeStandardLitSurfaceData(uv, surfaceData);
                 half cloth = step(uv.x * _AltarUVScale, 0.5) * step(uv.y * _AltarUVScale, 0.5);
                 surfaceData.albedo *= lerp(1.0h, _ClothAlbedoScale, cloth);
+                float2 atlasUV = uv * _AltarUVScale;
+                // Original semantic atlas quadrants; paintings occupy their own upper atlas area.
+                bool stone = (atlasUV.x < .5 && atlasUV.y >= .5 && atlasUV.y < 1)
+                          || (atlasUV.x >= .5 && atlasUV.x < 1 && atlasUV.y < .5);
+                if (_StoneEnabled > .5 && stone)
+                {
+                    float brush = dot(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uv).rgb, float3(.2126,.7152,.0722));
+                    float y = altarPositionWS.y - _FloorY;
+                    float row = floor(y / _CourseHeight);
+                    float h = min(frac(y/_CourseHeight),1-frac(y/_CourseHeight))*_CourseHeight;
+                    float x = altarPositionWS.x + altarPositionWS.z + fmod(row,2)*.22;
+                    float v = min(frac(x/.44),1-frac(x/.44))*.44;
+                    float aa = max(fwidth(y), .0005);
+                    float joint = 1-smoothstep(_JointWidth*.5-aa,_JointWidth*.5+aa,min(h,v));
+                    surfaceData.albedo = _StoneColor.rgb * _BaseColor.rgb * lerp(.94,1.06,brush) * (1-_JointContrast*joint);
+                    surfaceData.smoothness = .15;
+                    surfaceData.specular = _Specular.xxx;
+                    surfaceData.metallic = 0;
+                }
             }
             #define InitializeStandardLitSurfaceData InitializeAltarSurfaceData
+            #define LitPassFragment OriginalAltarFragment
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
+            #undef LitPassFragment
+            void LitPassFragment(Varyings input, out half4 outColor : SV_Target0)
+            {
+                altarPositionWS = input.positionWS;
+                OriginalAltarFragment(input, outColor);
+            }
             ENDHLSL
         }
 

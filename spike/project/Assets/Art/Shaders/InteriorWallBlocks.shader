@@ -424,16 +424,31 @@ void LitPassFragment(
     float3 an = abs(input.normalWS);
     float u = an.x > an.z ? input.positionWS.z : input.positionWS.x;
     float row = floor(input.positionWS.y / 0.48);
-    float2 cell = float2((u + fmod(abs(row), 2.0) * 0.55) / 1.10, input.positionWS.y / 0.48);
-    float2 id = floor(cell);
-    float2 edge = min(frac(cell), 1.0-frac(cell)) * float2(1.10, 0.48);
+    // Seeded row offsets, and one 1.5-width header in each six-course band.
+    float offset = 0.1 + 0.2 * frac(sin(row * 78.233) * 43758.5453);
+    float course = u / 1.10 + offset + fmod(abs(row),2.0)*0.5;
+    float band = floor(row/6.0);
+    float headerRow = band*6.0 + 3.0;
+    float header = step(abs(row-headerRow),0.1);
+    float start = floor(frac(sin(band*31.7)*1731.31)*5.0)-4.0;
+    float widened = header * step(start,course) * (1.0-step(start+1.5,course));
+    float adjusted = course - header * step(start+1.5,course)*0.5;
+    float col = widened > 0.5 ? start : floor(adjusted);
+    float horizontalEdge = widened > 0.5 ? min(course-start,start+1.5-course)*1.10 : min(frac(adjusted),1.0-frac(adjusted))*1.10;
+    float2 id = float2(col,row);
+    float2 edge = float2(horizontalEdge,min(frac(input.positionWS.y/0.48),1.0-frac(input.positionWS.y/0.48))*0.48);
     float hash = frac(sin(dot(id,float2(127.1,311.7)))*43758.5453);
-    float tone = 0.92 + floor(hash * 3.0) * 0.08;
+    float tone = 0.88 + hash * 0.24;
     float seam = min(edge.x,edge.y);
     float aa = max(fwidth(seam),0.0005);
     float factor = tone * lerp(0.80,1.0,smoothstep(0.02-aa,0.02+aa,seam));
     surfaceData.albedo *= factor;
-    surfaceData.emission *= factor;
+    // Local wall bounce: the window-facing wall receives a stronger neutral bounce.
+    // Opposite normals retain cooler, low-energy fill; rear sanctuary is the intermediate focus.
+    float bounce = lerp(0.17,2.08,saturate(input.normalWS.x*0.5+0.5));
+    if(input.positionWS.z>7.0)bounce=1.02;
+    surfaceData.emission *= factor * bounce;
+    surfaceData.emission.b *= lerp(1.0,1.025,saturate(input.normalWS.x*0.5+0.5));
 
 
 #ifdef LOD_FADE_CROSSFADE

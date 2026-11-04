@@ -1,0 +1,84 @@
+{
+  "accepted": true,
+  "checks": {
+    "wall_lit": true,
+    "wall_shadow": true,
+    "split": true,
+    "wall_chroma": true,
+    "ceiling": true,
+    "layer": true,
+    "altar": true,
+    "protected_digest": true,
+    "build": true,
+    "protected": true,
+    "entry": true,
+    "stem": true,
+    "painting": true,
+    "fresh_benchmark": true,
+    "runtime_errors": true,
+    "performance": true,
+    "screenshots": true,
+    "block_layout": true,
+    "lamps_chains": true
+  },
+  "measurements": {
+    "left_wall": {
+      "pixels": 26561,
+      "L": 37.806986290434224,
+      "a": 3.426765009950419,
+      "b": 10.981917100399976
+    },
+    "right_wall": {
+      "pixels": 26561,
+      "L": 22.71876211848336,
+      "a": 2.243027779089969,
+      "b": 8.097841310857051
+    },
+    "ceiling": {
+      "pixels": 43390,
+      "L": 16.167889330333796,
+      "a": 0.47424409877467766,
+      "b": 6.47652515789567
+    },
+    "altar_wall": {
+      "pixels": 570,
+      "L": 29.016497778351933,
+      "a": 3.4847621414379093,
+      "b": 11.915551004594713
+    }
+  },
+  "interior": {
+    "pos": "interior",
+    "fps_avg": 218.60870361328125,
+    "fps_p1": 160.09288024902344,
+    "vram_mb": 489.8719787597656,
+    "drawcalls": 244,
+    "tris": 6478896
+  },
+  "shots": {
+    "interior_inside": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "7e5d7c3a6c4d6c18ec71e910e13b5a410f28fe744fb1522eafc4c3b58f7c0f80",
+      "fresh": true
+    },
+    "windows_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "5d842bbb13ae7f9b439ef76905418bd3957aa466204a99300b421b37331723e3",
+      "fresh": true
+    },
+    "interior_lookup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "396a705ec9b1ac896f0e0dd4659a38cbd987dd87a0f4fbb5584e8bf6aeb4ca31",
+      "fresh": true
+    }
+  }
+}
