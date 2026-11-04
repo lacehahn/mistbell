@@ -1,0 +1,63 @@
+[PATH_TEX] a=path_stone_a snow=path_stone_snow scale_m=2.4 blend_band=8 mipmap=true aniso=4
+[PATH_WHITE] name=Paving_*/centre_gap material=M_Snow2Terrain source=exposed_snow_between_rows gap_before_m=0.060 gap_after_m=0 removed=true
+[PATH_ALTITUDE] terrace_bottom=-1.35763 bare_below=-11.35763 snow_above=-3.35763 tiles=270 treads=9 top_triangles=720 protected_unchanged=true
+[CAM_TEST] phase=0 seconds=6.000 samples=352 bad=0 ground_gap=3.57527 wall_gap=3.99951 turned=true
+[CAM_TEST] phase=1 seconds=6.017 samples=360 bad=0 ground_gap=3.10025 wall_gap=3.99951 turned=true
+[REVEAL] fog=120..420→20..120 color=#CBD8E4→#EAF0F6 bell_at=45m
+[REVEAL] bell pulse once rise=1.2s fall=0.8s bloom=x1.6 vignette=x1.3
+[REVEAL] bell pulse restored
+[PATH_CLOSEUP] distance_m=3.000 target=(-6.000, -16.321, -110.000) size=1920x1080 post=false
+[REVEAL] fog=120..420→20..120 color=#CBD8E4→#EAF0F6 bell_at=45m
+[PLAY] walk_start=(-18.000,-28.835,-205.000) walk_end=(-18.000,-26.367,-189.804) distance=15.395 row=3 fps_ok=true
+[PLAY] ground_error_max=0.000000 raycast_misses=0 fps=60.00 animation_fps=10 frames=6
+[REVEAL] fog=120..420→20..120 color=#CBD8E4→#EAF0F6 bell_at=45m
+[INT_PASS] light=True domeLight=True ceilingSeen=True domeSeen=True fx=0.785 visible=True obstacles=True walked=True z=0.42 dy=0.000 fov=50.00 lamps=20 shafts=3
+[REVEAL] fog=120..420→20..120 color=#CBD8E4→#EAF0F6 bell_at=45m
+[REVEAL] bell pulse once rise=1.2s fall=0.8s bloom=x1.6 vignette=x1.3
+[REVEAL] bell pulse restored
+[REVEAL] fog=120..420→20..120 color=#CBD8E4→#EAF0F6 bell_at=45m
+[REVEAL] d=80 fogStart=112.800 fogEnd=398.400 churchEdge=0.006335315
+[REVEAL] screenshot=/Users/lance/workspace/mistbell/spike/project/Shots/reveal_80.png roi_bottom_left=782,386,362,303 metric=mean_abs_RGB_xy/255
+[REVEAL] d=50 fogStart=93.600 fogEnd=340.800 churchEdge=0.007284045
+[REVEAL] screenshot=/Users/lance/workspace/mistbell/spike/project/Shots/reveal_50.png roi_bottom_left=654,284,630,495 metric=mean_abs_RGB_xy/255
+[REVEAL] d=115 fogStart=120.000 fogEnd=420.000 churchEdge=0.007159066
+[REVEAL] screenshot=/Users/lance/workspace/mistbell/spike/project/Shots/reveal_115.png roi_bottom_left=817,411,289,247 metric=mean_abs_RGB_xy/255
+[REVEAL] bell pulse once rise=1.2s fall=0.8s bloom=x1.6 vignette=x1.3
+[REVEAL] bell pulse restored
+[REVEAL] d=34 fogStart=66.533 fogEnd=259.600 churchEdge=0.008067886
+[REVEAL] screenshot=/Users/lance/workspace/mistbell/spike/project/Shots/reveal_34.png roi_bottom_left=533,161,893,699 metric=mean_abs_RGB_xy/255
+[REVEAL] near_dist=34 near_height=7.5 fov=48 church_height_pct=0.646993 top_margin=0.203720 bottom_margin=0.149287 depression_deg=-12.733 gate=pass
+[REVEAL] gate=pass ratio=1.273478 near_dist=34 church_height_pct=0.646993 ratio20_80=1.273478 bell_once=True pulse_restored=True
+[REVEAL] far_h_pct=0.227751 far_contrast=0.052669 far_dist=115 near_h_pct=0.646993 gate=pass
+[BENCH] pos=z01 fps_avg=212.32 fps_p1=165.37 drawcall=281
+[BENCH] pos=terrace fps_avg=222.98 fps_p1=165.73 drawcall=328
+[BENCH] pos=interior fps_avg=215.78 fps_p1=161.04 drawcall=256
+camera bad=0
+closeup bad=0
+walk bad=0
+interior bad=0
+reveal bad=0
+bench bad=0
+[CHECK] build=true
+[CHECK] protected=true
+[CHECK] textures=true
+[CHECK] white=true
+[CHECK] altitude=true
+[CHECK] treads=true
+[CHECK] camera=true
+[CHECK] closeup=true
+[CHECK] walk=true
+[CHECK] interior=true
+[CHECK] reveal=true
+[CHECK] outdoor_fps=true
+[CHECK] terrace_drawcall=true
+[CHECK] bad_zero=true
+[CHECK] import_path_stone_a.jpg=true
+[CHECK] import_path_stone_snow.jpg=true
+[CHECK] import_path_stone_steps_tread.png=true
+[CHECK] path_closeup=true
+[CHECK] cam_play_1080=true
+[CHECK] path_lower=true
+[CHECK] path_upper=true
+[CHECK] path_steps=true
+pass=true

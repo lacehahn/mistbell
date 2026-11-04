@@ -1,0 +1,14 @@
+{
+    "protected_before": "5D5662404EFAA302F147381EF7E311715A467312F051F18852D5FD1AD03E7918",
+    "protected_after": "5D5662404EFAA302F147381EF7E311715A467312F051F18852D5FD1AD03E7918",
+    "terrace_bottom": -1.3576312065124512,
+    "snow_line": -11.35763168334961,
+    "blend_band": 8.0,
+    "scale_m": 2.4000000953674318,
+    "center_gap_before": 0.060000061988830569,
+    "center_gap_after": 0.0,
+    "tiles": 270,
+    "treads": 9,
+    "top_triangles": 720,
+    "edge_removed": true
+}

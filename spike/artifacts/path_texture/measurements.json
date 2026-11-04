@@ -1,0 +1,117 @@
+{
+  "pass": true,
+  "checks": {
+    "build": true,
+    "protected": true,
+    "textures": true,
+    "white": true,
+    "altitude": true,
+    "treads": true,
+    "camera": true,
+    "closeup": true,
+    "walk": true,
+    "interior": true,
+    "reveal": true,
+    "outdoor_fps": true,
+    "terrace_drawcall": true,
+    "bad_zero": true,
+    "import_path_stone_a.jpg": true,
+    "import_path_stone_snow.jpg": true,
+    "import_path_stone_steps_tread.png": true,
+    "path_closeup": true,
+    "cam_play_1080": true,
+    "path_lower": true,
+    "path_upper": true,
+    "path_steps": true
+  },
+  "bad": {
+    "camera": 0,
+    "closeup": 0,
+    "walk": 0,
+    "interior": 0,
+    "reveal": 0,
+    "bench": 0
+  },
+  "assets": {
+    "protected_before": "5D5662404EFAA302F147381EF7E311715A467312F051F18852D5FD1AD03E7918",
+    "protected_after": "5D5662404EFAA302F147381EF7E311715A467312F051F18852D5FD1AD03E7918",
+    "terrace_bottom": -1.3576312065124512,
+    "snow_line": -11.35763168334961,
+    "blend_band": 8.0,
+    "scale_m": 2.4000000953674316,
+    "center_gap_before": 0.060000061988830566,
+    "center_gap_after": 0.0,
+    "tiles": 270,
+    "treads": 9,
+    "top_triangles": 720,
+    "edge_removed": true
+  },
+  "bench": [
+    {
+      "pos": "z01",
+      "fps_avg": 212.31556701660156,
+      "fps_p1": 165.36550903320312,
+      "vram_mb": 499.0079040527344,
+      "drawcalls": 281,
+      "tris": 5900028
+    },
+    {
+      "pos": "terrace",
+      "fps_avg": 222.98355102539062,
+      "fps_p1": 165.7294464111328,
+      "vram_mb": 499.0079040527344,
+      "drawcalls": 328,
+      "tris": 6445598
+    },
+    {
+      "pos": "interior",
+      "fps_avg": 215.77879333496094,
+      "fps_p1": 161.0363311767578,
+      "vram_mb": 499.0079040527344,
+      "drawcalls": 256,
+      "tris": 6479808
+    }
+  ],
+  "shots": {
+    "path_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "magenta_px": 0,
+      "sha256": "ca62238b668cb90e56a0cde1d1c1a3e6971b8555fc30ea875acc0a8903a7d400"
+    },
+    "cam_play_1080": {
+      "size": [
+        1920,
+        1080
+      ],
+      "magenta_px": 0,
+      "sha256": "3a00c1e169e973aab9c3c84041c82b4ddbd98f6f327f8d7d70fe1d55c382f19e"
+    },
+    "path_lower": {
+      "size": [
+        1920,
+        1080
+      ],
+      "magenta_px": 0,
+      "sha256": "c48c945c6d8b15417be496bd73824be62c340fefe1a2e4ad9a9db7352cdb8504"
+    },
+    "path_upper": {
+      "size": [
+        1920,
+        1080
+      ],
+      "magenta_px": 0,
+      "sha256": "0d58e08b176e23c8a70c5991125d55f796d26416c074b5071b6ea3059fb17ddf"
+    },
+    "path_steps": {
+      "size": [
+        1920,
+        1080
+      ],
+      "magenta_px": 0,
+      "sha256": "3ae23f56ce9cb8a071ab27df724e3fd3db590f6d25e06909c267c0145b1b0509"
+    }
+  }
+}
