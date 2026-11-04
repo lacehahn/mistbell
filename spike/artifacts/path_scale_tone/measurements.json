@@ -1,0 +1,393 @@
+{
+  "pass": false,
+  "checks": {
+    "build": true,
+    "protected": true,
+    "wood_geometry": true,
+    "scale": true,
+    "repeat": true,
+    "path_gain": true,
+    "path_L": false,
+    "fence_b": true,
+    "fence_sat_drop": false,
+    "fence_L_drop": true,
+    "cap": true,
+    "rail_snow": true,
+    "pilgrim_multiplier": true,
+    "contrast": false,
+    "demos": true,
+    "bad_zero": true,
+    "fps": true,
+    "drawcall": true,
+    "shots": true
+  },
+  "pixels": {
+    "cam_play_1080": {
+      "path": {
+        "samples": 38743,
+        "L": 44.81520438603182,
+        "b": 3.944006934006928,
+        "sat": 0.11008139772124913
+      },
+      "local_path": {
+        "samples": 4696,
+        "L": 44.39966960285576,
+        "b": 4.665786226107821,
+        "sat": 0.13100677366660468
+      },
+      "pilgrim_dark": {
+        "samples": 753,
+        "L": 38.04413805545495,
+        "b": 11.453327321116157,
+        "sat": 0.32337222740140853
+      }
+    },
+    "path_closeup": {
+      "path": {
+        "samples": 176991,
+        "L": 55.872324797606744,
+        "b": 1.8415162961788631,
+        "sat": 0.05309879997329569
+      },
+      "local_path": {
+        "samples": 0,
+        "L": 0,
+        "b": 0,
+        "sat": 0
+      },
+      "pilgrim_dark": {
+        "samples": 0,
+        "L": 0,
+        "b": 0,
+        "sat": 0
+      }
+    },
+    "fence_closeup": {
+      "samples": 4012,
+      "L": 39.67843920336553,
+      "b": -1.5995198780733424,
+      "sat": 0.4079534679995386
+    }
+  },
+  "fence_before": {
+    "samples": 4012,
+    "L": 41.99762049370085,
+    "b": 23.167615904057648,
+    "sat": 0.5187831346679759
+  },
+  "sat_drop": 0.21363390453964726,
+  "L_drop": 0.05522173073312986,
+  "cap_height_range": [
+    0.049999237060546875,
+    0.05000019073486328
+  ],
+  "rail_snow_range": [
+    0.029998839761742363,
+    0.03000352455103708
+  ],
+  "repeat_score": 0.17768934776431072,
+  "repeat_correlations": [
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 1,
+      "shift": [
+        1.078157944040954,
+        -0.8124502643483877
+      ],
+      "correlation": 0.150770888152336
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 2,
+      "shift": [
+        2.156315888081908,
+        -1.6249005286967755
+      ],
+      "correlation": -0.014694603547443837
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 3,
+      "shift": [
+        3.2344738321228625,
+        -2.437350793045163
+      ],
+      "correlation": 9.406939297291274e-05
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 1,
+      "shift": [
+        0.8124502643483877,
+        1.078157944040954
+      ],
+      "correlation": 0.13318593310459734
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 2,
+      "shift": [
+        1.6249005286967755,
+        2.156315888081908
+      ],
+      "correlation": -0.010834816226129886
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 3,
+      "shift": [
+        2.437350793045163,
+        3.2344738321228625
+      ],
+      "correlation": 0.012725982767708435
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 1,
+      "shift": [
+        1.512142979019571,
+        1.1394814366737556
+      ],
+      "correlation": -0.028172094726572405
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 2,
+      "shift": [
+        3.024285958039142,
+        2.278962873347511
+      ],
+      "correlation": -0.03544327869123365
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 3,
+      "shift": [
+        4.536428937058713,
+        3.4184443100212665
+      ],
+      "correlation": 0.002939704300616859
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 1,
+      "shift": [
+        -1.1394814366737556,
+        1.512142979019571
+      ],
+      "correlation": 0.00019057308451024115
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 2,
+      "shift": [
+        -2.278962873347511,
+        3.024285958039142
+      ],
+      "correlation": -0.005565603076069721
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 3,
+      "shift": [
+        -3.4184443100212665,
+        4.536428937058713
+      ],
+      "correlation": -0.013623774409072179
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 1,
+      "shift": [
+        1.078157944040954,
+        -0.8124502643483877
+      ],
+      "correlation": 0.17768934776431072
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 2,
+      "shift": [
+        2.156315888081908,
+        -1.6249005286967755
+      ],
+      "correlation": 0.012767991608222687
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 3,
+      "shift": [
+        3.2344738321228625,
+        -2.437350793045163
+      ],
+      "correlation": 0.0059552388987939315
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 1,
+      "shift": [
+        0.8124502643483877,
+        1.078157944040954
+      ],
+      "correlation": 0.17384205659364826
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 2,
+      "shift": [
+        1.6249005286967755,
+        2.156315888081908
+      ],
+      "correlation": 0.021445457409627798
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 3,
+      "shift": [
+        2.437350793045163,
+        3.2344738321228625
+      ],
+      "correlation": -0.013105713421809386
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 1,
+      "shift": [
+        1.512142979019571,
+        1.1394814366737556
+      ],
+      "correlation": 0.024339961845689945
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 2,
+      "shift": [
+        3.024285958039142,
+        2.278962873347511
+      ],
+      "correlation": -0.009991440838304022
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 3,
+      "shift": [
+        4.536428937058713,
+        3.4184443100212665
+      ],
+      "correlation": -0.010776283472271962
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 1,
+      "shift": [
+        -1.1394814366737556,
+        1.512142979019571
+      ],
+      "correlation": -0.001340323927706494
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 2,
+      "shift": [
+        -2.278962873347511,
+        3.024285958039142
+      ],
+      "correlation": 0.02192870696312875
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 3,
+      "shift": [
+        -3.4184443100212665,
+        4.536428937058713
+      ],
+      "correlation": 0.02125460425683945
+    }
+  ],
+  "delta_L": 6.355531547400808,
+  "bad": {
+    "camera": 0,
+    "closeup": 0,
+    "fence": 0,
+    "walk": 0,
+    "interior": 0,
+    "reveal": 0,
+    "bench": 0
+  },
+  "bench": [
+    {
+      "pos": "z01",
+      "fps_avg": 212.45135498046875,
+      "fps_p1": 166.11610412597656,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 207,
+      "tris": 5945202
+    },
+    {
+      "pos": "terrace",
+      "fps_avg": 216.93438720703125,
+      "fps_p1": 151.2980194091797,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 276,
+      "tris": 6546382
+    },
+    {
+      "pos": "interior",
+      "fps_avg": 215.9635009765625,
+      "fps_p1": 155.9366912841797,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 256,
+      "tris": 6479808
+    }
+  ],
+  "shots": {
+    "cam_play_1080": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "5d0254d27e3ac0f3fab6fad563c8372fb489e0dbf3db68e7a77fe23b22739781",
+      "fresh": true
+    },
+    "path_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "34f5439b4c8227ad5e8b6a2d88888c51570c009eda4d0b9d1f961906db497593",
+      "fresh": true
+    },
+    "fence_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "c23c177d269689e0bf9d87daeaf154b743c1757d3d9b667c2da388e46f723770",
+      "fresh": true
+    }
+  }
+}

@@ -22,6 +22,8 @@ public sealed partial class PlayerController : MonoBehaviour
     const float Acceleration = 12f, Deceleration = 18f, TurnSpeed = 540f;
     Vector3 velocity;
     Collider[] terraceSurfaces;
+    MeshCollider pathSurface;
+    float maxPathCenterError;
     bool stairsDemo, towerDemo, towerPromptShown, testingBarriers;
     Interactable towerPoi;
     int blockFrame = -1, blockLogCount;
@@ -73,13 +75,24 @@ public sealed partial class PlayerController : MonoBehaviour
         Application.runInBackground = true;
         lastTrailPos = transform.position;
         Debug.Log("[BOOT] PlayerController.Awake begin");
-        if (CaptureMode) { enabled = false; return; }
+        pathSurface=GameObject.Find("Paving_Surface")?.GetComponent<MeshCollider>();
+        Physics.SyncTransforms();
+        if (CaptureMode) {
+            var reference=transform.position;
+            reference.x=ClimbRoute.CenterX(reference.z);
+            if(pathSurface!=null && pathSurface.Raycast(new Ray(reference+Vector3.up*500,Vector3.down),out var referenceHit,1000))reference.y=referenceHit.point.y;
+            transform.position=reference;
+            Debug.Log(FormattableString.Invariant($"[SPAWN] dist_to_center={ClimbRoute.DistanceToCenter(reference):F6} mode=reference"));
+            enabled = false; return;
+        }
         gameObject.layer = PlayerLayer;
-        // Runtime spawn only: screenshot pilgrim and the ShotRig table are untouched.
+        // Runtime and reference-shot positions share the authored road centerline.
         var spawn = ClimbRoute.Spawn;
         if (ground.Raycast(new Ray(spawn + Vector3.up * 500, Vector3.down), out var spawnHit, 1000))
             spawn.y = spawnHit.point.y;
+        if(pathSurface!=null && pathSurface.Raycast(new Ray(spawn+Vector3.up*500,Vector3.down),out var pathHit,1000))spawn.y=pathHit.point.y;
         transform.position = spawn;
+        Debug.Log(FormattableString.Invariant($"[SPAWN] dist_to_center={ClimbRoute.DistanceToCenter(spawn):F6} position={spawn.ToString("F3")}"));
         audioDirector = gameObject.AddComponent<AudioDirector>();
     }
 
@@ -94,7 +107,7 @@ public sealed partial class PlayerController : MonoBehaviour
             c => c.gameObject.layer == BlockerLayer && c.enabled && !c.isTrigger);
         interior = FindFirstObjectByType<ChurchInterior>();
         Physics.SyncTransforms();
-        Debug.Log("[MOVE] step_up_max=0.28 ramp=true accel=12 decel=18 spawn=(-18,-205)");
+        Debug.Log("[MOVE] step_up_max=0.28 ramp=true accel=12 decel=18 spawn=centerline_z_-205");
         GetComponent<PilgrimAnimator>().enabled = false;
         sprite = GetComponent<MeshRenderer>().material;
         follow = Camera.main;
@@ -229,7 +242,8 @@ public sealed partial class PlayerController : MonoBehaviour
         else if (walkingDemo)
         {
             dt = Mathf.Min(dt, demoSeconds - elapsed);
-            direction = Vector3.forward;
+            direction = !stairsDemo && !churchDemo && !towerDemo
+                ? new Vector3(ClimbRoute.CenterX(transform.position.z+1)-transform.position.x,0,1).normalized : Vector3.forward;
             if (towerDemo)
             {
                 // Walk across the open front plaza before approaching the tower.
@@ -254,6 +268,7 @@ public sealed partial class PlayerController : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.F) && interior != null && interior.Contains(transform.position))
                 lookUp = !lookUp;
         }
+        if(walkingDemo && !stairsDemo && !churchDemo && !towerDemo)maxPathCenterError=Mathf.Max(maxPathCenterError,ClimbRoute.DistanceToCenter(transform.position));
         Vector3 before = transform.position;
         frameExpected = Vector3.zero;
         blockingHit = default;
@@ -301,6 +316,8 @@ public sealed partial class PlayerController : MonoBehaviour
         sprite.SetFloat("_Frame", Moving ? Mathf.FloorToInt(animationTime * 10) % 6 : 0);
         if (walkingDemo && elapsed >= demoSeconds)
         {
+            maxPathCenterError=Mathf.Max(maxPathCenterError,ClimbRoute.DistanceToCenter(transform.position));
+            Debug.Log(FormattableString.Invariant($"[WALK_ALIGN] max_offset={maxPathCenterError:F6}"));
             float distance = Vector3.Distance(walkStart, transform.position);
             float fps = frames / elapsed;
             // fps_ok verifies the requested 10 fps animation clock and sufficient render samples.
@@ -596,6 +613,7 @@ public sealed partial class PlayerController : MonoBehaviour
         // Indoors the flat floor owns support; the underlying hillside cannot win a highest-ray test.
         if(interior!=null && interior.SupportAt(position,out hit)) return true;
         bool found = ground.Raycast(ray, out hit, 1000);
+        if(pathSurface!=null && ClimbRoute.DistanceToCenter(position)<=ClimbRoute.PavingWidth*.5f && pathSurface.Raycast(ray,out var roadHit,1000) && (!found || roadHit.point.y>hit.point.y)) {hit=roadHit;found=true;}
         foreach (var surface in terraceSurfaces)
         {
             if (!surface.enabled || !surface.gameObject.activeInHierarchy) continue;

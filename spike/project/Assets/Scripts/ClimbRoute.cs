@@ -5,7 +5,7 @@ using System.Collections.Generic;
 public static class ClimbRoute
 {
     public const float Width = 5f, Depth = .25f;
-    public static readonly Vector3 Spawn = new Vector3(-18, 0, -205);
+    public static Vector3 Spawn => new Vector3(CenterX(-205), 0, -205);
     public static readonly Vector2[] Points = {
         new Vector2(-18,-210), new Vector2(10,-150), new Vector2(-12,-95),
         new Vector2(0,-40), new Vector2(0,-13.25f) };
@@ -34,6 +34,15 @@ public static class ClimbRoute
         for(int i=0;i<SmoothPoints.Length-1;i++)
             if(z<=SmoothPoints[i+1].y)return Mathf.Lerp(SmoothPoints[i].x,SmoothPoints[i+1].x,Mathf.InverseLerp(SmoothPoints[i].y,SmoothPoints[i+1].y,z));
         return SmoothPoints[SmoothPoints.Length-1].x;
+    }
+    public static float DistanceToCenter(Vector3 p) {
+        var q=new Vector2(p.x,p.z);float best=float.PositiveInfinity;
+        for(int i=0;i<SmoothPoints.Length-1;i++) {
+            var a=SmoothPoints[i];var d=SmoothPoints[i+1]-a;
+            float t=Mathf.Clamp01(Vector2.Dot(q-a,d)/d.sqrMagnitude);
+            best=Mathf.Min(best,Vector2.Distance(q,a+t*d));
+        }
+        return best;
     }
     public static Vector3 Point(int segment, float t, float offset=0)
     {

@@ -38,19 +38,24 @@ STEPS=(
 )
 
 fail=0
+pass=0
 for s in "${STEPS[@]}"; do
   method="${s%%:*}"; tag="${s##*:}"
   "$UNITY" -batchmode -quit -projectPath "$PROJ" -executeMethod "$method" -logFile "$LOGS/$tag.log" >/dev/null 2>&1
   rc=$?
-  errs=$(grep -c "error CS" "$LOGS/$tag.log" 2>/dev/null || echo 0)
+  errs=$(grep -c "error CS" "$LOGS/$tag.log" 2>/dev/null || true)
+  errs=${errs:-0}
   echo "[REBUILD] $method rc=$rc cs_errors=$errs log=$LOGS/$tag.log"
-  if [ "$rc" -ne 0 ] || [ "$errs" != "0" ]; then fail=1; fi
+  if [ "$rc" -ne 0 ] || [ "$errs" != "0" ]; then fail=1; else pass=$((pass + 1)); fi
 done
 
 if [ "${1:-}" != "--no-build" ]; then
   "$UNITY" -batchmode -quit -projectPath "$PROJ" -executeMethod SpikeBuild.Run -logFile "$LOGS/23_player.log" >/dev/null 2>&1
-  echo "[REBUILD] SpikeBuild.Run rc=$?"
+  rc=$?
+  echo "[REBUILD] SpikeBuild.Run rc=$rc"
+  if [ "$rc" -ne 0 ] || ! grep -q "windows: result=Succeeded errors=0" "$LOGS/23_player.log" || ! grep -q "macOS: result=Succeeded errors=0" "$LOGS/23_player.log"; then fail=1; fi
 fi
 
+echo "[REBUILD] $pass/${#STEPS[@]} pass"
 echo "[REBUILD] done fail=$fail"
 exit $fail

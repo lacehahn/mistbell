@@ -11,7 +11,10 @@ using Object=UnityEngine.Object;
 public static class FarMistRocksBuild
 {
     static bool Rock(MeshRenderer r)=>r.name.StartsWith("ClusterRock_") || (r.name.StartsWith("Rock_") && r.transform.parent.name.StartsWith("TerraceRockpile_"));
-    static bool Mutable(MeshRenderer r)=>Rock(r)||r.name.StartsWith("FencePost_")||r.name=="Sky Dome"||r.sharedMaterials.Any(m=>m!=null&&m.shader.name=="Mistbell/PaintedMountain");
+    static bool LegacyPost(MeshRenderer r) => r.sharedMaterial!=null &&
+        (r.sharedMaterial.name=="M_FenceWood" || r.sharedMaterial.name=="M_FarMistFencePost") &&
+        r.GetComponent<BoxCollider>()!=null && r.bounds.size.y>r.bounds.size.x && r.bounds.size.y>r.bounds.size.z;
+    static bool Mutable(MeshRenderer r)=>Rock(r)||LegacyPost(r)||r.name=="Sky Dome"||r.sharedMaterials.Any(m=>m!=null&&m.shader.name=="Mistbell/PaintedMountain");
     static string Digest(string s){using(var sha=System.Security.Cryptography.SHA256.Create())return BitConverter.ToString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(s))).Replace("-","").ToLowerInvariant();}
     static string Protected()
     {
@@ -55,8 +58,10 @@ public static class FarMistRocksBuild
         var all=Object.FindObjectsByType<MeshRenderer>(FindObjectsInactive.Include,FindObjectsSortMode.None);var rocks=all.Where(Rock).ToArray();
         var report=new Report {protected_before=Protected(),geometry_before=Geometry(rocks),rocks=rocks.Length,snow_min_pct=100};
         string baseline="../artifacts/far_mist_rocks/baseline.json";
-        if(File.Exists(baseline)) {var old=JsonUtility.FromJson<Report>(File.ReadAllText(baseline));report.protected_before=old.protected_before;report.geometry_before=old.geometry_before;report.post_before_L=old.post_before_L;}
-        else {report.post_before_L=L(all.First(r=>r.name.StartsWith("FencePost_")).sharedMaterial.GetColor("_BaseColor"));File.WriteAllText(baseline,JsonUtility.ToJson(report,true));}
+        // Each invocation protects its actual input, never a stale historical scene digest.
+        var legacyPosts=all.Where(LegacyPost).ToArray();
+        report.post_before_L=legacyPosts.Length>0?L(legacyPosts[0].sharedMaterial.GetColor("_BaseColor")):0;
+        File.WriteAllText(baseline,JsonUtility.ToJson(report,true));
         var sky=GameObject.Find("Sky Dome").GetComponent<MeshRenderer>().sharedMaterial;
         sky.SetColor("_HorizonColor",Hex("#DCE4EA"));sky.SetColor("_CloudColor",Hex("#DCE4EA"));EditorUtility.SetDirty(sky);
         float[] haze={.04f,.18f,.34f,.50f};
@@ -92,15 +97,24 @@ public static class FarMistRocksBuild
             report.snow_min_pct=Mathf.Min(report.snow_min_pct,100*cap/area);report.snow_max_pct=Mathf.Max(report.snow_max_pct,100*cap/area);
         }
         report.snow_cap_pct=100*covered/total;
-        var post=Mat("M_FarMistFencePost",all.First(r=>r.name.StartsWith("FencePost_")).sharedMaterial);
-        post.SetTexture("_BaseMap",null);post.SetColor("_BaseColor",Lab(report.post_before_L*.90f,-2,-10));post.SetColor("_EmissionColor",Color.black);EditorUtility.SetDirty(post);
-        foreach(var r in all.Where(r=>r.name.StartsWith("FencePost_")))r.sharedMaterial=post;
-        report.post_after_L=L(post.GetColor("_BaseColor"));
+        if(legacyPosts.Length>0) {
+            var post=Mat("M_FarMistFencePost",legacyPosts[0].sharedMaterial);
+            post.SetTexture("_BaseMap",null);post.SetColor("_BaseColor",Lab(report.post_before_L*.90f,-2,-10));post.SetColor("_EmissionColor",Color.black);EditorUtility.SetDirty(post);
+            foreach(var r in legacyPosts)r.sharedMaterial=post;
+            report.post_after_L=L(post.GetColor("_BaseColor"));
+        } else Debug.Log("[FAR_MIST] legacy_post_tone=skipped reason=current_model_fence_preserved");
         var audit=Object.FindFirstObjectByType<FarMistAudit>();if(audit==null)audit=new GameObject("Far Mist Audit").AddComponent<FarMistAudit>();
         audit.ridges=new FarMistAudit.Ridge[4];
         for(int i=0;i<4;i++)
         {
-            var r=all.First(q=>q.sharedMaterial!=null&&q.sharedMaterial.name=="M_MtnLayer_"+(i+1));var source=(Texture2D)r.sharedMaterial.GetTexture("_MainTex");var tex=new Texture2D(2,2);tex.LoadImage(File.ReadAllBytes(AssetDatabase.GetAssetPath(source)));var points=new List<Vector3>();
+            var r=all.FirstOrDefault(q=>q.sharedMaterial!=null&&q.sharedMaterial.name=="M_MtnLayer_"+(i+1));
+            var source=r!=null?r.sharedMaterial.GetTexture("_MainTex") as Texture2D:null;
+            string sourcePath=source!=null?AssetDatabase.GetAssetPath(source):null;
+            if(r==null || string.IsNullOrEmpty(sourcePath) || !File.Exists(sourcePath)) {
+                Debug.LogWarning("[FAR_MIST] ridge=skipped material=M_MtnLayer_"+(i+1)+" reason=missing_renderer_or_texture");
+                audit.ridges[i]=new FarMistAudit.Ridge {points=Array.Empty<Vector3>()};continue;
+            }
+            var tex=new Texture2D(2,2);tex.LoadImage(File.ReadAllBytes(sourcePath));var points=new List<Vector3>();
             for(int x=0;x<tex.width;x+=8){int y=tex.height-1;while(y>0&&tex.GetPixel(x,y).a<.5f)y--;points.Add(r.transform.TransformPoint(new Vector3((x+.5f)/tex.width-.5f,(y+.5f)/tex.height-.5f,0)));}
             audit.ridges[i]=new FarMistAudit.Ridge {points=points.ToArray()};
             Object.DestroyImmediate(tex);
@@ -110,7 +124,7 @@ public static class FarMistRocksBuild
         if(report.protected_before!=report.protected_after||report.geometry_before!=report.geometry_after)throw new InvalidOperationException("Protected objects/rock geometry changed");
         if(report.snow_min_pct<35||report.snow_max_pct>50)throw new InvalidOperationException("Snow cap area outside 35–50%");
         Debug.Log(FormattableString.Invariant($"[SNOW_ROCK] snow_cap_pct={report.snow_cap_pct:F6} per_rock_min={report.snow_min_pct:F6} per_rock_max={report.snow_max_pct:F6} count={rocks.Length} count_unchanged=true geometry_unchanged=true metric=triangle_surface_area"));
-        Debug.Log(FormattableString.Invariant($"[FENCE_ASSET] before_L={report.post_before_L:F6} after_L={report.post_after_L:F6} L_ratio={report.post_after_L/report.post_before_L:F6}"));
+        if(legacyPosts.Length>0)Debug.Log(FormattableString.Invariant($"[FENCE_ASSET] before_L={report.post_before_L:F6} after_L={report.post_after_L:F6} L_ratio={report.post_after_L/report.post_before_L:F6}"));
         AssetDatabase.SaveAssets();EditorSceneManager.MarkSceneDirty(reveal.gameObject.scene);EditorSceneManager.SaveScene(reveal.gameObject.scene);PerformanceBuild.Run();
     }
 }

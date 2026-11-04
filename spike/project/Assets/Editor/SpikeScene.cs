@@ -109,7 +109,7 @@ public static class SpikeScene
         }
 
         // 只移动角色：教堂门廊左前方，两固定机位共同可见；落点只查询地形碰撞体。
-        var pilgrimPos = new Vector3(8.5f, 0f, -66f);   // New route lowers the cut: stand on its snow shoulder, keeping the fixed capture cameras.
+        var pilgrimPos = new Vector3(ClimbRoute.CenterX(-45f), 0f, -45f);   // Reference-shot subject shares the current road centerline; camera poses stay fixed.
         Physics.SyncTransforms();
         float terrainY = 0f;
         if (terrainCollider.Raycast(

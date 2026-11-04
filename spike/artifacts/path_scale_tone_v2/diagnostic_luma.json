@@ -1,0 +1,16 @@
+{
+  "roi": [
+    1050,
+    450,
+    1300,
+    650
+  ],
+  "stats": {
+    "samples": 50000,
+    "L": 94.00618663402327,
+    "L_p10": 89.25941839670728,
+    "b": 17.565730610869675,
+    "sat": 0.18874640096038423
+  },
+  "note": "Old scene fixed rectangle only, not valid PathTone geometry-masked acceptance."
+}

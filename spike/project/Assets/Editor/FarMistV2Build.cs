@@ -82,11 +82,18 @@ public static class FarMistV2Build
         // Independent strips on the OUTER side of the two tile rows, 0.10m inward.
         // Combine all strips into a single mesh/renderer to keep draw cost bounded.
         var verts=new List<Vector3>();var tris=new List<int>();
-        foreach(var tile in all.Where(r=>r.name.StartsWith("Paving_")))
+        bool modernPath=all.Any(r=>r.enabled && r.GetComponent<MeshCollider>()!=null && r.sharedMaterial!=null && (r.sharedMaterial.shader.name=="Mistbell/PathTone" || r.sharedMaterial.shader.name=="Mistbell/PathPainted"));
+        if(modernPath)Debug.Log("[FAR_MIST_V2] legacy_snow_edges=skipped reason=current_path_surface_preserved");
+        foreach(var tile in all.Where(r=>!modernPath && r.name.StartsWith("Paving_")))
         {
-            var f=tile.GetComponent<MeshFilter>();var b=f.sharedMesh.bounds;
             // Tile local X is path lateral axis. Determine outer row from sibling pair.
-            int id=int.Parse(tile.name.Substring(7));int side=id%6<3?-1:1;
+            if(!int.TryParse(tile.name.Substring(7),System.Globalization.NumberStyles.None,System.Globalization.CultureInfo.InvariantCulture,out int id)) {
+                Debug.Log("[FAR_MIST_V2] legacy_edge_tile=skipped name="+tile.name+" raw=\""+tile.name.Substring(7)+"\" reason=non_numeric_paving_mesh");continue;
+            }
+            var f=tile.GetComponent<MeshFilter>();
+            if(f==null || f.sharedMesh==null) {Debug.LogWarning("[FAR_MIST_V2] legacy_edge_tile=skipped name="+tile.name+" reason=missing_mesh");continue;}
+            var b=f.sharedMesh.bounds;
+            int side=id%6<3?-1:1;
             float x=side<0?b.min.x:b.max.x;
             float dx=.1f/tile.transform.lossyScale.x;
             float y=b.max.y+.012f/tile.transform.lossyScale.y;
@@ -94,16 +101,19 @@ public static class FarMistV2Build
             foreach(var v in new[]{new Vector3(x,y,b.min.z),new Vector3(x-side*dx,y,b.min.z),new Vector3(x-side*dx,y,b.max.z),new Vector3(x,y,b.max.z)})verts.Add(tile.transform.TransformPoint(v));
             tris.AddRange(side<0?new[]{k,k+3,k+1,k+1,k+3,k+2}:new[]{k,k+1,k+3,k+1,k+2,k+3});report.edge_segments++;
         }
+        GameObject edge=null;
+        if(!modernPath) {
         string edgePath="Assets/Settings/PathSnowEdgeV2.asset";var edgeMesh=AssetDatabase.LoadAssetAtPath<Mesh>(edgePath);
         if(edgeMesh==null){edgeMesh=new Mesh();AssetDatabase.CreateAsset(edgeMesh,edgePath);}edgeMesh.Clear();edgeMesh.SetVertices(verts);edgeMesh.SetTriangles(tris,0);edgeMesh.RecalculateBounds();edgeMesh.RecalculateNormals();EditorUtility.SetDirty(edgeMesh);
-        var edge=GameObject.Find("PathSnowEdgeV2");if(edge==null){edge=new GameObject("PathSnowEdgeV2");edge.AddComponent<MeshFilter>();edge.AddComponent<MeshRenderer>();}
+        edge=GameObject.Find("PathSnowEdgeV2");if(edge==null){edge=new GameObject("PathSnowEdgeV2");edge.AddComponent<MeshFilter>();edge.AddComponent<MeshRenderer>();}
         edge.GetComponent<MeshFilter>().sharedMesh=edgeMesh;edge.GetComponent<MeshRenderer>().sharedMaterial=snow;
         edge.GetComponent<MeshRenderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
         report.layout_after=Layout(rocks);report.protected_after=Protected();report.stones=stones.ToArray();
         File.WriteAllText(Output+"assets.json",JsonUtility.ToJson(report,true));
         if(report.layout_before!=report.layout_after||report.protected_before!=report.protected_after||report.aspect_max>.45001f||report.buried_min<.35f||report.buried_max>.45f)throw new Exception("Far mist v2 protected/shape gate failed");
         Debug.Log(FormattableString.Invariant($"[ROCK_SHAPE_ASSET] count={report.count} aspect={report.aspect_max:F6} buried={report.buried_min:F6}..{report.buried_max:F6} layout_unchanged=true protected_unchanged=true"));
         Debug.Log($"[PATH_ASSET] snow_edge=true width_m=0.10 segments={report.edge_segments} albedo_gain=1.15");
-        AssetDatabase.SaveAssets();EditorSceneManager.MarkSceneDirty(edge.scene);EditorSceneManager.SaveScene(edge.scene);PerformanceBuild.Run();
+        AssetDatabase.SaveAssets();EditorSceneManager.MarkSceneDirty(rocks[0].gameObject.scene);EditorSceneManager.SaveScene(rocks[0].gameObject.scene);PerformanceBuild.Run();
     }
 }

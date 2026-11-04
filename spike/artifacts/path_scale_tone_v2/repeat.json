@@ -1,0 +1,245 @@
+{
+  "repeat_score": 0.8324588495674663,
+  "correlations": [
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 1,
+      "shift": [
+        1.0781579250000002,
+        -0.81245025
+      ],
+      "correlation": 0.8136998353502473
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 2,
+      "shift": [
+        2.1563158500000004,
+        -1.6249005
+      ],
+      "correlation": 0.814394549411504
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 3,
+      "shift": [
+        3.2344737750000006,
+        -2.4373507500000002
+      ],
+      "correlation": 0.8043656240281645
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 1,
+      "shift": [
+        0.81245025,
+        1.0781579250000002
+      ],
+      "correlation": 0.8035029878791525
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 2,
+      "shift": [
+        1.6249005,
+        2.1563158500000004
+      ],
+      "correlation": 0.8045564299726353
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "a",
+      "tiles": 3,
+      "shift": [
+        2.4373507500000002,
+        3.2344737750000006
+      ],
+      "correlation": 0.8175530437336715
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 1,
+      "shift": [
+        1.5121429523141656,
+        1.1394814165497897
+      ],
+      "correlation": 0.17452571734675698
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 2,
+      "shift": [
+        3.0242859046283312,
+        2.2789628330995795
+      ],
+      "correlation": 0.17480737361482682
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 3,
+      "shift": [
+        4.536428856942497,
+        3.418444249649369
+      ],
+      "correlation": 0.1659574843585503
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 1,
+      "shift": [
+        -1.1394814165497897,
+        1.5121429523141656
+      ],
+      "correlation": 0.17496381963082763
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 2,
+      "shift": [
+        -2.2789628330995795,
+        3.0242859046283312
+      ],
+      "correlation": 0.19511671642364067
+    },
+    {
+      "texture": "path_stone_a.jpg",
+      "layer": "b",
+      "tiles": 3,
+      "shift": [
+        -3.418444249649369,
+        4.536428856942497
+      ],
+      "correlation": 0.13632047285246968
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 1,
+      "shift": [
+        1.0781579250000002,
+        -0.81245025
+      ],
+      "correlation": 0.8069812164462182
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 2,
+      "shift": [
+        2.1563158500000004,
+        -1.6249005
+      ],
+      "correlation": 0.8194932330402709
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 3,
+      "shift": [
+        3.2344737750000006,
+        -2.4373507500000002
+      ],
+      "correlation": 0.7852603183361391
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 1,
+      "shift": [
+        0.81245025,
+        1.0781579250000002
+      ],
+      "correlation": 0.8214114519649628
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 2,
+      "shift": [
+        1.6249005,
+        2.1563158500000004
+      ],
+      "correlation": 0.8324588495674663
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "a",
+      "tiles": 3,
+      "shift": [
+        2.4373507500000002,
+        3.2344737750000006
+      ],
+      "correlation": 0.796430157299157
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 1,
+      "shift": [
+        1.5121429523141656,
+        1.1394814165497897
+      ],
+      "correlation": 0.20481912174329428
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 2,
+      "shift": [
+        3.0242859046283312,
+        2.2789628330995795
+      ],
+      "correlation": 0.11424968648039568
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 3,
+      "shift": [
+        4.536428856942497,
+        3.418444249649369
+      ],
+      "correlation": 0.24495289627016992
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 1,
+      "shift": [
+        -1.1394814165497897,
+        1.5121429523141656
+      ],
+      "correlation": 0.2260056214346236
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 2,
+      "shift": [
+        -2.2789628330995795,
+        3.0242859046283312
+      ],
+      "correlation": 0.24107847506041435
+    },
+    {
+      "texture": "path_stone_snow.jpg",
+      "layer": "b",
+      "tiles": 3,
+      "shift": [
+        -3.418444249649369,
+        4.536428856942497
+      ],
+      "correlation": 0.1748956720487952
+    }
+  ]
+}

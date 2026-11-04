@@ -130,6 +130,12 @@ public sealed class FootprintTrail : MonoBehaviour
     {
         Vector3 right = Vector3.Cross(Vector3.up, forward);
         float side = (contacts++ % 2 == 0 ? -.18f : .18f);
+        // Contacts on the authored route use its current center, including rounded bends.
+        if(point.z>=ClimbRoute.Points[0].y && point.z<=ClimbRoute.Points[ClimbRoute.Points.Length-1].y && ClimbRoute.DistanceToCenter(point)<=ClimbRoute.PavingWidth*.5f) {
+            point.x=ClimbRoute.CenterX(point.z);
+            forward=new Vector3(ClimbRoute.CenterX(point.z+.1f)-point.x,0,.1f).normalized;
+            right=Vector3.Cross(Vector3.up,forward);
+        }
         point += right * side;
 
         if (!Physics.Raycast(point + Vector3.up * 2f, Vector3.down, out var hit, 4f, ~0, QueryTriggerInteraction.Ignore))

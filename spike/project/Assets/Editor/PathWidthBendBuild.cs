@@ -93,7 +93,7 @@ public static class PathWidthBendBuild {
    if(FenceModelBuild.Crossing(Cell(i),cellTriangles,wall.vertices,wall.triangles)){report.wall_overlaps++;break;}
   report.endpoint_after=Snap(ClimbRoute.Points.Last()).y;report.climb_after=Snap(ClimbRoute.Points.Last()).y-Snap(new Vector2(ClimbRoute.Spawn.x,ClimbRoute.Spawn.z)).y;
   Physics.SyncTransforms();report.protected_after=Protected();File.WriteAllText(Out+"assets.json",JsonUtility.ToJson(report,true));
-  if(report.min_radius<6||report.max_angle>12||report.fence_crossings!=0||report.self_intersect||report.wall_overlaps!=0||report.protected_before!=report.protected_after||report.scale_m!=2.4f)throw new Exception("Path geometry/protection gate failed");
+  if(report.min_radius<6||report.max_angle>12||report.fence_crossings!=0||report.self_intersect||report.wall_overlaps!=0||report.protected_before!=report.protected_after||Mathf.Abs(report.scale_m-2.4f)>.0001f)throw new Exception("Path geometry/protection gate failed");
   Debug.Log(FormattableString.Invariant($"[PATH_W] width=2.100 min_turn_radius={report.min_radius:F6} samples={report.samples} self_intersect={report.self_intersect.ToString().ToLowerInvariant()}"));
   Debug.Log(FormattableString.Invariant($"[PATH_SMOOTH] max_angle_step={report.max_angle:F6} edge=.07 fence_spacing={report.spacing_min:F6}..{report.spacing_max:F6} fence_crossings={report.fence_crossings} protected_unchanged=true"));
   AssetDatabase.SaveAssets();EditorSceneManager.MarkSceneDirty(surface.scene);EditorSceneManager.SaveScene(surface.scene);PerformanceBuild.Run();

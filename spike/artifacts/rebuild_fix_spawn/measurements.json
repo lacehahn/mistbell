@@ -1,0 +1,77 @@
+{
+  "pass": true,
+  "checks": {
+    "rebuild_22": true,
+    "player_build": true,
+    "spawn": true,
+    "walk_6s": true,
+    "demos": true,
+    "outdoor_fps": true,
+    "terrace_drawcall": true,
+    "protected_scene": true,
+    "protected_fence_assets": true,
+    "path_unchanged": true,
+    "fresh_shots": true
+  },
+  "spawn": [
+    0.0
+  ],
+  "walk_max": [
+    2.3e-05
+  ],
+  "bad": {
+    "walk": 0,
+    "interior": 0,
+    "reveal": 0
+  },
+  "bench": [
+    {
+      "pos": "z01",
+      "fps_avg": 213.2998046875,
+      "fps_p1": 166.0179901123047,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 207,
+      "tris": 5945202
+    },
+    {
+      "pos": "terrace",
+      "fps_avg": 222.3955535888672,
+      "fps_p1": 163.03562927246094,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 276,
+      "tris": 6546382
+    },
+    {
+      "pos": "interior",
+      "fps_avg": 216.17579650878906,
+      "fps_p1": 158.5711212158203,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 256,
+      "tris": 6479808
+    }
+  ],
+  "protected_changed": [],
+  "source_changed": [],
+  "scale_m": 2.4,
+  "base_color": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "shots": {
+    "play_view": {
+      "size": [
+        1920,
+        1080
+      ],
+      "fresh": true
+    },
+    "art_runtime": {
+      "size": [
+        1920,
+        1080
+      ],
+      "fresh": true
+    }
+  }
+}

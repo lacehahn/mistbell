@@ -1,0 +1,73 @@
+{
+  "pass": false,
+  "checks": {
+    "build": true,
+    "required_baseline": false,
+    "assets_unchanged_after_rollback": true,
+    "camera": true,
+    "demos": false,
+    "outdoor_fps": true,
+    "terrace_drawcall": true,
+    "shots": true,
+    "path_luma": false,
+    "path_repeat": false,
+    "visual_slab_readability": false
+  },
+  "material_scene_references": 0,
+  "paving_surface_count": 0,
+  "old_paving_count": 270,
+  "changed_assets": [],
+  "bad": {
+    "camera": 0,
+    "closeup": 0,
+    "walk": 0,
+    "interior": 0,
+    "reveal": 2,
+    "bench": 0
+  },
+  "bench": [
+    {
+      "pos": "z01",
+      "fps_avg": 225.29017639160156,
+      "fps_p1": 171.09291076660156,
+      "vram_mb": 489.87115478515625,
+      "drawcalls": 261,
+      "tris": 6140055
+    },
+    {
+      "pos": "terrace",
+      "fps_avg": 223.4129180908203,
+      "fps_p1": 156.05763244628906,
+      "vram_mb": 489.87115478515625,
+      "drawcalls": 284,
+      "tris": 6774198
+    },
+    {
+      "pos": "interior",
+      "fps_avg": 228.70970153808594,
+      "fps_p1": 166.05706787109375,
+      "vram_mb": 489.87115478515625,
+      "drawcalls": 258,
+      "tris": 6512092
+    }
+  ],
+  "shots": {
+    "cam_play_1080": {
+      "size": [
+        1920,
+        1080
+      ],
+      "fresh": true
+    },
+    "path_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "fresh": true
+    }
+  },
+  "path_luma": null,
+  "repeat_score": null,
+  "reason": "Required PathTone baseline absent. Parameter-only edit has no rendered effect; reverted. CPU texture tests are diagnostics, not actual-scene acceptance."
+}
