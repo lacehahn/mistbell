@@ -82,6 +82,10 @@ public sealed class PilgrimAnimator : MonoBehaviour
         return maxY-minY;
     }
 
+    public float VisibleWorldHeight => alphaBounds[Row*6+Frame].height/80f*worldHeight;
+    public float MinVisibleWorldHeight => System.Linq.Enumerable.Min(alphaBounds, b=>b.height/80f*worldHeight);
+    public float MaxVisibleWorldHeight => System.Linq.Enumerable.Max(alphaBounds, b=>b.height/80f*worldHeight);
+
     public void RefreshDimensions()
     {
         worldWidth=animatedMaterial.GetFloat("_ScaleX");

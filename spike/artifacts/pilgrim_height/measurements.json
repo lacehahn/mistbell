@@ -1,0 +1,51 @@
+{
+  "pass": false,
+  "checks": {
+    "build": true,
+    "interior_size": true,
+    "interior_framing": true,
+    "interior_no_errors": true,
+    "walk_size": true,
+    "walk_framing": true,
+    "walk_no_errors": true,
+    "reveal_size": true,
+    "reveal_framing": true,
+    "reveal_no_errors": false,
+    "interior": true,
+    "walk": true,
+    "reveal": false,
+    "interior_inside_fresh": true,
+    "pilgrim_scale_fresh": true
+  },
+  "size_logs": [
+    "[PILGRIM_SIZE] world_h=1.71950 aspect_preserved=true collider=1.7 zone=outdoor alpha_h_min=1.69688 alpha_h_max=1.71950",
+    "[PILGRIM_SIZE] world_h=1.71950 aspect_preserved=true collider=1.7 zone=indoor alpha_h_min=1.69688 alpha_h_max=1.71950",
+    "[PILGRIM_SIZE] world_h=1.71950 aspect_preserved=true collider=1.7 zone=bench alpha_h_min=1.69688 alpha_h_max=1.71950",
+    "[PILGRIM_SIZE] world_h=1.71950 aspect_preserved=true collider=1.7 zone=outdoor alpha_h_min=1.69688 alpha_h_max=1.71950",
+    "[PILGRIM_SIZE] world_h=1.71950 aspect_preserved=true collider=1.7 zone=outdoor alpha_h_min=1.69688 alpha_h_max=1.71950"
+  ],
+  "clearance": "[PILGRIM_CLEARANCE] doorway_min_head_gap=1.86461 sampled_width=0.6 player_h=1.7 pew_pitch=0.80230 pew_back_h=0.91052 altar_bounds_h=1.00000 look_h=1.60",
+  "walk": [
+    "[PLAY] walk_start=(-18.000,-28.835,-205.000) walk_end=(-18.000,-26.368,-189.804) distance=15.395 row=3 fps_ok=true",
+    "[PLAY] ground_error_max=0.000000 raycast_misses=0 fps=59.83 animation_fps=10 frames=6"
+  ],
+  "reveal": [
+    "[REVEAL] d=80 fogStart=112.800 fogEnd=398.400 churchEdge=0.005599238",
+    "[REVEAL] d=50 fogStart=93.600 fogEnd=340.800 churchEdge=0.006288526",
+    "[REVEAL] d=20 fogStart=20.000 fogEnd=120.000 churchEdge=0.008013843",
+    "[REVEAL] gate=FAIL ratio20_80=1.431238 bell_once=True pulse_restored=True"
+  ],
+  "shots": {
+    "interior_inside": {
+      "path": "/Users/lance/workspace/mistbell/spike/project/Shots/interior_inside.png",
+      "bytes": 1043035,
+      "sha256": "87c3f871a44e60caf543163e6c837757d1a7d457037fce98f3e6eabf51b587e9"
+    },
+    "pilgrim_scale": {
+      "path": "/Users/lance/workspace/mistbell/spike/project/Shots/pilgrim_scale.png",
+      "bytes": 1019069,
+      "sha256": "6f9e7f2b5a7524d02a25380f3f0769a193163f713363d402337896d79f3124a8"
+    }
+  },
+  "baseline_reveal": "[REVEAL] gate=FAIL ratio20_80=1.429020 bell_once=True pulse_restored=True"
+}

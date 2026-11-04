@@ -63,7 +63,6 @@ public sealed partial class PlayerController : MonoBehaviour
     bool enteredByWalking;
     float indoorMinY=float.PositiveInfinity, indoorMinGap=float.PositiveInfinity;
     bool cameraBelowFloor;
-    float outsideSpriteX, outsideSpriteY;
 
 
 
@@ -107,21 +106,18 @@ public sealed partial class PlayerController : MonoBehaviour
         follow.fieldOfView=48;
         Debug.Log($"[CLOSEUP_CAMERA] playable_fov={follow.fieldOfView:F3}");
         followFov = 35;
-        // Runtime-only material instance: preserve the art screenshot character.
+        // World size comes from the atlas and material, never from a screen-pixel target.
         var animator = GetComponent<PilgrimAnimator>();
+        animator.RefreshDimensions();
         var pose = new ShotPose { position=follow.transform.position, euler=follow.transform.eulerAngles, fov=followFov };
         float height = animator.ProjectedHeight(pose, out bool contained);
-        for(int i=0;i<3;i++)
-        {
-            float scale=150f/height;
-            sprite.SetFloat("_ScaleX",sprite.GetFloat("_ScaleX")*scale);
-            sprite.SetFloat("_ScaleY",sprite.GetFloat("_ScaleY")*scale);
-            animator.RefreshDimensions();
-            height=animator.ProjectedHeight(pose,out contained);
-        }
-        outsideSpriteX=sprite.GetFloat("_ScaleX"); outsideSpriteY=sprite.GetFloat("_ScaleY");
-        Debug.Log(FormattableString.Invariant($"[CAM] offset=(0,4.4,-10.5) pilgrim_px={height:F2}"));
-        if(!contained || height<130 || height>175) { Debug.LogError("[CAM] framing gate failed"); Application.Quit(1); }
+        Debug.Log(FormattableString.Invariant($"[CAM] offset=(0,1.55,-7.2) fov={followFov} reference_h=900 pilgrim_px={height:F2} pilgrim_px_900={height*900/Screen.height:F2}"));
+        // 1600x900 measured 341.29px with the existing 7.2m / 35-degree outdoor rig.
+        // Normalize resolution only; resizing the mesh to the old 150px target broke world scale.
+        const float measuredHeight900=341.29f;
+        float height900=height*900f/Screen.height;
+        if(!contained || height900<measuredHeight900*.9f || height900>measuredHeight900*1.1f) { Debug.LogError("[CAM] framing gate failed"); Application.Quit(1); }
+        AuditPilgrimSize("outdoor");
         var vertices = new System.Collections.Generic.List<Vector3>();
         foreach(var mf in reveal.church.GetComponentsInChildren<MeshFilter>())
             foreach(var vertex in mf.sharedMesh.vertices) vertices.Add(mf.transform.TransformPoint(vertex));
@@ -756,11 +752,8 @@ public sealed partial class PlayerController : MonoBehaviour
         follow.transform.rotation = inside ? rotation : Quaternion.Lerp(follow.transform.rotation,rotation,.12f);
         // Use the specified eye, aim and symmetric 38 degree lens indoors.
         follow.ResetProjectionMatrix();
-        // Keep the pixel character readable with the narrower indoor lens and shorter follow distance.
-        float spriteScale=inside ? Mathf.Tan(19*Mathf.Deg2Rad)/Mathf.Tan(followFov*.5f*Mathf.Deg2Rad)*7.5f/10.5f*1.2f : 1;
-        sprite.SetFloat("_ScaleX",Mathf.Lerp(sprite.GetFloat("_ScaleX"),outsideSpriteX*spriteScale,.2f));
-        sprite.SetFloat("_ScaleY",Mathf.Lerp(sprite.GetFloat("_ScaleY"),outsideSpriteY*spriteScale,.2f));
-        GetComponent<PilgrimAnimator>().RefreshDimensions();
+        // A metre remains a metre indoors; camera changes do not resize the character.
+
     }
 
     float CameraWallGap(Vector3 position)
@@ -1118,6 +1111,7 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(1.5f);
         yield return new WaitForEndOfFrame();
         string inside=InteriorShot("interior_inside");
+        AuditPilgrimSize("indoor");
         AltarCrossVisibility.Check(interior, follow.transform.position, follow);
         Debug.Log("[INT_LIGHT_ROI] surface_space=linear ceiling_space=display nave=center60 wall=bilateral_lower_wall bench=bilateral_front_pews");
         var lightingFrame=ScreenCapture.CaptureScreenshotAsTexture();
@@ -1213,8 +1207,35 @@ public sealed partial class PlayerController : MonoBehaviour
             pass &= entryPass;
         }
         // Inspection capture runs after every existing entry/obstacle assertion.
-        if(pass && poi==null) { yield return WindowsCloseup(); yield return RoyalDoorCloseup(); yield return PewsCloseup(); }
+        if(pass && poi==null) { yield return WindowsCloseup(); yield return RoyalDoorCloseup(); yield return PewsCloseup(); yield return PilgrimScaleShot(); }
         Application.Quit(pass?0:1);
+    }
+
+    bool AuditPilgrimSize(string zone)
+    {
+        var animator=GetComponent<PilgrimAnimator>();
+        float h=animator.VisibleWorldHeight;
+        bool aspect=Mathf.Abs(sprite.GetFloat("_ScaleX")/sprite.GetFloat("_ScaleY")-64f/80f)<.00001f;
+        bool pass=Mathf.Abs(h-PlayerHeight)<=.03f && aspect &&
+            animator.MinVisibleWorldHeight>=PlayerHeight-.03f && animator.MaxVisibleWorldHeight<=PlayerHeight+.03f;
+        Debug.Log(FormattableString.Invariant($"[PILGRIM_SIZE] world_h={h:F5} aspect_preserved={aspect.ToString().ToLowerInvariant()} collider={PlayerHeight:F1} zone={zone} alpha_h_min={animator.MinVisibleWorldHeight:F5} alpha_h_max={animator.MaxVisibleWorldHeight:F5}"));
+        if(!pass) { Debug.LogError("[PILGRIM_SIZE] size gate failed"); Application.Quit(1); }
+        return pass;
+    }
+
+    IEnumerator PilgrimScaleShot()
+    {
+        enabled=false;
+        var saved=transform.position;
+        transform.position=new Vector3(-5.75f,interior.FloorY,.55f);
+        var eye=follow.transform.position;var rotation=follow.transform.rotation;float fov=follow.fieldOfView;
+        follow.transform.position=new Vector3(-4.15f,interior.FloorY+1.75f,-5.2f);
+        follow.transform.LookAt(new Vector3(-4.15f,interior.FloorY+1.0f,2.5f));follow.fieldOfView=50;
+        yield return new WaitForSecondsRealtime(.5f);yield return new WaitForEndOfFrame();
+        AuditPilgrimSize("bench");
+        string path=InteriorShot("pilgrim_scale");
+        Debug.Log("[PILGRIM_SCALE_SHOT] path="+path);
+        transform.position=saved;follow.transform.SetPositionAndRotation(eye,rotation);follow.fieldOfView=fov;enabled=true;
     }
 
     IEnumerator WindowsCloseup()

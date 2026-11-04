@@ -123,8 +123,8 @@ public static class SpikeScene
 
         var bbMat = new Material(bbShader) { name = "M_Pilgrim" };
         bbMat.SetTexture("_MainTex", pilgrimAtlas);
-        bbMat.SetFloat("_ScaleX", 1.45f * 64f / 80f);
-        bbMat.SetFloat("_ScaleY", 1.45f);
+        bbMat.SetFloat("_ScaleX", 1.81f * 64f / 80f);
+        bbMat.SetFloat("_ScaleY", 1.81f);
         bbMat.SetFloat("_PivotY", 0f);
         bbMat.SetFloat("_Cutoff", 0.5f);
         bbMat.SetFloat("_Cols", 6f);

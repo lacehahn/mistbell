@@ -717,3 +717,10 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - `bash spike/tools/accept_interior_windows.sh` exit=0，26/26门槛全过；PNG独立复算nave=0.576410、dome=0.744979/L*76.8679、plaster=0.237752、gold L*74.7023。六行墙面480缩图可数，三张新1080p图已目视检查。
 - INT_PASS全部True/obstacles=True/lamps=18；保留两均衡补光，移除2个吊灯低功率Light而保留8个蜡烛网格；原灯数统计未变。室内254drawcalls/220.05FPS、1%low158.52；构建Succeeded/0errors。
 - 地板、祭坛/圣像/王门、室外、原相机、碰撞及其余灯保护比对相等、重复修补幂等；未改AGENTS.md、任务书，未提交。报告[acceptance.md](artifacts/interior_windows/acceptance.md)，详尽数字[measurements.json](artifacts/interior_windows/measurements.json)。
+
+## 2026-11-04 人物真实身高（pilgrim_height 单项）
+
+- `_ScaleY=1.81`、`_ScaleX=1.81*64/80`；移除150px启动归一化及室内按镜头缩小，24帧可见高度1.69688–1.71950m，aspect_preserved=true，collider=1.7。当前7.2m/FOV35机位实测341.29px@900p，取±10%作门槛；没有为追186px改变世界尺寸或相机。
+- 构建Succeeded/0 errors；进堂INT_PASS全True，walk6距离15.395m、贴地误差0、漏射线0、59.83fps。门洞头顶最小余量1.86461m；现有椅背0.91052m、排距0.80230m、净空0.28m；LookHeight1.6保留。
+- **整体验收未全绿**：reveal原门槛失败，修改前对照ratio1.429020、最终1.431238（要求≥1.6）；两版石材tile1.0与旧1.8断言亦不符。未扩展范围修改reveal/石材/雾/门槛。专用验收脚本exit=1，拒绝通用run_demos.sh漏报gate=FAIL的假绿。
+- 新截图interior_inside.png / pilgrim_scale.png已目视确认。报告[acceptance.md](artifacts/pilgrim_height/acceptance.md)，数字[measurements.json](artifacts/pilgrim_height/measurements.json)。未改AGENTS.md，未提交。
