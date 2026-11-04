@@ -1,0 +1,4 @@
+climb_steps.png sha256=c43eb73c591d70626bdbdd7f546d2178c80bebb80de5b3c7b9059dfe7b6cd9e6
+[MEASURE] magenta_px=0 snow_ratio=0.5418 white_clip_ratio=0.001 dark_ratio_lower=0.1105 mid_ratio_lower=0.2791 hf_energy_lower=0.013 shadow_ratio_lower=0.3443 warm_px=10599 ground_shadow_gap=0.0086 size=1920x1080
+play_view.png sha256=5d1b76fe70ebbfe8830460690debf8fa20435adba60da8fb50a18a7e457a7158
+[MEASURE] magenta_px=0 snow_ratio=0.7792 white_clip_ratio=0.0003 dark_ratio_lower=0.0493 mid_ratio_lower=0.1523 hf_energy_lower=0.0111 shadow_ratio_lower=0.1939 warm_px=3384 ground_shadow_gap=0.2317 size=1920x1080

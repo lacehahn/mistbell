@@ -1,0 +1,29 @@
+{
+  "rebuild_22": true,
+  "geometry": true,
+  "walk6": {
+    "rc": 0,
+    "bad_zero": true
+  },
+  "steps": {
+    "rc": 0,
+    "three_pass": true
+  },
+  "enter": {
+    "rc": 0
+  },
+  "reveal": {
+    "rc": 0
+  },
+  "climb": {
+    "rc": 0
+  },
+  "bench": {
+    "rc": 1
+  },
+  "outdoor_fps": {
+    "z01": 195.71481323242188,
+    "terrace": 199.80445861816406
+  },
+  "pass": false
+}

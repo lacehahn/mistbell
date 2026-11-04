@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Task-only acceptance. Run after rebuild_all.sh and PerformanceBuild.Run."""
+"""Task-only acceptance. Run against rebuild_all.sh's non-Development player."""
 import json
 import re
 import shutil
@@ -45,7 +45,7 @@ def main():
         ('enter', ['-demo-enter-church']),
         ('reveal', ['-demo-reveal']),
         ('climb', ['-demo-climb']),
-        ('bench', ['-bench', '-bench-output', str(OUT / 'bench.json')]),
+        ('bench', ['-bench', '-bench-foreground', '-bench-output', str(OUT / 'bench.json')]),
     ]:
         rc, log = run(name, flags)
         results[name] = {'rc': rc}
