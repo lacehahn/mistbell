@@ -1,0 +1,113 @@
+{
+  "pass": false,
+  "checks": {
+    "build": true,
+    "framing": true,
+    "size": true,
+    "church_upper": true,
+    "camera_clearance": true,
+    "doorway_clearance": true,
+    "walk_no_errors": true,
+    "interior_no_errors": true,
+    "reveal_no_errors": false,
+    "walk": true,
+    "interior": true,
+    "reveal": false,
+    "outdoor_fps": true,
+    "cam_play_1080": true,
+    "cam_walk_1080": true,
+    "reveal_unchanged": true
+  },
+  "bad": {
+    "walk": 0,
+    "interior": 0,
+    "reveal": 1
+  },
+  "framing": [
+    "[CAM_FRAME] dist=11.50 h=2.10 look=1.20 fov=48.00 pilgrim_px=158.478 pilgrim_pct=14.674 actual_h=1080 contained=True",
+    "[CAM_FRAME] dist=11.50 h=2.10 look=1.20 fov=48.00 pilgrim_px=158.478 pilgrim_pct=14.674 actual_h=1080 contained=True"
+  ],
+  "size": [
+    "[PILGRIM_SIZE] world_h=1.52000 aspect_preserved=true collider=1.5 zone=outdoor alpha_h_min=1.50000 alpha_h_max=1.52000",
+    "[PILGRIM_SIZE] world_h=1.52000 aspect_preserved=true collider=1.5 zone=outdoor alpha_h_min=1.50000 alpha_h_max=1.52000",
+    "[PILGRIM_SIZE] world_h=1.52000 aspect_preserved=true collider=1.5 zone=outdoor alpha_h_min=1.50000 alpha_h_max=1.52000",
+    "[PILGRIM_SIZE] world_h=1.52000 aspect_preserved=true collider=1.5 zone=indoor alpha_h_min=1.50000 alpha_h_max=1.52000",
+    "[PILGRIM_SIZE] world_h=1.52000 aspect_preserved=true collider=1.5 zone=bench alpha_h_min=1.50000 alpha_h_max=1.52000",
+    "[PILGRIM_SIZE] world_h=1.52000 aspect_preserved=true collider=1.5 zone=outdoor alpha_h_min=1.50000 alpha_h_max=1.52000"
+  ],
+  "clearance": [
+    "[CAM_CLEARANCE] player_h=1.5 diameter=0.6 doorway_head_gap=2.06461 pew_pitch=0.80230 back_gap=0.70867"
+  ],
+  "camera_test": [
+    "[CAM_TEST] phase=0 seconds=6.000 samples=352 bad=0 ground_gap=3.53063 wall_gap=3.99951 turned=true",
+    "[CAM_TEST] phase=1 seconds=6.017 samples=360 bad=0 ground_gap=3.10025 wall_gap=3.99951 turned=true"
+  ],
+  "walk": [
+    "[PLAY] walk_start=(-18.000,-28.835,-205.000) walk_end=(-18.000,-26.368,-189.804) distance=15.395 row=3 fps_ok=true",
+    "[PLAY] ground_error_max=0.000000 raycast_misses=0 fps=60.00 animation_fps=10 frames=6"
+  ],
+  "interior": [
+    "[INT_PASS] light=True domeLight=True ceilingSeen=True domeSeen=True fx=0.785 visible=True obstacles=True walked=True z=0.43 dy=0.000 fov=50.00 lamps=20 shafts=3"
+  ],
+  "reveal": [
+    "[REVEAL] fog=120..420→20..120 color=#CBD8E4→#EAF0F6 bell_at=45m",
+    "[REVEAL] d=80 fogStart=112.800 fogEnd=398.400 churchEdge=0.006351495",
+    "[REVEAL] screenshot=/Users/lance/workspace/mistbell/spike/project/Shots/reveal_80.png roi_bottom_left=698,313,532,446 metric=mean_abs_RGB_xy/255",
+    "[REVEAL] d=50 fogStart=93.600 fogEnd=340.800 churchEdge=0.006710049",
+    "[REVEAL] screenshot=/Users/lance/workspace/mistbell/spike/project/Shots/reveal_50.png roi_bottom_left=578,184,784,674 metric=mean_abs_RGB_xy/255",
+    "[REVEAL] bell pulse once rise=1.2s fall=0.8s bloom=x1.6 vignette=x1.3",
+    "[REVEAL] d=28 fogStart=50.400 fogEnd=211.200 churchEdge=0.008157824",
+    "[REVEAL] screenshot=/Users/lance/workspace/mistbell/spike/project/Shots/reveal_28.png roi_bottom_left=608,164,735,670 metric=mean_abs_RGB_xy/255",
+    "[REVEAL] bell pulse restored",
+    "[REVEAL] gate=FAIL ratio=1.284394 near_dist=28 church_height_pct=0.620000 ratio20_80=1.284394 bell_once=True pulse_restored=True"
+  ],
+  "bench": {
+    "results": [
+      {
+        "pos": "z01",
+        "fps_avg": 226.25929260253906,
+        "fps_p1": 169.96047973632812,
+        "vram_mb": 489.8719787597656,
+        "drawcalls": 283,
+        "tris": 6137045
+      },
+      {
+        "pos": "terrace",
+        "fps_avg": 223.9713897705078,
+        "fps_p1": 161.44654846191406,
+        "vram_mb": 489.8719787597656,
+        "drawcalls": 352,
+        "tris": 6753378
+      },
+      {
+        "pos": "interior",
+        "fps_avg": 215.0948486328125,
+        "fps_p1": 157.55099487304688,
+        "vram_mb": 489.8719787597656,
+        "drawcalls": 250,
+        "tris": 6479808
+      }
+    ]
+  },
+  "benchmark_terminal": [
+    "[BENCH_GATE] pass=False output=/Users/lance/workspace/mistbell/spike/logs/camera_distance_bench.json"
+  ],
+  "shots": {
+    "cam_play_1080": {
+      "path": "/Users/lance/workspace/mistbell/spike/project/Shots/cam_play_1080.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "d9a8357dffa499ace71df67157fc58956ab0fc6d233bf40aa08b27aa83abd7f1"
+    },
+    "cam_walk_1080": {
+      "path": "/Users/lance/workspace/mistbell/spike/project/Shots/cam_walk_1080.png",
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "b29be446b3552175f9b499761b2fb3e99619f84b8b678e33c41369954f57b3c7"
+    }
+  }
+}

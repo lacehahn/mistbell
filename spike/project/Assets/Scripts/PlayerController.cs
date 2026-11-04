@@ -15,7 +15,7 @@ public sealed partial class PlayerController : MonoBehaviour
     public Collider stairDeck;
     // Reserved physics layers; ramp contact overrides accept only PlayerLayer.
     public const int PlayerLayer = 8, TraversalLayer = 9, BlockerLayer = 10;
-    const float PlayerRadius = .30f, PlayerHeight = 1.7f, CollisionSkin = .01f;
+    const float PlayerRadius = .30f, PlayerHeight = 1.5f, CollisionSkin = .01f;
     Collider[] blockers;
     bool churchDemo, blockedDuringWalk;
     const float StepUpMax = .28f, StepProbe = .35f, StepLiftSpeed = 12f;
@@ -35,8 +35,8 @@ public sealed partial class PlayerController : MonoBehaviour
     public int Row { get; private set; } = 3;
     public static bool CaptureMode => Array.IndexOf(Environment.GetCommandLineArgs(), "-shot") >= 0 ||
         Array.IndexOf(Environment.GetCommandLineArgs(), "-shots") >= 0;
-    public static readonly Vector3 FollowOffset = new Vector3(0, 1.55f, -7.2f);
-    public const float LookHeight = 1.6f;
+    public static readonly Vector3 FollowOffset = new Vector3(0, 2.1f, -11.5f);
+    public const float LookHeight = 1.2f;
     AudioDirector audioDirector;
     int lastSoundFrame = -1;
     Interactable[] pois;
@@ -100,23 +100,13 @@ public sealed partial class PlayerController : MonoBehaviour
         follow = Camera.main;
         follow.transform.position = transform.position + FollowOffset;
         follow.transform.LookAt(transform.position + Vector3.up * LookHeight);
-        // Playable outdoor rig is 35 degrees; the ShotRig camera table is independent.
-        // CaptureMode exits in Awake, so the ShotRig camera table stays unchanged.
+        // Gameplay lens; reveal and indoor rigs own their independent parameters.
         var reveal = GetComponent<MistReveal>();
-        follow.fieldOfView=48;
-        Debug.Log($"[CLOSEUP_CAMERA] playable_fov={follow.fieldOfView:F3}");
-        followFov = 35;
-        // World size comes from the atlas and material, never from a screen-pixel target.
+        followFov = 48;
+        follow.fieldOfView = followFov;
         var animator = GetComponent<PilgrimAnimator>();
         animator.RefreshDimensions();
-        var pose = new ShotPose { position=follow.transform.position, euler=follow.transform.eulerAngles, fov=followFov };
-        float height = animator.ProjectedHeight(pose, out bool contained);
-        Debug.Log(FormattableString.Invariant($"[CAM] offset=(0,1.55,-7.2) fov={followFov} reference_h=900 pilgrim_px={height:F2} pilgrim_px_900={height*900/Screen.height:F2}"));
-        // 1600x900 measured 341.29px with the existing 7.2m / 35-degree outdoor rig.
-        // Normalize resolution only; resizing the mesh to the old 150px target broke world scale.
-        const float measuredHeight900=341.29f;
-        float height900=height*900f/Screen.height;
-        if(!contained || height900<measuredHeight900*.9f || height900>measuredHeight900*1.1f) { Debug.LogError("[CAM] framing gate failed"); Application.Quit(1); }
+        AuditCameraFrame();
         AuditPilgrimSize("outdoor");
         var vertices = new System.Collections.Generic.List<Vector3>();
         foreach(var mf in reveal.church.GetComponentsInChildren<MeshFilter>())
@@ -147,6 +137,8 @@ public sealed partial class PlayerController : MonoBehaviour
         var args = Environment.GetCommandLineArgs();
         InitializePersistence(args);
         if (StartPersistenceDemo(args)) return;
+        if (Array.IndexOf(args, "-demo-camera-distance") >= 0)
+        { suppressCinema=true; StartCoroutine(DemoCameraDistance()); return; }
         if (Array.IndexOf(args, "-demo-altar") >= 0)
         { suppressCinema=true; StartCoroutine(DemoAltar()); return; }
         if (Array.IndexOf(args, "-bench") >= 0)

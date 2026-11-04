@@ -734,3 +734,23 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - 构建Succeeded/0errors；室外z01=214.69FPS/281drawcalls，terrace=229.09FPS/306drawcalls。进堂INT_PASS全True，walk6=15.396m/贴地0/漏射线0；其余演示bad=0。
 - **未过：reveal gate=FAIL，ratio=1.311026<1.6，bad=1；不能宣称任务全过。** 保留原断言，未修改相机、室内、地面、祭坛、王门或人物来追该门槛。两类保护快照相等，git diff --check通过。
 - 完整验收 `bash spike/tools/accept_far_mist_rocks.sh` 已运行，exit=1；报告 [acceptance.md](artifacts/far_mist_rocks/acceptance.md)，数字 [measurements.json](artifacts/far_mist_rocks/measurements.json)，原始日志`logs/far_mist_rocks_{build,interior,walk,reveal,capture,bench}.log`。AGENTS.md未改，未提交；生成场景/资产/截图/构建沿原忽略规则留本地。
+
+
+## 2026-11-04 玩法相机距离（camera_distance 单项，严格验收未全绿）
+
+- 角色_ScaleY1.60/_ScaleX1.28，可见1.50–1.52m，PlayerHeight1.50；玩法FollowOffset=(0,2.10,-11.50)/LookHeight1.20/FOV48。修正LateUpdate原回落FOV35；reveal/室内机位及受保护美术不改。
+- [CAM_FRAME] pilgrim_px=158.478/pilgrim_pct=14.674，1080p；新静止/转身行走截图已目视复核。路径z=-110教堂完整在上半部；近处不能完整装下建筑的限制写入报告。路径/台地旁各6秒，相机bad=0，最小离地3.10025m；门洞头顶余量2.06461m，长椅/进堂碰撞通过。
+- 构建Succeeded/0errors；walk6距离15.395m、贴地误差0、漏射线0；walk/enter bad=0。室外226.26/223.97FPS，均≥200。
+- 未全绿：reveal原gate=FAIL、ratio=1.284394<1.6、bad=1；通用bench台地352drawcalls>330而gate=False。保留门槛，未越界调整雾/材质/reveal。专用accept/verify均exit1，git diff --check通过。
+- [验收报告](artifacts/camera_distance/acceptance.md) / [测量JSON](artifacts/camera_distance/measurements.json)；命令bash spike/tools/accept_camera_distance.sh --player-only（构建CameraDistanceBuild.Run已单独执行）。未改AGENTS.md，未提交。
+
+
+## 2026-11-04 远景收口第二轮（far_mist_v2，未全绿）
+
+- 仅执行 `tasks/far_mist_v2.md`。新双距离判据替代ratio硬门槛，保留ratio20_80诊断及指定原因注释；没有改reveal距离/FOV/高度。80m几何视高0.411735仍超过0.30，与固定机位硬约束冲突；保留真实失败，未缩教堂或更换视高口径。
+- `[REVEAL] far_h_pct=0.411735 far_contrast=0.042502 near_h_pct=0.620000 gate=FAIL`；28m完整入画、基座无遮挡、钟声单次/恢复通过。
+- 局部入口 `FarMistV2Build.Run`：88块原物体变换矩阵全部保留，只改网格Y；aspect≤0.42，按雪地/台地碰撞面埋入约40%，PNG最低暗面L*=23.971725。室内/祭坛/人物/全部碰撞体/灯光/相机及非路面石头美术保护摘要一致。
+- 路面PNG：reveal_80 L*=54.765097/b*=-0.192417；art_runtime L*=52.289078/b*=-1.011916。两侧0.1m压雪边，线性反照率为路面×1.15，270段合并单renderer。保留3层远山可见性。
+- 修正诊断器给空网格建立临时MeshCollider导致开发控制台污染近景截图的问题：跳过无有效三角面网格，只改诊断查询对象，未改场景碰撞。验收额外捕获此类错误，最终没有再出现。
+- 构建Succeeded/0errors；室外1920×1080：z01 228.15FPS/285drawcalls；terrace 225.52FPS/355drawcalls。walk6=15.395m/贴地误差0/漏射线0；进堂全True；bad=enter0/walk0/reveal1。通用bench旧250上限仍False，本任务按200FPS/400drawcalls独立验收，不改旧基准脚本。
+- 完整执行 `bash spike/tools/accept_far_mist_v2.sh`，exit=1（固定80m构图未过）；`git diff --check`与脚本语法检查通过。三张新图已目视检查；[验收报告](artifacts/far_mist_v2/acceptance.md)、[数字](artifacts/far_mist_v2/measurements.json)，汇总日志`logs/far_mist_v2_acceptance.log`。AGENTS.md未改，未提交，未执行其他任务。

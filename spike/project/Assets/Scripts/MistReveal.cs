@@ -202,7 +202,8 @@ public sealed class MistReveal : MonoBehaviour
         string output = root != null ? Path.Combine(root.Parent.FullName, "Shots") : Path.GetFullPath("Shots");
         Directory.CreateDirectory(output);
         float[] distances = { 80, 50, DemoNearDistance };
-        float nearHeight = 0;
+        float nearHeight = 0, farHeight = 0;
+        double farContrast = 0;
         double[] edges = new double[distances.Length];
         bool closeupPass = false;
         for (int i = 0; i < distances.Length; i++)
@@ -246,6 +247,7 @@ public sealed class MistReveal : MonoBehaviour
             if (d == 80) FarMistAudit.Capture(cam, frame, output);
             RectInt roi = ChurchRect(cam, frame.width, frame.height, out float heightPct);
             edges[i] = Edge(frame, roi);
+            if (d == 80) { farHeight = heightPct; farContrast = SilhouetteContrast(cam, frame, output); }
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "[REVEAL] d={0:F0} fogStart={1:F3} fogEnd={2:F3} churchEdge={3:F9}",
                 Distance(), RenderSettings.fogStartDistance, RenderSettings.fogEndDistance, edges[i]));
@@ -254,7 +256,8 @@ public sealed class MistReveal : MonoBehaviour
             if (d == DemoNearDistance) { nearHeight = heightPct; closeupPass = ValidateCloseup(cam) && heightPct >= .55f && heightPct <= .68f; }
             Destroy(frame);
         }
-        bool pass = closeupPass && edges[0] < edges[1] && edges[1] < edges[2] && edges[2] >= edges[0] * 1.6;
+        // 该比值在雾密度可调后与远山可见性冲突，已由双距离构图判据替代。
+        bool pass = closeupPass && farHeight <= .30f && farContrast <= .18;
         // Let the single pulse finish so the same run verifies restoration as well.
         while (pulsing) yield return null;
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
@@ -262,6 +265,7 @@ public sealed class MistReveal : MonoBehaviour
             pass ? "pass" : "FAIL", edges[2] / Math.Max(edges[0], double.Epsilon), bellFired,
             (bloom == null || Mathf.Approximately(bloom.intensity.value, baseBloom)) &&
             (vignette == null || Mathf.Approximately(vignette.intensity.value, baseVignette)), DemoNearDistance, nearHeight));
+        Debug.Log(FormattableString.Invariant($"[REVEAL] far_h_pct={farHeight:F6} far_contrast={farContrast:F6} near_h_pct={nearHeight:F6} gate={(pass ? "pass" : "FAIL")}"));
         // Allow the complete synthesized decay to play before exiting this demo.
         var audio = player.GetComponent<AudioDirector>();
         yield return new WaitForSecondsRealtime(4);
@@ -376,6 +380,48 @@ public sealed class MistReveal : MonoBehaviour
         int x1 = Mathf.Clamp(Mathf.CeilToInt(max.x), x0 + 1, width);
         int y1 = Mathf.Clamp(Mathf.CeilToInt(max.y), y0 + 1, height);
         return new RectInt(x0, y0, x1 - x0, y1 - y0);
+    }
+
+    // Project triangle row spans to obtain actual silhouette boundaries; compare
+    // PNG Rec.709 luma 4 px inside/outside each side, then mean absolute delta.
+    // All rows/samples are exported for independent PNG recomputation.
+    double SilhouetteContrast(Camera cam, Texture2D frame, string output)
+    {
+        var left = new float[frame.height]; var right = new float[frame.height];
+        Array.Fill(left, float.PositiveInfinity); Array.Fill(right, float.NegativeInfinity);
+        foreach (var mf in church.GetComponentsInChildren<MeshFilter>())
+        {
+            var verts = Array.ConvertAll(mf.sharedMesh.vertices, v => cam.WorldToScreenPoint(mf.transform.TransformPoint(v)));
+            var tri = mf.sharedMesh.triangles;
+            for (int k=0;k<tri.Length;k+=3)
+            {
+                var a=verts[tri[k]]; var b=verts[tri[k+1]]; var c=verts[tri[k+2]];
+                int lo=Mathf.Max(0,Mathf.CeilToInt(Mathf.Min(a.y,Mathf.Min(b.y,c.y))));
+                int hi=Mathf.Min(frame.height-1,Mathf.FloorToInt(Mathf.Max(a.y,Mathf.Max(b.y,c.y))));
+                for(int y=lo;y<=hi;y++)
+                {
+                    void Span(Vector3 u,Vector3 v) { if((u.y<=y && v.y>y)||(v.y<=y && u.y>y)) { float x=Mathf.Lerp(u.x,v.x,(y-u.y)/(v.y-u.y));left[y]=Mathf.Min(left[y],x);right[y]=Mathf.Max(right[y],x); } }
+                    Span(a,b);Span(b,c);Span(c,a);
+                }
+            }
+        }
+        var csv=new System.Text.StringBuilder("inside_x,outside_x,y,contrast\n"); double sum=0;int n=0;
+        double L(Color c)=>.2126*c.r+.7152*c.g+.0722*c.b;
+        for(int y=0;y<frame.height;y+=2)
+        {
+            if(right[y]-left[y]<12)continue;
+            foreach(int side in new[]{-1,1})
+            {
+                int edge=Mathf.RoundToInt(side<0?left[y]:right[y]);int ix=edge-side*4,ox=edge+side*4;
+                if(ix<0||ox<0||ix>=frame.width||ox>=frame.width)continue;
+                double delta=Math.Abs(L(frame.GetPixel(ix,y))-L(frame.GetPixel(ox,y)));sum+=delta;n++;
+                csv.Append(FormattableString.Invariant($"{ix},{ox},{y},{delta:F9}\n"));
+            }
+        }
+        File.WriteAllText(Path.Combine(output,"reveal_contrast.csv"),csv.ToString());
+        if(n==0)throw new InvalidOperationException("No church silhouette contrast samples");
+        Debug.Log($"[REVEAL_CONTRAST] samples={n} metric=mean_abs_boundary_Rec709_PNG_delta offset_px=4");
+        return sum/n;
     }
 
     static double Edge(Texture2D frame, RectInt roi)
