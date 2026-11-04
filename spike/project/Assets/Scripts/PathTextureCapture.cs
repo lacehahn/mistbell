@@ -21,6 +21,7 @@ public sealed class PathTextureCapture:MonoBehaviour {
   var root=new DirectoryInfo(Application.dataPath);while(root!=null && root.Name!="Builds")root=root.Parent;
   string dir=Path.Combine(root!=null?root.Parent.FullName:Directory.GetCurrentDirectory(),"Shots");Directory.CreateDirectory(dir);
   ScreenCapture.CaptureScreenshot(Path.Combine(dir,"path_closeup.png"));
+  FencePathToneAudit.Capture(camera,dir,"path_closeup");
   Debug.Log(FormattableString.Invariant($"[PATH_CLOSEUP] distance_m={Vector3.Distance(camera.transform.position,target):F3} target={target.ToString("F3")} size={Screen.width}x{Screen.height} post=false"));
   yield return new WaitForSecondsRealtime(1);
   // Additional same-lighting samples allow comparison of the two authored altitude endpoints.

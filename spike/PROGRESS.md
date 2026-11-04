@@ -754,3 +754,12 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - 修正诊断器给空网格建立临时MeshCollider导致开发控制台污染近景截图的问题：跳过无有效三角面网格，只改诊断查询对象，未改场景碰撞。验收额外捕获此类错误，最终没有再出现。
 - 构建Succeeded/0errors；室外1920×1080：z01 228.15FPS/285drawcalls；terrace 225.52FPS/355drawcalls。walk6=15.395m/贴地误差0/漏射线0；进堂全True；bad=enter0/walk0/reveal1。通用bench旧250上限仍False，本任务按200FPS/400drawcalls独立验收，不改旧基准脚本。
 - 完整执行 `bash spike/tools/accept_far_mist_v2.sh`，exit=1（固定80m构图未过）；`git diff --check`与脚本语法检查通过。三张新图已目视检查；[验收报告](artifacts/far_mist_v2/acceptance.md)、[数字](artifacts/far_mist_v2/measurements.json)，汇总日志`logs/far_mist_v2_acceptance.log`。AGENTS.md未改，未提交，未执行其他任务。
+
+### 2026-11-04 围栏 / 路面色调（fence_path_tone）
+
+- 仅执行任务书；`bash spike/tools/accept_fence_path_tone.sh` exit=0，22项全过，`git diff --check`通过。
+- `[FENCE3] spacing=2.199987..2.200088 count=185 crossing=0`；每侧一排，柱0.08×0.08×1m，雪帽0.04m，#4A3B2E，roughness=.85、无高光；无后期近景受光面最高L*=22.870519。
+- `[PATH3] luma=54.173238 b_star=2.560099 edge_ok=true`；同像素增亮9.71%，7cm #E8EFF6 雪边、无侧面硬边/中央白线；`[SNOW3] ridges=3`。
+- walk6=15.395m/贴地0/漏射线0；enter全True；reveal gate=pass；三项bad=0，未改门槛。
+- 1920×1080前台平均：z01=212.44FPS/269dc，terrace=221.41FPS/328dc，interior=216.25FPS/256dc；1%low=165.35/160.88/158.13，如实记录。
+- 所有保护项摘要不变；AGENTS.md未改。新截图已目视检查，数据、测量口径（受光面用post=false近景，保留玩法图景深混色极值）、源码与复现说明见 `spike/artifacts/fence_path_tone/report.md`；原始日志 `spike/logs/fence_path_tone_*.log/json`。

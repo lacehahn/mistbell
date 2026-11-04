@@ -921,6 +921,7 @@ public sealed partial class PlayerController : MonoBehaviour
         string output=Path.Combine(root!=null?root.Parent.FullName:Directory.GetCurrentDirectory(),"Shots",name+".png");
         Directory.CreateDirectory(Path.GetDirectoryName(output));
         var frame=ScreenCapture.CaptureScreenshotAsTexture(); File.WriteAllBytes(output,frame.EncodeToPNG()); Destroy(frame);
+        FencePathToneAudit.Capture(follow,Path.GetDirectoryName(output),name);
         return output;
     }
     static float InteriorSurfaceLuma(Texture2D frame, Rect roi)

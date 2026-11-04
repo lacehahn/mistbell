@@ -1,0 +1,8 @@
+围栏木料贴图（给 Lot 生成；回来命名 fence_wood.png 放到 spike/art-prompts/staged/）
+
+E —— 深 walnut 老木料（竖纹，横向无缝）
+```
+Hand-painted HD-2D RPG weathered dark walnut wood surface for a mountain fence, filling the frame edge to edge, flat orthographic front view, seamless tileable horizontally (left edge matches right edge), square 1:1 canvas. Vertical wood grain running top to bottom, grain lines 3-6 px, slightly wavy and wandering, occasional knots (2-3 per tile, 30-50 px), fine splitting cracks near the knots, chipped worn edges on about 15% of the surface showing lighter wood underneath. Palette strictly three posterized levels of dark walnut: #4A3B2E base, #382C22 shadow, #5C4A38 worn light, with a few pale grey lichen freckles under 4%. Brushwork chunky hand-painted, hard edges, no photographic grain, no smooth gradient, no gloss, no directional lighting, no baked shadow, no frost, no snow, no metal hardware, no text, no watermark, no 3D render.
+```
+
+如果一次想多出几种，可以按同样提示词再要一版偏灰的（`#4A4740` 基调），我挑更冷的那版。
