@@ -1,0 +1,105 @@
+{
+  "pass": true,
+  "checks": {
+    "build": true,
+    "protected": true,
+    "width": true,
+    "edge": true,
+    "scale": true,
+    "samples": true,
+    "radius": true,
+    "angle": true,
+    "self_intersect": true,
+    "walls": true,
+    "height": true,
+    "fence_spacing": true,
+    "fence_edge_gap": true,
+    "fence_crossing": true,
+    "fence_batch": true,
+    "footprints": true,
+    "walk": true,
+    "interior": true,
+    "reveal": true,
+    "trail": true,
+    "bad_zero": true,
+    "outdoor_fps": true,
+    "drawcall": true,
+    "screenshots": true,
+    "fresh_logs": true
+  },
+  "width_min": 2.0999949125302577,
+  "width_max": 2.1000077729959616,
+  "min_radius": 21.216382697050385,
+  "max_angle": 2.697219867414747,
+  "samples": 208,
+  "self_intersections": 0,
+  "wall_overlaps": [],
+  "fence_crossings": 0,
+  "fence_spacing": [
+    2.1986082237851137,
+    2.200016998437894
+  ],
+  "fence_offset": [
+    1.3996125708427376,
+    1.4000028997977039
+  ],
+  "footprint_max_offset": 0.18000000715255737,
+  "walk_distance": 15.396,
+  "bad": {
+    "camera": 0,
+    "closeup": 0,
+    "walk": 0,
+    "interior": 0,
+    "reveal": 0,
+    "bench": 0,
+    "trail": 0
+  },
+  "bench": [
+    {
+      "pos": "z01",
+      "fps_avg": 212.57669067382812,
+      "fps_p1": 166.39207458496094,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 207,
+      "tris": 5983364
+    },
+    {
+      "pos": "terrace",
+      "fps_avg": 220.85110473632812,
+      "fps_p1": 160.9809112548828,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 276,
+      "tris": 6584542
+    },
+    {
+      "pos": "interior",
+      "fps_avg": 216.2639923095703,
+      "fps_p1": 158.2797393798828,
+      "vram_mb": 508.342041015625,
+      "drawcalls": 256,
+      "tris": 6479808
+    }
+  ],
+  "shots": {
+    "cam_play_1080": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "1afb7dc2dc745f8175f805029fea572c48a2976b6e7ba56cf09cf3913469f3b1",
+      "fresh": true,
+      "magenta": 0
+    },
+    "path_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "0431705a580a6385be0ede499c8c6d741a77f447637b04538dce51fffbba1aec",
+      "fresh": true,
+      "magenta": 0
+    }
+  },
+  "climb": 27.442068099975586,
+  "endpoint": -1.39263117313385
+}

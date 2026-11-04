@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 // Metres, shared by scene generation and runtime traversal checks.
 public static class ClimbRoute
@@ -9,11 +10,30 @@ public static class ClimbRoute
         new Vector2(-18,-210), new Vector2(10,-150), new Vector2(-12,-95),
         new Vector2(0,-40), new Vector2(0,-13.25f) };
     static readonly float[] Grades = {6,8,10};
+    public const float PavingWidth = 2.1f, SnowEdge = .07f;
+    // Quadratic Bezier fillets, tangent to the unchanged straight approaches.
+    // Height(z) and the original grade control points intentionally remain unchanged.
+    public static readonly Vector2[] SmoothPoints = SamplePlan();
+    static Vector2[] SamplePlan()
+    {
+        var dense=new List<Vector2>{Points[0]};
+        void Line(Vector2 p) { var a=dense[dense.Count-1];int n=Mathf.CeilToInt(Vector2.Distance(a,p)/.05f);for(int j=1;j<=n;j++)dense.Add(Vector2.Lerp(a,p,j/(float)n)); }
+        for(int i=1;i<Points.Length-1;i++) {
+            var c=Points[i];var a=c+(Points[i-1]-c).normalized*10f;var b=c+(Points[i+1]-c).normalized*10f;
+            Line(a);for(int j=1;j<=400;j++){float t=j/400f;dense.Add((1-t)*(1-t)*a+2*(1-t)*t*c+t*t*b);}
+        }
+        Line(Points[Points.Length-1]);var result=new List<Vector2>{dense[0]};float station=1,total=0;
+        for(int i=1;i<dense.Count;i++){float length=Vector2.Distance(dense[i-1],dense[i]);while(station<=total+length){result.Add(Vector2.Lerp(dense[i-1],dense[i],(station-total)/length));station+=1;}total+=length;}
+        // Distribute the final residual over all samples: uniform spacing <= 1m.
+        int count=Mathf.CeilToInt(total);result.Clear();result.Add(dense[0]);station=total/count;float stride=station;total=0;
+        for(int i=1;i<dense.Count;i++){float length=Vector2.Distance(dense[i-1],dense[i]);while(result.Count<count&&station<=total+length){result.Add(Vector2.Lerp(dense[i-1],dense[i],(station-total)/length));station+=stride;}total+=length;}
+        result.Add(dense[dense.Count-1]);return result.ToArray();
+    }
     public static float CenterX(float z)
     {
-        for(int i=0;i<Points.Length-1;i++)
-            if(z<=Points[i+1].y) return Mathf.Lerp(Points[i].x,Points[i+1].x,Mathf.InverseLerp(Points[i].y,Points[i+1].y,z));
-        return 0;
+        for(int i=0;i<SmoothPoints.Length-1;i++)
+            if(z<=SmoothPoints[i+1].y)return Mathf.Lerp(SmoothPoints[i].x,SmoothPoints[i+1].x,Mathf.InverseLerp(SmoothPoints[i].y,SmoothPoints[i+1].y,z));
+        return SmoothPoints[SmoothPoints.Length-1].x;
     }
     public static Vector3 Point(int segment, float t, float offset=0)
     {

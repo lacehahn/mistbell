@@ -21,6 +21,13 @@ public sealed class FootprintTrail : MonoBehaviour
     readonly int[] triangles = new int[72];
     readonly RaycastHit[] hits = new RaycastHit[8];
 
+    // Narrow paving exposes more snow contacts. Keep the same ring pool but
+    // submit its disjoint decals as one dynamic mesh rather than 120 renderers.
+    readonly Vector3[] batchVertices = new Vector3[Capacity * Verts];
+    readonly int[] batchIndices = new int[Capacity * 72];
+    Mesh batchMesh;
+    bool batchDirty;
+
     AudioDirector audioDirector;
     Material material;
     Transform root;
@@ -75,6 +82,14 @@ public sealed class FootprintTrail : MonoBehaviour
         }
 
         root = new GameObject("Player Footprint Trail").transform;
+        var batch = new GameObject("Trail Batch", typeof(MeshFilter), typeof(MeshRenderer));
+        batch.transform.SetParent(root, false);
+        batchMesh = new Mesh { name = "TrailFootprintBatch" };
+        batchMesh.MarkDynamic();
+        batch.GetComponent<MeshFilter>().sharedMesh = batchMesh;
+        batch.GetComponent<MeshRenderer>().sharedMaterial = material;
+        for (int i = 0; i < Capacity; i++)
+            for (int j = 0; j < 72; j++) batchIndices[i * 72 + j] = i * Verts + triangles[j];
         for (int i = 0; i < Capacity; i++)
         {
             var go = new GameObject("Trail_" + i, typeof(MeshFilter), typeof(MeshRenderer));
@@ -83,6 +98,7 @@ public sealed class FootprintTrail : MonoBehaviour
             mesh.MarkDynamic();
             go.GetComponent<MeshFilter>().sharedMesh = mesh;
             go.GetComponent<MeshRenderer>().sharedMaterial = material;
+            go.GetComponent<MeshRenderer>().forceRenderingOff = true;
             go.SetActive(false);
             meshes[i] = mesh;
             patches[i] = go;
@@ -161,9 +177,23 @@ public sealed class FootprintTrail : MonoBehaviour
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         patches[slot].SetActive(true);
+        Array.Copy(vertices, 0, batchVertices, slot * Verts, Verts);
+        batchDirty = true;
         next++;
         Spawns++;
         if (audioDirector != null) audioDirector.PlayFootstep();
+    }
+
+    void LateUpdate()
+    {
+        if (!batchDirty || batchMesh == null) return;
+        int count = Mathf.Min(next, Capacity);
+        batchMesh.Clear();
+        batchMesh.SetVertices(batchVertices, 0, count * Verts);
+        batchMesh.SetIndices(batchIndices, 0, count * 72, MeshTopology.Triangles, 0);
+        batchMesh.RecalculateNormals();
+        batchMesh.RecalculateBounds();
+        batchDirty = false;
     }
 
     public void LogSummary()
