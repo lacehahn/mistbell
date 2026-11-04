@@ -31,7 +31,11 @@ for spec in "$@"; do
     RC=0
   fi
   # 演示用 Application.Quit(code) 结束，进程退出码拿不到；改看日志里的失败断言。
-  BAD=$(grep -acE "^\[PLAY\] .*fps_ok=false|failed|ERROR|Exception" "$LOG" 2>/dev/null || true)
+  BAD=$(grep -acE "^\[PLAY\] .*fps_ok=false|failed|ERROR|Exception|^\[REVEAL\] gate=FAIL" "$LOG" 2>/dev/null || true)
+  if [[ "$spec" == *-demo-reveal* ]] && ! grep -aqE '^\[REVEAL\] gate=(pass|FAIL) ' "$LOG"; then
+    BAD=$(( ${BAD:-0} + 1 ))
+    echo '[REVEAL] missing terminal gate result'
+  fi
   printf '%-26s rc=%s bad=%s\n' "$spec" "$RC" "$BAD"
   [ "$RC" -ne 0 ] && FAIL=1
   [ "${BAD:-0}" -gt 0 ] && FAIL=1

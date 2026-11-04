@@ -224,11 +224,12 @@ public sealed class MistReveal : MonoBehaviour
             var frame = ScreenCapture.CaptureScreenshotAsTexture();
             string path = Path.Combine(output, "reveal_" + d.ToString("F0", CultureInfo.InvariantCulture) + ".png");
             File.WriteAllBytes(path, frame.EncodeToPNG());
-            RectInt roi = ChurchRect(cam, frame.width, frame.height);
+            RectInt roi = ChurchRect(cam, frame.width, frame.height, out float heightPct);
             edges[i] = Edge(frame, roi);
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "[REVEAL] d={0:F0} fogStart={1:F3} fogEnd={2:F3} churchEdge={3:F9}",
                 Distance(), RenderSettings.fogStartDistance, RenderSettings.fogEndDistance, edges[i]));
+            Debug.Log(FormattableString.Invariant($"[REVEAL_FRAME] d={d:F0} fov={cam.fieldOfView:F3} church_height_pct={heightPct:F6}"));
             Debug.Log($"[REVEAL] screenshot={path} roi_bottom_left={roi.x},{roi.y},{roi.width},{roi.height} metric=mean_abs_RGB_xy/255");
             if (d == 20) closeupPass = ValidateCloseup(cam);
             Destroy(frame);
@@ -316,7 +317,7 @@ public sealed class MistReveal : MonoBehaviour
         return bounds;
     }
 
-    RectInt ChurchRect(Camera cam, int width, int height)
+    RectInt ChurchRect(Camera cam, int width, int height, out float heightPct)
     {
         // Project real geometry: at close range the empty AABB corners grossly
         // overestimate the ROI and dilute the church's edge metric with sky.
@@ -329,6 +330,7 @@ public sealed class MistReveal : MonoBehaviour
             var pixel = new Vector2(v.x * width, v.y * height);
             min = Vector2.Min(min, pixel); max = Vector2.Max(max, pixel);
         }
+        heightPct = (max.y - min.y) / height;
         int x0 = Mathf.Clamp(Mathf.FloorToInt(min.x), 0, width - 1);
         int y0 = Mathf.Clamp(Mathf.FloorToInt(min.y), 0, height - 1);
         int x1 = Mathf.Clamp(Mathf.CeilToInt(max.x), x0 + 1, width);
