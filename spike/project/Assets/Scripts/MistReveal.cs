@@ -13,6 +13,8 @@ public sealed class MistReveal : MonoBehaviour
     const float FarStart = 120f, FarEnd = 420f, NearStart = 20f, NearEnd = 120f;
     const float PulseRise = 1.2f, PulseFall = .8f, BloomMultiplier = 1.6f, VignetteMultiplier = 1.3f;
     const float SettleSeconds = .5f;
+    const float DemoNearDistance = 28f, DemoCameraHeight = 14f, DemoNearHeight = .62f;
+    static readonly Vector3 DemoOffset = new Vector3(0, DemoCameraHeight, -7.2f);
     const int CloudColumns = 48, CloudRows = 24;
     const float CloudWidth = 260f, CloudHeight = 140f, CloudOpacity = .98f;
     const float CloudCenterY = 18f, CloudFrontZ = -20f, CloudLayerSpacing = 26f;
@@ -177,7 +179,7 @@ public sealed class MistReveal : MonoBehaviour
 
     IEnumerator DemoReveal()
     {
-        // Start all normal components before moving the player. Keep normal follow-camera framing.
+        // Start normal components before positioning the reveal-only camera.
         yield return null;
         // 关键：PlayerController.LateUpdate 每帧把相机朝向拉回"玩家上方 lookHeight"，
         // 会把我们按教堂包围盒设的 FOV/朝向覆盖掉（表现为教堂顶被切）。演示期间停掉它。
@@ -187,16 +189,17 @@ public sealed class MistReveal : MonoBehaviour
         while (root != null && root.Name != "Builds") root = root.Parent;
         string output = root != null ? Path.Combine(root.Parent.FullName, "Shots") : Path.GetFullPath("Shots");
         Directory.CreateDirectory(output);
-        float[] distances = { 80, 50, 20 };
+        float[] distances = { 80, 50, DemoNearDistance };
+        float nearHeight = 0;
         double[] edges = new double[distances.Length];
         bool closeupPass = false;
         for (int i = 0; i < distances.Length; i++)
         {
             float d = distances[i];
-            if (d == 20)
+            if (d == DemoNearDistance)
             {
-                // Exercise the actual 45 m crossing before the existing 20 m
-                // screenshot teleport, rather than reporting its overshoot as 20 m.
+                // Exercise the actual 45 m crossing before teleporting to the
+                // selected near sample, so the bell fires exactly once.
                 Vector3 bellPoint = Anchor + Vector3.back * BellDistance;
                 if (!player.ground.Raycast(new Ray(bellPoint + Vector3.up * 500, Vector3.down), out var bellHit, 1000))
                 { Debug.LogError("[REVEAL] demo bell ground ray missed"); Application.Quit(1); yield break; }
@@ -210,15 +213,19 @@ public sealed class MistReveal : MonoBehaviour
             { Debug.LogError("[REVEAL] demo ground ray missed"); Application.Quit(1); yield break; }
             p.y = hit.point.y;
             player.transform.position = p;
-            // Teleport the existing follow rig with the player, avoiding frame-rate dependent camera lag.
-            cam.transform.position = p + PlayerController.FollowOffset;
-            // 底座扩到 37×27 后，35° 固定 FOV 在 20 m 处装不下 24.5 m 高的教堂（顶会被切）。
-            // 按教堂世界包围盒反算 FOV：保持机位不变（ValidateCloseup 校验 offset），只改视角。
+            // Reveal-only rig: elevate above the retaining wall, without altering gameplay cameras.
+            cam.transform.position = p + DemoOffset;
             var cb = ChurchWorldBounds();
             float distToChurch = Vector3.Distance(cam.transform.position, cb.center);
             float fitFov = 2f * Mathf.Atan((cb.extents.y * 1.10f) / Mathf.Max(distToChurch, 1f)) * Mathf.Rad2Deg;
             cam.fieldOfView = Mathf.Clamp(fitFov, 35f, 58f);
             cam.transform.LookAt(cb.center);
+            if (d == DemoNearDistance)
+            {
+                ChurchRect(cam, Screen.width, Screen.height, out float initialHeight);
+                cam.fieldOfView = 2f * Mathf.Atan(Mathf.Tan(cam.fieldOfView * .5f * Mathf.Deg2Rad)
+                    * initialHeight / DemoNearHeight) * Mathf.Rad2Deg;
+            }
             yield return new WaitForSecondsRealtime(SettleSeconds);
             yield return new WaitForEndOfFrame();
             var frame = ScreenCapture.CaptureScreenshotAsTexture();
@@ -231,17 +238,17 @@ public sealed class MistReveal : MonoBehaviour
                 Distance(), RenderSettings.fogStartDistance, RenderSettings.fogEndDistance, edges[i]));
             Debug.Log(FormattableString.Invariant($"[REVEAL_FRAME] d={d:F0} fov={cam.fieldOfView:F3} church_height_pct={heightPct:F6}"));
             Debug.Log($"[REVEAL] screenshot={path} roi_bottom_left={roi.x},{roi.y},{roi.width},{roi.height} metric=mean_abs_RGB_xy/255");
-            if (d == 20) closeupPass = ValidateCloseup(cam);
+            if (d == DemoNearDistance) { nearHeight = heightPct; closeupPass = ValidateCloseup(cam) && heightPct >= .55f && heightPct <= .68f; }
             Destroy(frame);
         }
         bool pass = closeupPass && edges[0] < edges[1] && edges[1] < edges[2] && edges[2] >= edges[0] * 1.6;
         // Let the single pulse finish so the same run verifies restoration as well.
         while (pulsing) yield return null;
         Debug.Log(string.Format(CultureInfo.InvariantCulture,
-            "[REVEAL] gate={0} ratio20_80={1:F6} bell_once={2} pulse_restored={3}",
+            "[REVEAL] gate={0} ratio={1:F6} near_dist={4:F0} church_height_pct={5:F6} ratio20_80={1:F6} bell_once={2} pulse_restored={3}",
             pass ? "pass" : "FAIL", edges[2] / Math.Max(edges[0], double.Epsilon), bellFired,
             (bloom == null || Mathf.Approximately(bloom.intensity.value, baseBloom)) &&
-            (vignette == null || Mathf.Approximately(vignette.intensity.value, baseVignette))));
+            (vignette == null || Mathf.Approximately(vignette.intensity.value, baseVignette)), DemoNearDistance, nearHeight));
         // Allow the complete synthesized decay to play before exiting this demo.
         var audio = player.GetComponent<AudioDirector>();
         yield return new WaitForSecondsRealtime(4);
@@ -250,14 +257,32 @@ public sealed class MistReveal : MonoBehaviour
 
     bool ValidateCloseup(Camera cam)
     {
-        float topY = 1;
+        float topY = 1, bottomY = 1;
+        int baseSamples = 0, baseBlocked = 0;
         Material stone = null;
+        float baseY = ChurchWorldBounds().min.y;
+        var walls = Array.FindAll(FindObjectsByType<Collider>(FindObjectsSortMode.None),
+            c => c.name.StartsWith("TerraceWall_") || c.name.StartsWith("TerraceCap_"));
         foreach (var mf in church.GetComponentsInChildren<MeshFilter>())
         {
             foreach (var v in mf.sharedMesh.vertices)
             {
                 var projected = cam.WorldToViewportPoint(mf.transform.TransformPoint(v));
-                if (projected.z > 0) topY = Mathf.Min(topY, 1 - projected.y);
+                if (projected.z > 0)
+                {
+                    topY = Mathf.Min(topY, 1 - projected.y);
+                    bottomY = Mathf.Min(bottomY, projected.y);
+                }
+                // Test actual low church geometry against foreground terrace collider geometry.
+                var world = mf.transform.TransformPoint(v);
+                if (world.y <= baseY + .25f)
+                {
+                    baseSamples++;
+                    var delta = world - cam.transform.position;
+                    foreach (var wall in walls)
+                        if (wall.Raycast(new Ray(cam.transform.position, delta.normalized), out _, delta.magnitude - .02f))
+                        { baseBlocked++; break; }
+                }
             }
             foreach (var mat in mf.GetComponent<Renderer>().sharedMaterials)
                 if (mat.name.StartsWith("M_ChurchStone")) stone = mat;
@@ -297,9 +322,11 @@ public sealed class MistReveal : MonoBehaviour
             "[CLOSEUP] cam_offset=({0:0.###},{1:0.###},{2:0.###}) church_top_y={3:F6} stone_tile_m={4:0.0} masonry_per_5m={5} brazier_r={6:0.###} brazier_i={7:0.###} contact_alpha={8:F2} rail_gap_m={9:F6}",
             offset.x, offset.y, offset.z, topY, tileM, masonry, fire.range, fire.intensity, alpha, gap));
         Debug.Log($"[CLOSEUP_DETAIL] fence_feet={feet} rail_gap_reference=adjacent_paving_top_plane contact_mode=realtime_only contact_patches=0");
-        return topY >= .06f && topY <= .20f && masonry >= 8 && gap <= .02f && feet > 0 &&
-            Vector3.Distance(offset, PlayerController.FollowOffset) < .001f &&
-            Mathf.Abs(tileM - 1.8f) < .001f && fire.type == LightType.Point &&
+        Debug.Log(FormattableString.Invariant($"[REVEAL_COMPOSITION] top_margin={topY:F6} bottom_margin={bottomY:F6} base_samples={baseSamples} base_blocked={baseBlocked} camera_y={cam.transform.position.y:F3} camera_height={DemoCameraHeight:F3} fov={cam.fieldOfView:F3}"));
+        // 以 `Style11` 图集实际物理尺寸为准，1.8 m 是早期估算。
+        return topY >= .04f && bottomY >= .04f && baseSamples > 0 && baseBlocked == 0 && masonry >= 8 && gap <= .02f && feet > 0 &&
+            Vector3.Distance(offset, DemoOffset) < .001f &&
+            Mathf.Abs(tileM - 1.0f) < .001f && fire.type == LightType.Point &&
             Mathf.Approximately(fire.range, 7) && Mathf.Approximately(fire.intensity, 2.2f) && alpha <= .051f;
     }
 
