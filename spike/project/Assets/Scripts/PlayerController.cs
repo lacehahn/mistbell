@@ -1129,7 +1129,20 @@ public sealed partial class PlayerController : MonoBehaviour
         InteriorPewsAudit.Inside(interior, follow, lightingFrame);
         InteriorWindowsAudit.Inside(interior, follow, lightingFrame);
         InteriorToneAudit.Inside(interior, follow, lightingFrame);
+        InteriorPilastersDomeAudit.Inside(interior, follow, lightingFrame);
+        InteriorMaterialsAudit.Pews(interior, follow, lightingFrame);
         Destroy(lightingFrame);
+        // Paired same-camera PNGs quantify each additive shaft against its own disabled control.
+        var taskBeams=Array.FindAll(interior.GetComponentsInChildren<MeshRenderer>(true), r=>r.name.StartsWith("Interior_LightShaft_"));
+        foreach(var beam in taskBeams) {
+            yield return new WaitForEndOfFrame();
+            InteriorShot("pilasters_with_"+beam.name);
+            beam.enabled=false;
+            yield return new WaitForEndOfFrame();
+            InteriorShot("pilasters_without_"+beam.name);
+            beam.enabled=true;
+            yield return new WaitForEndOfFrame();
+        }
         // 抬头验证：按 F 的逻辑等价物，把看向点抬到穹顶中心，出一张 interior_lookup.png
         lookUp=true;
         yield return new WaitForSeconds(1.2f);

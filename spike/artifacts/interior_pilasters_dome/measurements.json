@@ -1,0 +1,202 @@
+{
+  "geometry": {
+    "rib_width_min": 0.12,
+    "rib_width_max": 0.12,
+    "rib_depth_min": 0.05,
+    "rib_depth_max": 0.05,
+    "mullion_width_min": 0.03,
+    "mullion_width_max": 0.03,
+    "mullions": 12.0,
+    "black_bits": 0.0,
+    "max_decoration_aabb": 0.05464,
+    "replacement": 4.0
+  },
+  "base_L_definition": "lowest exposed shaft below world y=3.5m; foot molding itself hidden by pews",
+  "accepted": true,
+  "checks": {
+    "build": true,
+    "protected": true,
+    "runtime_errors": true,
+    "entry": true,
+    "base_L": true,
+    "shaft_L": true,
+    "shaft_b": true,
+    "color_shift": true,
+    "hue_delta": true,
+    "cap_contrast": true,
+    "rib_top_gain": true,
+    "rib_side_delta": true,
+    "window_L": true,
+    "black_bits": true,
+    "mullions": true,
+    "gold_frame": true,
+    "beams": true,
+    "performance": true,
+    "wall_lit": true,
+    "wall_shadow": true,
+    "wall_split": true,
+    "wall_chroma": true,
+    "ceiling": true,
+    "altar": true,
+    "mottle": true,
+    "gold_multiplier": true,
+    "shaft_alpha_retained": true,
+    "idempotent": true,
+    "geometry": true,
+    "fresh_shots": true
+  },
+  "pilasters": {
+    "shaft": {
+      "L": 31.881887906879015,
+      "a": 3.5883311883982505,
+      "b": 10.261881304138146,
+      "luma": 0.2940585793237586,
+      "pixels": 6372
+    },
+    "base": {
+      "pixels": 2242,
+      "L": 33.54942667929103,
+      "a": 4.46717607827964,
+      "b": 12.070804865101776,
+      "luma": 0.3095102887827749
+    },
+    "cap": {
+      "pixels": 0,
+      "L": null,
+      "a": null,
+      "b": null,
+      "luma": null
+    },
+    "wall": {
+      "pixels": 25180,
+      "L": 28.925984307234113,
+      "a": 2.991028691008385,
+      "b": 9.854232320261179,
+      "luma": 0.26662262087869437
+    },
+    "gold": {
+      "pixels": 148,
+      "L": 42.93156544676512,
+      "a": 9.314676884057072,
+      "b": 33.422273691535224,
+      "luma": 0.38786783253842044
+    },
+    "upper_shaft": {
+      "pixels": 4130,
+      "L": 30.976652573283925,
+      "a": 3.1112439624626393,
+      "b": 9.27989422818646,
+      "luma": 0.28567050847457837
+    }
+  },
+  "color_shift_vs_wall": 0.7231514139128085,
+  "hue_delta": 2.389017664206733,
+  "cap_contrast": 0.09000000000000008,
+  "dome": {
+    "window": {
+      "pixels": 1982,
+      "L": 69.93410694416612,
+      "a": -1.7940363246923476,
+      "b": -1.3320401115061653,
+      "luma": 0.6712420735640446
+    },
+    "plaster": {
+      "pixels": 13578,
+      "L": 22.87217081671956,
+      "a": 5.0864590625693085,
+      "b": 15.310476611265104,
+      "luma": 0.2109587354977246
+    },
+    "rib_top": {
+      "pixels": 2062,
+      "L": 31.305498607816176,
+      "a": 0.8627485213999343,
+      "b": 10.76504164742092,
+      "luma": 0.28928783438884836
+    },
+    "rib_side": {
+      "pixels": 276,
+      "L": 20.523987447728377,
+      "a": 2.002255433579775,
+      "b": 11.181216792909998,
+      "luma": 0.1940596078431368
+    }
+  },
+  "rib_side_delta": 0.15999999564469336,
+  "rib_top_gain": 0.11000002393165786,
+  "gold_frame_luma": 0.53981,
+  "gold_frame_original_view_luma": 0.45266,
+  "beams": [
+    {
+      "index": 0,
+      "positive_pixels": 87870,
+      "mean_positive_delta": 0.03449675169870155
+    },
+    {
+      "index": 1,
+      "positive_pixels": 44786,
+      "mean_positive_delta": 0.02768935220477286
+    },
+    {
+      "index": 2,
+      "positive_pixels": 32616,
+      "mean_positive_delta": 0.022963160243741582
+    }
+  ],
+  "regression": {
+    "left": {
+      "pixels": 26557,
+      "L": 37.81893908389714,
+      "a": 3.418789830873682,
+      "b": 10.967268350831457,
+      "luma": 0.35057539977272256
+    },
+    "right": {
+      "pixels": 26557,
+      "L": 22.729802349564476,
+      "a": 2.242583557511414,
+      "b": 8.100999733731754,
+      "luma": 0.21430085562169746
+    },
+    "altar": {
+      "pixels": 570,
+      "L": 28.876563521754036,
+      "a": 3.346869241112735,
+      "b": 11.907936437647887,
+      "luma": 0.2651341919504635
+    },
+    "ceiling": {
+      "pixels": 43389,
+      "L": 16.046782618157472,
+      "a": 0.48746293347363423,
+      "b": 6.4672241234351375,
+      "luma": 0.1557956049943522
+    }
+  },
+  "interior": {
+    "pos": "interior",
+    "fps_avg": 217.8444061279297,
+    "fps_p1": 160.69354248046875,
+    "vram_mb": 489.8719787597656,
+    "drawcalls": 250,
+    "tris": 6479808
+  },
+  "shots": {
+    "interior_inside": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "ae0f9e85383b96f536fea2f02fec9baa678259ad78aa01795162b97974778ea4",
+      "fresh": true
+    },
+    "interior_lookup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "fbf0a5dc0bf075b09f40429ee5741168e91daf8a67c5a2f1167c1621c3dc27c0",
+      "fresh": true
+    }
+  }
+}
