@@ -1,0 +1,46 @@
+{
+  "accepted": true,
+  "checks": {
+    "door_geometry": true,
+    "colliders_and_sides_unchanged": true,
+    "rendered_geometry_ray": true,
+    "native_collision_retained": true,
+    "original_camera": true,
+    "demo": true,
+    "closeup_3m": true,
+    "budget": true,
+    "build": true,
+    "interior_inside": true,
+    "royal_door_closeup": true
+  },
+  "door": "[ROYAL_DOOR] center_arch=-2.0000/1.8040/7.5500 backing_removed=true door_w=0.8600 door_h=2.8600 frame_mat=M_InteriorV2Gold frame_color=#C9A227 frame_width=0.0400 projection=0.0200 collider_changed=false",
+  "ray": "[ROYAL_DOOR_RAY] mode=rendered_geometry hit=Interior_Altar_Model native_hit=Interior_Iconostasis pass=true camera=(-2.0000, 2.1240, -4.7750)",
+  "cross": "[ALTAR_CROSS] altar_z=8.7200 cross_tip_y=2.5060 wall_bottom_y=Infinity visible_from_cam=true hit=Interior_Altar_Model hit_y=2.5053 hit_z=8.9850 ray_mode=rendered_geometry native_hit=Interior_Iconostasis visual_hit=Interior_Altar_Model visual_hit_y=2.5053 visual_hit_z=8.9850 camera=(-2.0000,2.1240,-4.7750) cross_height=1.10 visual_lower_raise=0.00 tip_screen=(960.00, 516.45, 13.79) image=1920x1080",
+  "tris": 8880,
+  "materials": 2,
+  "interior": {
+    "pos": "interior",
+    "fps_avg": 237.0673370361328,
+    "fps_p1": 173.90176391601562,
+    "vram_mb": 484.5101623535156,
+    "drawcalls": 236,
+    "tris": 6508212
+  },
+  "screenshots": {
+    "interior_inside": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "ca63ca23aabb17bc54d6a13c0a3aea0a3dc32d044ea17998519f6d0bdbf9487e"
+    },
+    "royal_door_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "bfa4960628a950b31dbe7d9a6d4805baa9fa99b4fe83218d9631b12066e8a1da"
+    }
+  },
+  "ray_definition": "Opaque rendered source meshes, excluding transparent light effects and duplicate merged batches; native movement ray is recorded independently and still hits the unchanged wall."
+}

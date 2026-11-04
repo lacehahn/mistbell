@@ -987,7 +987,7 @@ public sealed partial class PlayerController : MonoBehaviour
         Vector3 chandelierVp=follow.WorldToViewportPoint(chandelierWorld);
         float cy=1-chandelierVp.y;
         int candles=Array.FindAll(interior.lamps,l=>l.name.StartsWith("Interior_ChandelierCandle_")).Length;
-        int frames=Array.FindAll(interior.GetComponentsInChildren<MeshRenderer>(),r=>r.name.StartsWith("Interior_ArchFrame_")).Length;
+        int frames=Array.FindAll(interior.GetComponentsInChildren<MeshRenderer>(),r=>r.name.StartsWith("Interior_ArchFrame_") || r.name=="Interior_RoyalDoor_Frame").Length;
         var shaftMaterial=interior.shafts[0].sharedMaterial;
         float alpha=shaftMaterial.GetColor("_BaseColor").a;
         bool additive=shaftMaterial.GetFloat("_DstBlend")==1;
@@ -1107,6 +1107,7 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(1.5f);
         yield return new WaitForEndOfFrame();
         string inside=InteriorShot("interior_inside");
+        AltarCrossVisibility.Check(interior, follow.transform.position, follow);
         Debug.Log("[INT_LIGHT_ROI] surface_space=linear ceiling_space=display nave=center60 wall=bilateral_lower_wall bench=bilateral_front_pews");
         var lightingFrame=ScreenCapture.CaptureScreenshotAsTexture();
         // Linear Rec.709 for surface light energy, fixed normalized screen ROIs (bottom-left origin).
@@ -1180,7 +1181,27 @@ public sealed partial class PlayerController : MonoBehaviour
             Debug.Log("[INTERIOR_U] screenshots=Shots/interior_entry.png,Shots/interior_inside.png,Shots/interior_poi_p04.png");
             pass &= entryPass;
         }
+        // Inspection capture runs after every existing entry/obstacle assertion.
+        if(pass && poi==null) yield return RoyalDoorCloseup();
         Application.Quit(pass?0:1);
+    }
+
+    IEnumerator RoyalDoorCloseup()
+    {
+        enabled=false;
+        var go=new GameObject("Royal door inspection camera");
+        var camera=go.AddComponent<Camera>();camera.CopyFrom(follow);
+        var source=follow.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+        var data=go.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+        data.renderPostProcessing=source.renderPostProcessing;data.volumeLayerMask=source.volumeLayerMask;
+        go.transform.position=new Vector3(-2,interior.FloorY+1.43f,4.55f);
+        go.transform.rotation=Quaternion.identity;camera.fieldOfView=60;
+        follow.enabled=false;
+        yield return new WaitForSecondsRealtime(1);
+        yield return new WaitForEndOfFrame();
+        string path=InteriorShot("royal_door_closeup");
+        Debug.Log($"[ROYAL_DOOR_SHOT] distance_m=3.000 camera={go.transform.position:F4} path={path}");
+        follow.enabled=true;Destroy(go);enabled=true;
     }
 
     IEnumerator DemoPoi(Interactable poi)

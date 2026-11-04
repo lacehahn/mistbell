@@ -1,0 +1,32 @@
+{
+  "accepted": false,
+  "ray_pass": false,
+  "runtime_ray": "[ALTAR_CROSS] altar_z=8.7200 cross_tip_y=2.5060 wall_bottom_y=1.6940 visible_from_cam=false hit=Interior_Iconostasis hit_y=2.4621 hit_z=7.4250 native_hit=Interior_Iconostasis visual_hit=Interior_V2NicheBack_1 visual_hit_y=2.4672 visual_hit_z=7.6100 camera=(-2.0000,2.1240,-4.7748) cross_height=1.10 visual_lower_raise=0.00 tip_screen=(960.00, 516.45, 13.79) image=1920x1080",
+  "sweep_total_including_baseline": 17,
+  "sweep_visible_count": 0,
+  "pixel_roi_top_left_xyxy": [
+    956,
+    567,
+    964,
+    582
+  ],
+  "rod_width_px": 8,
+  "rod_luma_linear_rec709": 0.0036187572413445227,
+  "background_luma_linear_rec709": 0.0042304076169940984,
+  "contrast": -0.1445842649281588,
+  "pixel_pass": false,
+  "demo_pass": true,
+  "budget_pass": true,
+  "model_tris": 8880,
+  "model_materials": 2,
+  "interior_bench": {
+    "pos": "interior",
+    "fps_avg": 232.86993408203125,
+    "fps_p1": 166.4481964111328,
+    "vram_mb": 428.5085144042969,
+    "drawcalls": 236,
+    "tris": 6508198
+  },
+  "screenshot_sha256": "f0e73ba3b024fbc443969379edeb4ccbbe0e76efb39957f47da236d99f497084",
+  "note": "ROI is the geometric projection of the upper cross rod; occlusion means it samples the wall, not the cross."
+}

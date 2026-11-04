@@ -23,15 +23,20 @@ public static class AltarBuild
         var interior=Object.FindFirstObjectByType<ChurchInterior>();
         var mf=System.Array.Find(interior.detailRoot.GetComponentsInChildren<MeshFilter>(true),f=>f.name=="Interior_Altar_Model");
         var mesh=mf.sharedMesh;var vertices=mesh.vertices;var uv=mesh.uv;var indices=mesh.triangles;
+        var baseMap=mf.GetComponent<MeshRenderer>().sharedMaterial.GetTexture("_BaseMap");
         double area=0,uvArea=0;
         for(int i=0;i<indices.Length;i+=3)
         {
             int a=indices[i],b=indices[i+1],c=indices[i+2];
+            // The new native icon panels intentionally use higher density than stone/cloth.
+            // Their separate pixel-grid gate is verified by AltarPixelIcons and PIL.
+            if(baseMap.width==2048 && uv[a].y>.6f && uv[b].y>.6f && uv[c].y>.6f)continue;
             var va=mf.transform.TransformPoint(vertices[a]);var vb=mf.transform.TransformPoint(vertices[b]);var vc=mf.transform.TransformPoint(vertices[c]);
             area+=Vector3.Cross(vb-va,vc-va).magnitude*.5;
             var x=uv[b]-uv[a];var y=uv[c]-uv[a];uvArea+=System.Math.Abs(x.x*y.y-x.y*y.x)*.5;
         }
-        double texel=1024*System.Math.Sqrt(uvArea/area);
+        // The pixel-icon composite preserves the original 1024 texels in a 2048 atlas.
+        double texel=baseMap.width*System.Math.Sqrt(uvArea/area);
         // Bounds below mensa include linen; candles/cross lie strictly above y=1.05.
         var bounds=new Bounds();bool first=true;
         foreach(var vertex in vertices)
@@ -66,19 +71,7 @@ public static class AltarBuild
             Mathf.Abs(size.x-2.2f)<=.1f && Mathf.Abs(size.y-1.05f)<=.08f && Mathf.Abs(size.z-.95f)<=.1f && recessed;
         Debug.Log(System.FormattableString.Invariant($"[ALTAR_MODEL] tris={indices.Length/3} materials={r.sharedMaterials.Length} bbox={size.x:F4}x{size.y:F4}x{size.z:F4} texel_px_per_m={texel:F3} niche_depths={depths[0]:F4}/{depths[1]:F4}/{depths[2]:F4} front_faces_congregation={recessed} pass={pass}"));
         var eye=new Vector3(-2,interior.FloorY+1.75f,-4.78f);
-        var tip=new Vector3(-2,interior.FloorY+2.132f,9.01f);
-        string occluder="none";
-        foreach(var panel in interior.detailRoot.GetComponentsInChildren<MeshFilter>(true))
-        {
-            if(!panel.name.StartsWith("Interior_V2NicheBack_") && !panel.name.StartsWith("Interior_ArchFrame_"))continue;
-            var probe=new GameObject("Altar cross sightline probe");
-            probe.transform.SetPositionAndRotation(panel.transform.position,panel.transform.rotation);
-            probe.transform.localScale=panel.transform.lossyScale;
-            var pc=probe.AddComponent<MeshCollider>();pc.sharedMesh=panel.sharedMesh;
-            if(pc.Raycast(new Ray(eye,(tip-eye).normalized),out var obstruction,Vector3.Distance(eye,tip)))occluder=panel.name;
-            Object.DestroyImmediate(probe);
-        }
-        Debug.Log($"[ALTAR_CROSS] tip={tip} original_camera={eye} occluder={occluder} visible={occluder=="none"} altar_shift_z=0.12 icon_wall_lower_edge_raise=0.05");
+        AltarCrossVisibility.Check(interior,eye);
         if(!pass)throw new System.InvalidOperationException("Imported altar acceptance failed");
     }
 }

@@ -1,0 +1,32 @@
+{
+  "automated_pass": true,
+  "geometry_unchanged": true,
+  "tris": 8880,
+  "materials": 2,
+  "demo_pass": "[INT_PASS] light=True domeLight=True ceilingSeen=True domeSeen=True fx=0.793 visible=True obstacles=True walked=True z=0.42 dy=0.000 fov=50.00 lamps=18 shafts=3",
+  "closeup": "[ALTAR_SHOT] distance_m=1.200 front=-Z isolated_inspection=False blur=False path=/Users/lance/workspace/mistbell/spike/project/Shots/altar_closeup.png camera=(-2.00, 1.42, 7.10)",
+  "interior_bench": {
+    "pos": "interior",
+    "fps_avg": 233.36416625976562,
+    "fps_p1": 166.3650665283203,
+    "vram_mb": 484.5101623535156,
+    "drawcalls": 237,
+    "tris": 6529892
+  },
+  "images": {
+    "altar_closeup": {
+      "path": "project/Shots/altar_closeup.png",
+      "sha256": "34f43a8d17c3632a958edbf6a5350045d1935193cf0ab1636f2f6c8150018631"
+    },
+    "interior_inside": {
+      "path": "project/Shots/interior_inside.png",
+      "sha256": "91a2858a27440c4c01df3ad4c02e5dc714714f392974aa29443ff3ae1b80514f"
+    },
+    "altar_icons_480": {
+      "path": "project/Shots/altar_icons_480.png",
+      "sha256": "e295bb9f97461092976dadd472423ed52f27eaa9a30f4d533794e3c8c8e73b3f"
+    }
+  },
+  "visual_review": "Review altar_icons_480.png: three distinct silhouettes; scene pixel density is a human judgment.",
+  "downsample": "LANCZOS to480x270, NEAREST x4; no editing of source scene screenshots"
+}

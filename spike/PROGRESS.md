@@ -660,3 +660,32 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - `-demo-enter-church` 全绿（obstacles=True）；室内236 drawcalls / 236.84 FPS，bench gate通过。
 - **未通过整项任务**：已按字面 +Z .12m、壁龛下沿+.05m，十字顶端仍被 `Interior_V2NicheBack_1` 挡住。会众实际在-Z，与任务方向说明冲突。需另行确认高壁龛后移方案，未擅自扩大移动量。
 - 详见 [验收报告](artifacts/altar/altar_v2_acceptance.md)，含截图、测量方法、参数和复现命令。未修改 AGENTS.md，未提交。
+
+## 2026-11-04 祭坛第三轮（未通过：允许调整范围不足）
+
+- 新增 `AltarCrossVisibility`，原生物理射线保留全部墙碰撞，视觉网格用真实网格临时查询；原机位打印 `[ALTAR_CROSS] altar_z/cross_tip_y/wall_bottom_y/visible_from_cam/hit` 及投影 ROI。`AltarBuild.Verify` 也改用同一诊断，修正 v2 没检查原墙碰撞的问题。
+- 原机位首个物理命中 `Interior_Iconostasis`（y=2.4621,z=7.425），视觉首个命中 `Interior_V2NicheBack_1`（y=2.4672,z=7.610）。12 个允许范围组合及 4 个旧基准宽松边界组合全部失败；没有保存无效候选，模型位置/高度、图标墙结构/碰撞、相机、室外光照均保持不变。
+- 新构建 Succeeded/0 errors；`-demo-enter-church` 全绿、`obstacles=True`；室内 236 drawcalls / 232.87 FPS；模型仍 8880 tris / 2 材质。新截图 1920×1080 已目视检查；竖杆预期投影内部宽8px、对邻近背景增亮为 -14.46%，未达 +15%。
+- `python3 spike/tools/verify_altar_v3.py` **exit=1（真实验收失败）**：ray_pass=false、pixel_pass=false、demo_pass=true、budget_pass=true；没有改门槛或忽略墙碰撞制造通过。
+- [完整报告](artifacts/altar/altar_v3_acceptance.md) / [测量 JSON](artifacts/altar/altar_v3_measurements.json)，原始日志 `logs/altar_model3_{audit,build,interior,bench}.log`。后续需放宽任务约束，例如保持墙不动但容许祭坛前移约1.6m（仅几何估算，未实施），或另行设计视觉与碰撞开口；本轮未越权执行。未修改 AGENTS.md，未提交。
+
+## 2026-11-04 祭坛圣像像素化
+
+- 按 `tasks/altar_icons_pixel.md` 将三块内画面重绘为 72×110 逻辑像素的圣母子 / 受难十字 / 持杖圣徒，交付各 512×784 PNG。每张 8/8/10 色，CIELAB L*26.260–68.318，金色占比 5.023%/2.631%/1.432%。Python 与 Unity 对导入后的每个像素分别验证，`grid_ok=true`；Point / no mipmap / aniso1 / 无压缩 / NPOT None。
+- 新增原生绘制/验证工具 `tools/altar_icons_pixel.py`、汇总 `tools/verify_altar_icons.py`、Unity `AltarPixelIcons`。2048 图集保留旧 1024 图集每个像素，三个独立画面区域；仅更改 UV，原 FBX/顶点/索引/位置、金边、家具、灯光、图标墙及碰撞保持不变。独立黑底发光遮罩仅给画面 0.7 补偿，复用两材质槽。重建入口自动应用像素版。
+- 已明示规格冲突：72×110 不能整数倍变为512×784，采用最近邻7/8 texel格，边界误差≤0.491px；原指定深褐/米白超出L*范围，改用同色系限明度变体；外框0.30×0.46m/内画0.26×0.42m沿用原几何。未将这些取舍伪称字面完全一致。
+- 构建 Succeeded / 0 errors；`AltarPixelIcons.Audit` 重应用幂等检查、原模型门槛通过；8880 tris / 2材质，非圣像密度126.136px/m。`-demo-enter-church` 全绿。1920×1080 / Apple M6 Metal 前台bench：室内237 drawcalls / 233.36 FPS（1%low166.37），通过≤260 / ≥200，未改阈值。
+- 三张本轮截图已目视检查：`project/Shots/altar_closeup.png`（场景内1.2m）、`interior_inside.png`（原机位）、`altar_icons_480.png`（LANCZOS480×270后NEAREST×4）。近景及480图三主题可辨，最终颗粒美术判断留负责人复核。
+- `python3 spike/tools/verify_altar_icons.py` exit=0、`git diff --check`通过。[验收报告](artifacts/altar/altar_icons_acceptance.md) / [汇总JSON](artifacts/altar/altar_icons_acceptance.json) / [像素报告](artifacts/altar/altar_icons_pixels.json)，日志 `logs/altar_icons_{build,audit,closeup,interior,bench}.log`。原有v3遮挡问题保留，本轮不处理。未修改AGENTS.md，未提交；生成美术资产沿用原忽略规则保留本地。
+
+## 2026-11-04 王门视觉开口
+
+- 中央背板移除，金色落地拱框净宽0.86m/净高2.86m，框宽0.04m/出挑0.02m；两侧拱、原墙及全部碰撞的序列化/变换不变，重复安装幂等。未加可选门片。
+- 原机位视觉网格射线命中Interior_Altar_Model；原生物理射线仍命中Interior_Iconostasis，遵守碰撞不变。两类结果独立记录；不宣称原生Physics射线穿墙。
+- 构建Succeeded/0 errors；进堂演示全绿，obstacles=True。原interior_inside及3m正对royal_door_closeup均已目视检查，十字/祭坛可见。原演示拱框计数适配新中央框，仍要求3道；碰撞断言未改。
+- 祭坛8880tris/2材质；室内236drawcalls/237.07FPS，1%low 173.90；python3 spike/tools/verify_royal_door.py exit=0，git diff --check通过。
+- [验收报告](artifacts/altar/royal_door_acceptance.md) / [测量JSON](artifacts/altar/royal_door_measurements.json)；日志royal_door_{build,interior,bench}，可用RoyalDoorBuild.Run复现。未修改AGENTS.md，未提交。
+| 10:15 | 祭坛圣像改像素风（用户选 2） | 72×110 逻辑像素、最近邻 7/8 格、Point 采样；实测唯一色数 8/8/10、三块可区分（圣母子/受难/圣徒） | `altar_icons_480.png` 复核通过 |
+| 10:15 | 王门解决十字遮挡 | 图标墙中央拱背板移除 + 金门框，两侧拱与碰撞不动；原机位可见祭坛与十字 | `-demo-enter-church` 全绿、射线命中祭坛 |
+| 10:15 | 用户裁决 | **地板定稿**（冷暖/明暗不再改），后续只动其他元素 | — |
+

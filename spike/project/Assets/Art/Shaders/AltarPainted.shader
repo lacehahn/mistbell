@@ -4,6 +4,7 @@ Shader "Mistbell/AltarPainted"
     Properties
     {
         _ClothAlbedoScale("Cloth albedo scale", Range(0,4)) = 1.2
+        _AltarUVScale("Original atlas UV scale", Float) = 1
         // Specular vs Metallic workflow
         _WorkflowMode("WorkflowMode", Float) = 1.0
 
@@ -178,10 +179,11 @@ Shader "Mistbell/AltarPainted"
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             float _ClothAlbedoScale;
+            float _AltarUVScale;
             void InitializeAltarSurfaceData(float2 uv, out SurfaceData surfaceData)
             {
                 InitializeStandardLitSurfaceData(uv, surfaceData);
-                half cloth = step(uv.x, 0.5) * step(uv.y, 0.5);
+                half cloth = step(uv.x * _AltarUVScale, 0.5) * step(uv.y * _AltarUVScale, 0.5);
                 surfaceData.albedo *= lerp(1.0h, _ClothAlbedoScale, cloth);
             }
             #define InitializeStandardLitSurfaceData InitializeAltarSurfaceData

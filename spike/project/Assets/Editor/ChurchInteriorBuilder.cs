@@ -787,7 +787,39 @@ public static class ChurchInteriorBuilder
             }
             Surface(detail,"Interior_ArchFrame_"+i,v.ToArray(),tris.ToArray(),gold);
         }
+        InstallRoyalDoor(detail,fy);
 
+    }
+    // Visual aperture only: the imported wall and every gameplay collider stay untouched.
+    public static void InstallRoyalDoor(Transform detail,float floorY)
+    {
+        foreach(var r in detail.GetComponentsInChildren<MeshRenderer>(true))
+            if(r.name=="Interior_V2NicheBack_1" || r.name=="Interior_ArchFrame_1" || r.name.StartsWith("Interior_RoyalDoor"))
+                Object.DestroyImmediate(r.gameObject);
+        var gold=AssetDatabase.LoadAssetAtPath<Material>("Assets/Settings/M_InteriorV2Gold.mat");
+        // Preserve the existing arch crown (floor+2.86), extend only its jambs to the floor.
+        const float halfWidth=.43f, band=.04f, depth=.02f;
+        float spring=floorY+2.43f;
+        var inner=new List<Vector3>{new Vector3(-2-halfWidth,floorY,7.55f)};
+        var outer=new List<Vector3>{new Vector3(-2-halfWidth-band,floorY,7.55f)};
+        for(int i=0;i<=32;i++)
+        {
+            float a=Mathf.PI-i*Mathf.PI/32;
+            inner.Add(new Vector3(-2+Mathf.Cos(a)*halfWidth,spring+Mathf.Sin(a)*halfWidth,7.55f));
+            outer.Add(new Vector3(-2+Mathf.Cos(a)*(halfWidth+band),spring+Mathf.Sin(a)*(halfWidth+band),7.55f));
+        }
+        inner.Add(new Vector3(-2+halfWidth,floorY,7.55f));
+        outer.Add(new Vector3(-2+halfWidth+band,floorY,7.55f));
+        var v=new List<Vector3>();var t=new List<int>();
+        for(int i=0;i<inner.Count;i++)v.AddRange(new[]{inner[i]-Vector3.forward*depth,outer[i]-Vector3.forward*depth,inner[i],outer[i]});
+        for(int i=0;i<inner.Count-1;i++)
+        {
+            int a=i*4,b=a+4;
+            // Front gold band, inner reveal, and outside return; no panel across the void.
+            t.AddRange(new[]{a,b,a+1,a+1,b,b+1,a,a+2,b,a+2,b+2,b,a+1,b+1,a+3,a+3,b+1,b+3});
+        }
+        Surface(detail,"Interior_RoyalDoor_Frame",v.ToArray(),t.ToArray(),gold);
+        Debug.Log(System.FormattableString.Invariant($"[ROYAL_DOOR] center_arch=-2.0000/{(floorY+1.43f):F4}/7.5500 backing_removed=true door_w=0.8600 door_h=2.8600 frame_mat={gold.name} frame_color=#C9A227 frame_width=0.0400 projection=0.0200 collider_changed=false"));
     }
     // Shared by full scene builds and the isolated altar update. Other furnishings stay intact.
     public static void InstallAltar(Transform church,Transform detail,float floorY)
@@ -866,6 +898,7 @@ public static class ChurchInteriorBuilder
         legacy.enabled=false;
         var renderer=model.GetComponentInChildren<MeshRenderer>();
         Debug.Log($"[ALTAR_IMPORT] bbox={renderer.bounds.size} position={model.transform.position} materials={renderer.sharedMaterials.Length} collider={legacy.GetComponent<BoxCollider>().bounds.size}");
+        AltarPixelIcons.ApplyIfAvailable(detail);
     }
     // Called after the exterior atlas pass. Only indoor meshes/materials are touched.
     public static void FinishInterior(ChurchInterior interior)

@@ -1,0 +1,62 @@
+{
+  "icons": [
+    {
+      "icon": "left",
+      "palette_max": 8,
+      "luma_min": 26.260216068094145,
+      "luma_max": 68.31779976842743,
+      "gold_pct": 5.023068797831633,
+      "grid_ok": true,
+      "sha256": "6f93f0d72b4bfeae40254ec78fc0840234b0d210bfca4a9231a56434eb0794f7"
+    },
+    {
+      "icon": "mid",
+      "palette_max": 8,
+      "luma_min": 26.260216068094145,
+      "luma_max": 68.31779976842743,
+      "gold_pct": 2.6314871651785716,
+      "grid_ok": true,
+      "sha256": "1ceff4cf2d8eba431d838dcb6ebddd8b16ca30e7b811b043a951e89a5c313fb7"
+    },
+    {
+      "icon": "right",
+      "palette_max": 10,
+      "luma_min": 26.260216068094145,
+      "luma_max": 68.31779976842743,
+      "gold_pct": 1.4319595025510203,
+      "grid_ok": true,
+      "sha256": "63f26d06710221a9b20ac49f3f83523700909e5ab2f1d1721aec22c64b3ae92c"
+    }
+  ],
+  "palette": {
+    "ink": "#4E3A2D",
+    "wood": "#594332",
+    "stone": "#7A6B5C",
+    "gold": "#C9A227",
+    "ivory": "#ACA393",
+    "red": "#A35A4A",
+    "cold": "#3E4654",
+    "shadow": "#544538",
+    "skin": "#A88569",
+    "robe": "#6F4140",
+    "blue": "#555E6A"
+  },
+  "grid": "PIL NEAREST 72x110 -> 512x784; cells 7 or 8 texels",
+  "grid_axes": [
+    {
+      "logical": 72,
+      "delivery": 512,
+      "cell_min": 7,
+      "cell_max": 8,
+      "boundary_error_max": 0.4444444444444571
+    },
+    {
+      "logical": 110,
+      "delivery": 784,
+      "cell_min": 7,
+      "cell_max": 8,
+      "boundary_error_max": 0.4909090909090992
+    }
+  ],
+  "atlas": "2048x2048: original1024 bottom-left unchanged, icons top row"
+}
