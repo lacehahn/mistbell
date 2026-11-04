@@ -1,0 +1,443 @@
+{
+  "accepted": false,
+  "visible_rows": [
+    6,
+    6
+  ],
+  "rail_rows": [
+    [
+      {
+        "samples": 17,
+        "contrast": 0.16369317111786974
+      },
+      {
+        "samples": 17,
+        "contrast": 0.16914129728347943
+      },
+      {
+        "samples": 17,
+        "contrast": 0.19304485800320767
+      },
+      {
+        "samples": 17,
+        "contrast": 0.17461432885773984
+      },
+      {
+        "samples": 15,
+        "contrast": 0.15346501712156965
+      },
+      {
+        "samples": 15,
+        "contrast": 0.2730551642237274
+      }
+    ],
+    [
+      {
+        "samples": 17,
+        "contrast": 0.11920607926220675
+      },
+      {
+        "samples": 17,
+        "contrast": 0.12072558044251759
+      },
+      {
+        "samples": 17,
+        "contrast": 0.2475552764121409
+      },
+      {
+        "samples": 17,
+        "contrast": 0.22224864117043808
+      },
+      {
+        "samples": 15,
+        "contrast": 0.1561961301122746
+      },
+      {
+        "samples": 15,
+        "contrast": 0.4516897795662504
+      }
+    ]
+  ],
+  "niche_luma": [
+    0.07208061273279788,
+    0.08277143952215353
+  ],
+  "checks": {
+    "balance": true,
+    "dome": true,
+    "ground": true,
+    "demo": true,
+    "build": true,
+    "protected": true,
+    "protected_art": true,
+    "fresh_benchmark": true,
+    "budget": true,
+    "resolution": true,
+    "fresh_shots": true,
+    "pews": true,
+    "chain": true,
+    "niche": true,
+    "lamps_18": false,
+    "closeup": true,
+    "no_runtime_exceptions": true
+  },
+  "balance": {
+    "left": 0.06964430069230888,
+    "right": 0.05291365505960818,
+    "nave": 0.034004657004165044,
+    "ratio": 1.3161876762029259
+  },
+  "dome": {
+    "rib": {
+      "pixels": 1968,
+      "display_luma": 0.15090118125298965
+    },
+    "plaster": {
+      "pixels": 13762,
+      "display_luma": 0.12166172318775437
+    },
+    "oculus": {
+      "pixels": 214,
+      "display_luma": 0.9601603078614639
+    }
+  },
+  "rib_contrast": 0.2403340779590267,
+  "pew_edge_delta": 0.007510952897062554,
+  "pew_pairs": [
+    [
+      203,
+      90,
+      198,
+      81
+    ],
+    [
+      248,
+      113,
+      243,
+      105
+    ],
+    [
+      729,
+      90,
+      727,
+      81
+    ],
+    [
+      743,
+      113,
+      741,
+      105
+    ],
+    [
+      307,
+      144,
+      303,
+      137
+    ],
+    [
+      341,
+      161,
+      337,
+      155
+    ],
+    [
+      760,
+      144,
+      759,
+      137
+    ],
+    [
+      771,
+      161,
+      770,
+      155
+    ],
+    [
+      386,
+      185,
+      382,
+      179
+    ],
+    [
+      412,
+      198,
+      409,
+      193
+    ],
+    [
+      784,
+      185,
+      783,
+      179
+    ],
+    [
+      792,
+      198,
+      792,
+      193
+    ],
+    [
+      447,
+      217,
+      445,
+      212
+    ],
+    [
+      468,
+      228,
+      466,
+      223
+    ],
+    [
+      803,
+      217,
+      803,
+      212
+    ],
+    [
+      810,
+      228,
+      809,
+      223
+    ],
+    [
+      497,
+      243,
+      495,
+      238
+    ],
+    [
+      514,
+      252,
+      512,
+      247
+    ],
+    [
+      818,
+      243,
+      818,
+      238
+    ],
+    [
+      824,
+      252,
+      823,
+      247
+    ],
+    [
+      538,
+      264,
+      536,
+      260
+    ],
+    [
+      552,
+      272,
+      551,
+      268
+    ],
+    [
+      831,
+      264,
+      830,
+      260
+    ],
+    [
+      835,
+      272,
+      835,
+      268
+    ],
+    [
+      1190,
+      90,
+      1192,
+      81
+    ],
+    [
+      1176,
+      113,
+      1178,
+      105
+    ],
+    [
+      1716,
+      90,
+      1721,
+      81
+    ],
+    [
+      1671,
+      113,
+      1676,
+      105
+    ],
+    [
+      1159,
+      144,
+      1160,
+      137
+    ],
+    [
+      1148,
+      161,
+      1149,
+      155
+    ],
+    [
+      1612,
+      144,
+      1616,
+      137
+    ],
+    [
+      1578,
+      161,
+      1582,
+      155
+    ],
+    [
+      1135,
+      185,
+      1136,
+      179
+    ],
+    [
+      1127,
+      198,
+      1127,
+      193
+    ],
+    [
+      1533,
+      185,
+      1537,
+      179
+    ],
+    [
+      1507,
+      198,
+      1510,
+      193
+    ],
+    [
+      1116,
+      217,
+      1116,
+      212
+    ],
+    [
+      1109,
+      228,
+      1110,
+      223
+    ],
+    [
+      1472,
+      217,
+      1474,
+      212
+    ],
+    [
+      1451,
+      228,
+      1453,
+      223
+    ],
+    [
+      1101,
+      243,
+      1101,
+      238
+    ],
+    [
+      1095,
+      252,
+      1096,
+      247
+    ],
+    [
+      1422,
+      243,
+      1424,
+      238
+    ],
+    [
+      1405,
+      252,
+      1407,
+      247
+    ],
+    [
+      1088,
+      264,
+      1089,
+      260
+    ],
+    [
+      1084,
+      272,
+      1084,
+      268
+    ],
+    [
+      1381,
+      264,
+      1383,
+      260
+    ],
+    [
+      1367,
+      272,
+      1368,
+      268
+    ]
+  ],
+  "interior": {
+    "pos": "interior",
+    "fps_avg": 230.40467834472656,
+    "fps_p1": 168.09518432617188,
+    "vram_mb": 489.87115478515625,
+    "drawcalls": 258,
+    "tris": 6512092
+  },
+  "shots": {
+    "interior_inside": {
+      "sha256": "daa844c8b76af08c8d99c3c04757ccd000cd320a0dbcdff80aec9c6eb68b975b",
+      "size": [
+        1920,
+        1080
+      ]
+    },
+    "interior_lookup": {
+      "sha256": "5b55e19ae44ce78912d39ccb201734eb4237644ffbf17647bc260ecbc2ea92bc",
+      "size": [
+        1920,
+        1080
+      ]
+    },
+    "interior_dome_mask": {
+      "sha256": "eb5f63b5b439d6753d828414e1a38243077d09863f5a5baeba5e9b8a34eaa258",
+      "size": [
+        480,
+        270
+      ]
+    },
+    "pews_closeup": {
+      "sha256": "71cbf2418b5f1ca283ebdb3f8ae0b7d5ee2865d5035feddd4206ace12a035790",
+      "size": [
+        1920,
+        1080
+      ]
+    }
+  },
+  "runtime_logs": [
+    "[PEW_V2] rows=6 width=2.35 gap=0.28 legs=4 rail=true visible_rows=6 left=6 right=6 measurement=mesh_raycast",
+    "[CHANDELIER] chain_segments=3 top_y=8.600 ring_y=3.400",
+    "[SIDE_NICHE] panels=2 luma=0.07743 left=0.07208 right=0.08277 space=linear_mean_rgb",
+    "[INT_BALANCE] left=0.06972 right=0.05295 nave=0.03387 ratio=1.31684",
+    "[DOME_SKIN] plaster=true ribs_visible=true rib_contrast=0.22211 oculus_luma=0.96086 plaster_luma=0.12802 rib_luma=0.15646 rib_pixels=1968 oculus_pixels=214",
+    "[PEW_GROUND] shadows=12 edge_delta=0.00751 samples=48 blend=alpha alpha=0.20",
+    "[INT_PASS] light=True domeLight=True ceilingSeen=True domeSeen=True fx=0.793 visible=True obstacles=True walked=True z=0.43 dy=0.000 fov=50.00 lamps=20 shafts=3"
+  ]
+}

@@ -698,3 +698,14 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - 构建Succeeded/0 errors；进堂[INT_PASS]全部True，obstacles=True；1920×1080前台室内254drawcalls/229.88FPS，1%low165.93。`python3 spike/tools/verify_interior_balance.py` exit=0，全部检查true；git diff --check通过。
 - 更新前后保护比对通过：地板材质、全部碰撞、室外渲染/灯/相机、祭坛与王门等受保护对象一致。未改祭坛/王门源文件、AGENTS.md，未提交。最终interior_inside/interior_lookup均已目视检查。
 - [验收报告](artifacts/interior_balance/acceptance.md) / [测量JSON](artifacts/interior_balance/measurements.json)；原始日志`logs/interior_balance_{build,interior,bench}.log`，性能数据`logs/interior_balance_bench.json`。生成场景/资产/截图/构建按原忽略规则留本地。
+
+
+## 2026-11-04 室内长椅、吊链、侧龛（灯数规格冲突，严格验收未全通过）
+
+- 局部幂等入口 `InteriorPewsBuild.Run`：每侧6排、外宽2.35m、座深0.42m/厚0.05m、靠背高0.42m/后倾6°、端板厚0.06m、每排4条0.06m方腿、0.02m收边底色/自发光×1.11；行距0.80230m，计入收边伸出后的真实净空0.28000m。48个脚底贴片随新腿更新，12组阴影保持。原机位两侧各6排通过网格遮挡查询及PNG亮边对比。
+- 可见吊灯移到轴线x=-2m，保留实际ring_y=3.4m；三节0.16m椭圆链、0.03m铁丝、交锁间距0.13m，接至顶y=8.6m吊杆及三根斜撑，沿用铁材质。明确任务7.2m来自旧灯、0.48m短链无法独自跨越真实高差，未抬高吊灯或改相机。删除旧吊杆时同步清理其穹顶切换表引用，最终运行无空引用。
+- 两块0.34×0.52m圣像板、0.02m金框，复用icon_left/icon_mid及原像素采样，不改祭坛。独立材质自发光倍率0.96/1.23；最终PNG画面内部线性亮度左0.07208/右0.08277，均达0.05–0.09。该亮度口径为画面而非整个拱内区域，见报告。
+- 地板材质/亮度参数、室外、原相机、祭坛、王门、上轮明暗/穹顶及全部碰撞保护快照一致。上轮PNG指标继续通过：left0.06964/right0.05291/ratio1.31619/nave0.03400，肋对比0.24033、顶孔0.96016、脚底差0.00751。
+- 构建Succeeded/0errors；进堂INT_PASS所有布尔True、obstacles=True，室内258drawcalls/230.40FPS（1%low168.10）。原机位与4m长椅近景已目视复核，git diff --check通过。
+- **唯一未过：任务lamps=18与上一轮新增两盏补光后的20盏冲突。保留20盏与上一轮效果，未删灯、未改计数或放宽断言；严格verify exit=1，17项中仅lamps_18=false。** 任务整体不宣称全通过。
+- [验收报告](artifacts/interior_pews/acceptance.md) / [测量JSON](artifacts/interior_pews/measurements.json)，脚本 `tools/verify_interior_pews.py`；截图 `project/Shots/interior_inside.png`、`pews_closeup.png`。未改AGENTS.md，未提交；生成场景/资产/构建按原规则留本地。

@@ -220,6 +220,7 @@ public static class ChurchInteriorBuilder
         BuildWestWindows(detail,interior);
         ApplyLighting(interior);
         InteriorBalanceBuild.Apply(interior);
+        InteriorPewsBuild.Apply(interior);
         Debug.Log($"[INTERIOR_BUILD] floor_y={fy:F3} lamps={interior.lamps.Length} shafts={interior.shafts.Length} hinge={interior.doorLeaf.position}");
         return interior;
     }

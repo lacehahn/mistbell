@@ -1125,6 +1125,7 @@ public sealed partial class PlayerController : MonoBehaviour
         float wallLuma=(InteriorSurfaceLuma(lightingFrame,new Rect(.03f,.22f,.14f,.22f))+InteriorSurfaceLuma(lightingFrame,new Rect(.83f,.22f,.14f,.22f)))*.5f;
         float benchLuma=(InteriorSurfaceLuma(lightingFrame,new Rect(.19f,.23f,.21f,.065f))+InteriorSurfaceLuma(lightingFrame,new Rect(.60f,.23f,.21f,.065f)))*.5f;
         InteriorBalanceAudit.Inside(interior, follow, lightingFrame);
+        InteriorPewsAudit.Inside(interior, follow, lightingFrame);
         Destroy(lightingFrame);
         // 抬头验证：按 F 的逻辑等价物，把看向点抬到穹顶中心，出一张 interior_lookup.png
         lookUp=true;
@@ -1194,8 +1195,24 @@ public sealed partial class PlayerController : MonoBehaviour
             pass &= entryPass;
         }
         // Inspection capture runs after every existing entry/obstacle assertion.
-        if(pass && poi==null) yield return RoyalDoorCloseup();
+        if(pass && poi==null) { yield return RoyalDoorCloseup(); yield return PewsCloseup(); }
         Application.Quit(pass?0:1);
+    }
+
+    IEnumerator PewsCloseup()
+    {
+        enabled=false;
+        var go=new GameObject("Pews inspection camera");var camera=go.AddComponent<Camera>();camera.CopyFrom(follow);
+        var source=follow.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+        var data=go.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+        data.renderPostProcessing=source.renderPostProcessing;data.volumeLayerMask=source.volumeLayerMask;
+        var target=new Vector3(-4.15f,interior.FloorY+.48f,.55f);
+        go.transform.position=target+new Vector3(1.4f,1.0f,-3.60971f).normalized*4;
+        go.transform.LookAt(target);camera.fieldOfView=50;follow.enabled=false;
+        yield return new WaitForSecondsRealtime(1);yield return new WaitForEndOfFrame();
+        string path=InteriorShot("pews_closeup");
+        Debug.Log(FormattableString.Invariant($"[PEWS_SHOT] distance_m={Vector3.Distance(target,go.transform.position):F3} path={path}"));
+        follow.enabled=true;Destroy(go);enabled=true;
     }
 
     IEnumerator RoyalDoorCloseup()
