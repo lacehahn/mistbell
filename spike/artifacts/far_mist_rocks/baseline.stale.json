@@ -1,0 +1,12 @@
+{
+    "protected_before": "8597c9bc45d6d00526f231c08a27dbc3e8a97a89f142477e4cef66e54300ea5b",
+    "protected_after": "",
+    "geometry_before": "bec91f66bd3203d9321f257cca5a2c8a57730a92218bb8db1257aeb9f82e872a",
+    "geometry_after": "",
+    "rocks": 88,
+    "snow_cap_pct": 0.0,
+    "snow_min_pct": 100.0,
+    "snow_max_pct": 0.0,
+    "post_before_L": 50.59201431274414,
+    "post_after_L": 0.0
+}
