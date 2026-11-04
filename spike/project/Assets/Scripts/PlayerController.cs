@@ -996,7 +996,8 @@ public sealed partial class PlayerController : MonoBehaviour
         Vector3 chandelierWorld=ringRenderer.bounds.center;
         Vector3 chandelierVp=follow.WorldToViewportPoint(chandelierWorld);
         float cy=1-chandelierVp.y;
-        int candles=Array.FindAll(interior.lamps,l=>l.name.StartsWith("Interior_ChandelierCandle_")).Length;
+        // Count the eight physical candles; two share the central chandelier light.
+        int candles=Array.FindAll(interior.detailRoot.GetComponentsInChildren<MeshRenderer>(),r=>System.Text.RegularExpressions.Regex.IsMatch(r.name,@"^Interior_ChandelierCandle_[0-7]$")).Length;
         int frames=Array.FindAll(interior.GetComponentsInChildren<MeshRenderer>(),r=>r.name.StartsWith("Interior_ArchFrame_") || r.name=="Interior_RoyalDoor_Frame").Length;
         var shaftMaterial=interior.shafts[0].sharedMaterial;
         float alpha=shaftMaterial.GetColor("_BaseColor").a;
@@ -1126,6 +1127,7 @@ public sealed partial class PlayerController : MonoBehaviour
         float benchLuma=(InteriorSurfaceLuma(lightingFrame,new Rect(.19f,.23f,.21f,.065f))+InteriorSurfaceLuma(lightingFrame,new Rect(.60f,.23f,.21f,.065f)))*.5f;
         InteriorBalanceAudit.Inside(interior, follow, lightingFrame);
         InteriorPewsAudit.Inside(interior, follow, lightingFrame);
+        InteriorWindowsAudit.Inside(interior, follow, lightingFrame);
         Destroy(lightingFrame);
         // 抬头验证：按 F 的逻辑等价物，把看向点抬到穹顶中心，出一张 interior_lookup.png
         lookUp=true;
@@ -1141,6 +1143,7 @@ public sealed partial class PlayerController : MonoBehaviour
             Color c=domeFrame.GetPixel(x,y); domeSum+=.2126*c.r+.7152*c.g+.0722*c.b; domePixels++;
         }
         InteriorBalanceAudit.Dome(interior, follow, domeFrame);
+        InteriorWindowsAudit.Dome(interior, follow, domeFrame);
         Destroy(domeFrame);
         float headroomLuma=(float)(domeSum/domePixels);
         var windowKey=Array.Find(interior.lamps,l=>l.name=="Interior_WindowKey");
@@ -1170,7 +1173,7 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(.4f);
         bool pass=interiorLightPass && domeLightPass && ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
-            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==20 && interior.shafts.Length==3 &&
+            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==18 && interior.shafts.Length==3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;
         Debug.Log($"[INT_PASS] light={interiorLightPass} domeLight={domeLightPass} ceilingSeen={ceilingSeen} " +
             $"domeSeen={domeSeen} fx={ceilingFx:F3} visible={InteriorVisibility()} obstacles={TestInteriorObstacles()} " +
@@ -1195,8 +1198,23 @@ public sealed partial class PlayerController : MonoBehaviour
             pass &= entryPass;
         }
         // Inspection capture runs after every existing entry/obstacle assertion.
-        if(pass && poi==null) { yield return RoyalDoorCloseup(); yield return PewsCloseup(); }
+        if(pass && poi==null) { yield return WindowsCloseup(); yield return RoyalDoorCloseup(); yield return PewsCloseup(); }
         Application.Quit(pass?0:1);
+    }
+
+    IEnumerator WindowsCloseup()
+    {
+        enabled=false;
+        var go=new GameObject("Windows inspection camera");var camera=go.AddComponent<Camera>();camera.CopyFrom(follow);
+        var source=follow.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+        var data=go.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+        data.renderPostProcessing=source.renderPostProcessing;data.volumeLayerMask=source.volumeLayerMask;
+        var target=new Vector3(-5.6f,6.77402f,4.02f);
+        go.transform.position=target+new Vector3(.85f,-.1f,-4.2f);go.transform.LookAt(target);camera.fieldOfView=50;follow.enabled=false;
+        yield return new WaitForSecondsRealtime(1);yield return new WaitForEndOfFrame();
+        string path=InteriorShot("windows_closeup");
+        Debug.Log("[WINDOWS_SHOT] temporary_inspection_camera=true path="+path);
+        follow.enabled=true;Destroy(go);enabled=true;
     }
 
     IEnumerator PewsCloseup()
@@ -1212,6 +1230,12 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSecondsRealtime(1);yield return new WaitForEndOfFrame();
         string path=InteriorShot("pews_closeup");
         Debug.Log(FormattableString.Invariant($"[PEWS_SHOT] distance_m={Vector3.Distance(target,go.transform.position):F3} path={path}"));
+        // Rear-side 45-degree inspection, using only this temporary camera.
+        go.transform.position=target+new Vector3(1, .48f, -1).normalized*4;
+        go.transform.LookAt(target);
+        yield return new WaitForSecondsRealtime(1);yield return new WaitForEndOfFrame();
+        string sidePath=InteriorShot("pews_side");
+        Debug.Log(FormattableString.Invariant($"[PEWS_SIDE_SHOT] azimuth_deg=45 distance_m={Vector3.Distance(target,go.transform.position):F3} path={sidePath}"));
         follow.enabled=true;Destroy(go);enabled=true;
     }
 

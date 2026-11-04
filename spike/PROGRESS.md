@@ -709,3 +709,11 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - 构建Succeeded/0errors；进堂INT_PASS所有布尔True、obstacles=True，室内258drawcalls/230.40FPS（1%low168.10）。原机位与4m长椅近景已目视复核，git diff --check通过。
 - **唯一未过：任务lamps=18与上一轮新增两盏补光后的20盏冲突。保留20盏与上一轮效果，未删灯、未改计数或放宽断言；严格verify exit=1，17项中仅lamps_18=false。** 任务整体不宣称全通过。
 - [验收报告](artifacts/interior_pews/acceptance.md) / [测量JSON](artifacts/interior_pews/measurements.json)，脚本 `tools/verify_interior_pews.py`；截图 `project/Shots/interior_inside.png`、`pews_closeup.png`。未改AGENTS.md，未提交；生成场景/资产/构建按原规则留本地。
+
+
+## 2026-11-04 室内窗户、穹顶肋、砌块层次
+
+- 仅执行 `tasks/interior_windows.md`。原两块黑高矩形实际为Banner占位，替换为室内窗表现；右中红板为WallPainting，统一#A35A4A/0.9×1.6m。6根0.05m窗棂、0.18m进深、12鼓座窗0.03m框；抹灰#9C8B74/roughness0.8、肋材质+11%/−9%、金环宽0.06m；砌块同色相三档±8%/4cm暗20%灰缝。
+- `bash spike/tools/accept_interior_windows.sh` exit=0，26/26门槛全过；PNG独立复算nave=0.576410、dome=0.744979/L*76.8679、plaster=0.237752、gold L*74.7023。六行墙面480缩图可数，三张新1080p图已目视检查。
+- INT_PASS全部True/obstacles=True/lamps=18；保留两均衡补光，移除2个吊灯低功率Light而保留8个蜡烛网格；原灯数统计未变。室内254drawcalls/220.05FPS、1%low158.52；构建Succeeded/0errors。
+- 地板、祭坛/圣像/王门、室外、原相机、碰撞及其余灯保护比对相等、重复修补幂等；未改AGENTS.md、任务书，未提交。报告[acceptance.md](artifacts/interior_windows/acceptance.md)，详尽数字[measurements.json](artifacts/interior_windows/measurements.json)。

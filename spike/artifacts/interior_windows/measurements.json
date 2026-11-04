@@ -1,0 +1,309 @@
+{
+  "accepted": true,
+  "checks": {
+    "nave_png_luma": true,
+    "dome_png_luma": true,
+    "gold_ring_cielab_lstar": true,
+    "dome_cielab_lstar": true,
+    "plaster_png_luma": true,
+    "mullions": true,
+    "rib_material_light": true,
+    "rib_material_shadow": true,
+    "rib_material_counts": true,
+    "visible_ribs": true,
+    "wall_materials": true,
+    "red_panel_dimensions_color": true,
+    "wall_shader_cpu": true,
+    "mesh_geometry": true,
+    "protected_snapshot_files": true,
+    "runtime_mesh_queries_clean": true,
+    "demo": true,
+    "build": true,
+    "protected": true,
+    "budget": true,
+    "fresh_benchmark": true,
+    "resolution": true,
+    "masks": true,
+    "fresh_shots": true,
+    "png_runtime_agreement": true,
+    "inputs_readable": true
+  },
+  "measurements": {
+    "inside": {
+      "nave": {
+        "pixels": 1846,
+        "display_luma": 0.5764095570709161,
+        "cielab_lstar": 60.877689302328555
+      },
+      "dome": {
+        "pixels": 0,
+        "display_luma": null,
+        "cielab_lstar": null
+      },
+      "plaster": {
+        "pixels": 0,
+        "display_luma": null,
+        "cielab_lstar": null
+      },
+      "rib_light": {
+        "pixels": 0,
+        "display_luma": null,
+        "cielab_lstar": null
+      },
+      "rib_shadow": {
+        "pixels": 0,
+        "display_luma": null,
+        "cielab_lstar": null
+      },
+      "gold_ring": {
+        "pixels": 0,
+        "display_luma": null,
+        "cielab_lstar": null
+      }
+    },
+    "lookup": {
+      "nave": {
+        "pixels": 344,
+        "display_luma": 0.5273938942088469,
+        "cielab_lstar": 56.01309750605684
+      },
+      "dome": {
+        "pixels": 2146,
+        "display_luma": 0.7449792401732318,
+        "cielab_lstar": 76.86790726279867
+      },
+      "plaster": {
+        "pixels": 13730,
+        "display_luma": 0.23775188689429358,
+        "cielab_lstar": 25.961011870753904
+      },
+      "rib_light": {
+        "pixels": 986,
+        "display_luma": 0.3099789706876661,
+        "cielab_lstar": 33.595991264472815
+      },
+      "rib_shadow": {
+        "pixels": 986,
+        "display_luma": 0.28051801296583584,
+        "cielab_lstar": 30.365979926075607
+      },
+      "gold_ring": {
+        "pixels": 36,
+        "display_luma": 0.7203592156862746,
+        "cielab_lstar": 74.70227111645544
+      }
+    }
+  },
+  "material_metrics": {
+    "rib": {
+      "rib_light_gain": "0.110000",
+      "rib_shadow_drop": "0.090000",
+      "plaster_luma": "0.237752",
+      "light_materials": "12",
+      "shadow_materials": "12",
+      "ratio_metric": "material_base_Rec709",
+      "plaster_metric": "screenshot_display_Rec709"
+    },
+    "wall": {
+      "block_variants": "3",
+      "contrast": "0.08",
+      "hue_shift": "0",
+      "grout_drop": "0.20",
+      "grout_width": "0.04",
+      "block_width": "1.10",
+      "block_height": "0.48",
+      "space": "albedo_and_emission_scalar"
+    }
+  },
+  "wall_shader_cpu": {
+    "shader_sha256": "8b0e18db93e7c4adb757386576dadb7234c3598b6f1a0a0a96b36573892cd3b0",
+    "forward_sha256": "8b0e18db93e7c4adb757386576dadb7234c3598b6f1a0a0a96b36573892cd3b0",
+    "base_rgb": [
+      0.38274512,
+      0.3356863,
+      0.28862748
+    ],
+    "tone_scalars": [
+      0.92,
+      1.0,
+      1.08
+    ],
+    "variant_rgb": [
+      [
+        0.3521255104,
+        0.308831396,
+        0.2655372816
+      ],
+      [
+        0.38274512,
+        0.3356863,
+        0.28862748
+      ],
+      [
+        0.41336472960000004,
+        0.362541204,
+        0.31171767840000003
+      ]
+    ],
+    "hue_shift_degrees": 1.9984014443252818e-14,
+    "grout_drop": 0.19999999999999996,
+    "grout_width_metres": 0.04,
+    "note": "CPU evaluates the scalar expression parsed from the actual fragment shader; visible row legibility remains a screenshot review."
+  },
+  "mesh_geometry": {
+    "gold_ring": {
+      "inner_radius": 0.3999999127873383,
+      "outer_radius": 0.4600000992119545,
+      "width": 0.060000186424616186
+    },
+    "reveal_depth": 0.18000006675720215,
+    "nave_glass": [
+      {
+        "side": 0,
+        "z_min": 4.019999980926514,
+        "z_max": 4.019999980926514
+      },
+      {
+        "side": 1,
+        "z_min": 4.019999980926514,
+        "z_max": 4.019999980926514
+      }
+    ],
+    "mullions": [
+      {
+        "side": 0,
+        "bar": 0,
+        "extent": [
+          0.05000019073486328,
+          2.8999996185302734,
+          0.04999995231628418
+        ],
+        "width": 0.05000019073486328
+      },
+      {
+        "side": 0,
+        "bar": 1,
+        "extent": [
+          1.1000003814697266,
+          0.05000019073486328,
+          0.04999995231628418
+        ],
+        "width": 0.05000019073486328
+      },
+      {
+        "side": 0,
+        "bar": 2,
+        "extent": [
+          1.1000003814697266,
+          0.05000019073486328,
+          0.04999995231628418
+        ],
+        "width": 0.05000019073486328
+      },
+      {
+        "side": 1,
+        "bar": 0,
+        "extent": [
+          0.04999995231628418,
+          2.8999996185302734,
+          0.04999995231628418
+        ],
+        "width": 0.04999995231628418
+      },
+      {
+        "side": 1,
+        "bar": 1,
+        "extent": [
+          1.1000001430511475,
+          0.05000019073486328,
+          0.04999995231628418
+        ],
+        "width": 0.05000019073486328
+      },
+      {
+        "side": 1,
+        "bar": 2,
+        "extent": [
+          1.1000001430511475,
+          0.05000019073486328,
+          0.04999995231628418
+        ],
+        "width": 0.05000019073486328
+      }
+    ]
+  },
+  "protected_snapshots": {
+    "protected_before": "c78b45a20c0ffefaaa38413889fd6438f4da3aeff728722d1f4bc3012b5dcbf2",
+    "protected_after": "c78b45a20c0ffefaaa38413889fd6438f4da3aeff728722d1f4bc3012b5dcbf2"
+  },
+  "balance_reference": {
+    "left": 0.08752219855535245,
+    "right": 0.05077437045580477,
+    "nave": 0.03487536353396084,
+    "ratio": 1.72374758701408
+  },
+  "interior": {
+    "pos": "interior",
+    "fps_avg": 220.04745483398438,
+    "fps_p1": 158.51626586914062,
+    "vram_mb": 489.8719787597656,
+    "drawcalls": 254,
+    "tris": 6511860
+  },
+  "shots": {
+    "interior_inside": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "bcb4c62fd8fc4e7863947070141dddeb9ba2d9a4c9b72b586320c673087c68d1",
+      "mtime": 1793763493.7939413
+    },
+    "interior_lookup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "aee735cbeb00cd8ae81a3557dd5ad1f2a0b2c0383bb9b60186a179277156a478",
+      "mtime": 1793763495.355726
+    },
+    "windows_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "618a4036c0c04be858d392139d10e2c41df941b40fdd724f511b8da535dbc2c3",
+      "mtime": 1793763497.1022756
+    },
+    "interior_windows_inside_mask": {
+      "size": [
+        480,
+        270
+      ],
+      "sha256": "0cafd82bbe07b2ca96b2e4389a11be68719dba949d1bffa30b5b91fc99afd684",
+      "mtime": 1793763494.3479583
+    },
+    "interior_windows_lookup_mask": {
+      "size": [
+        480,
+        270
+      ],
+      "sha256": "752ef6ae7d7a893f40ef0a76dcf9af39183dd7457ab7d2f62cc7f375a170a17d",
+      "mtime": 1793763495.7974417
+    }
+  },
+  "wall_crop_source_box": [
+    38,
+    324,
+    480,
+    756
+  ],
+  "wall_crop_note": "Visual review required: count block rows in enlarged crop.",
+  "metric_note": "PNG luma uses display Rec.709; CIELAB L* is averaged per pixel after sRGB linearization (D65); rib gains/drops compare base material Rec.709. Nave uses inside, drum windows and gold ring use lookup.",
+  "logs": {
+    "build": "/Users/lance/workspace/mistbell/spike/logs/interior_windows_build.log",
+    "runtime": "/Users/lance/workspace/mistbell/spike/logs/interior_windows_interior.log",
+    "benchmark": "/Users/lance/workspace/mistbell/spike/logs/interior_windows_bench.json"
+  },
+  "errors": []
+}
