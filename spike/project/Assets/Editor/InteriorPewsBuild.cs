@@ -65,10 +65,10 @@ public static class InteriorPewsBuild
         {
             float x=side==0?-4.15f:.15f,z=.55f+row*pitch;string n="Interior_V2Pew_"+side+"_"+row;
             Box(root,n+"_Seat",new Vector3(x,fy+.455f,z),new Vector3(2.35f,.05f,.42f),wood);
-            var back=Box(root,n+"_Back",new Vector3(x,fy+.48f+.21f*Mathf.Cos(angle),z+backZ),new Vector3(2.35f,.42f,.05f),wood);
-            back.transform.rotation=Quaternion.Euler(6,0,0);
-            var rim=Box(root,n+"_Rim",new Vector3(x,fy+.48f+.42f*Mathf.Cos(angle),z+.21f+.42f*Mathf.Sin(angle)),new Vector3(2.35f,.02f,.055f),rail);
-            rim.transform.rotation=Quaternion.Euler(6,0,0);
+            var back=Box(root,n+"_Back",new Vector3(x,fy+.48f+.21f*Mathf.Cos(angle),z-backZ),new Vector3(2.35f,.42f,.05f),wood);
+            back.transform.rotation=Quaternion.Euler(-6,0,0);
+            var rim=Box(root,n+"_Rim",new Vector3(x,fy+.48f+.42f*Mathf.Cos(angle),z-(.21f+.42f*Mathf.Sin(angle))),new Vector3(2.35f,.02f,.055f),rail);
+            rim.transform.rotation=Quaternion.Euler(-6,0,0);
             var v=new List<Vector3>();var t=new List<int>();
             foreach(float dx in new[]{-1.145f,1.145f})
             {
@@ -125,13 +125,13 @@ public static class InteriorPewsBuild
         Debug.Log(FormattableString.Invariant($"[PEWS_BUILD] rows=6 width=2.35 gap=0.28 pitch={pitch:F5} legs=4 rail=true"));
         Debug.Log(FormattableString.Invariant($"[CHANDELIER] chain_segments=3 top_y=8.600 ring_y={center.y:F3} axis_x={center.x:F3} link_length=0.16 wire_diameter=0.03 stem=true"));
     }
-    static string Protected(ChurchInterior interior)
+    static string Protected(ChurchInterior interior, bool facingOnly=false)
     {
         var entries=new List<string>();
         foreach(var r in Object.FindObjectsByType<MeshRenderer>(FindObjectsInactive.Include,FindObjectsSortMode.None))
         {
             // Only the explicit furniture being replaced is excluded.
-            if(r.name.StartsWith("Interior_V2Pew_") || r.name.StartsWith("Interior_PewContact_") || r.name.StartsWith("Interior_Chain_") || r.name.StartsWith("Interior_Suspension_") || r.name.StartsWith("Interior_SideIcon_") || r.name=="Interior_Chandelier" || r.name.StartsWith("Interior_ChandelierCandle_"))continue;
+            if(facingOnly ? r.name.StartsWith("Interior_V2Pew_") && (r.name.EndsWith("_Back") || r.name.EndsWith("_Rim")) : r.name.StartsWith("Interior_V2Pew_") || r.name.StartsWith("Interior_PewContact_") || r.name.StartsWith("Interior_Chain_") || r.name.StartsWith("Interior_Suspension_") || r.name.StartsWith("Interior_SideIcon_") || r.name=="Interior_Chandelier" || r.name.StartsWith("Interior_ChandelierCandle_"))continue;
             entries.Add(r.name+EditorJsonUtility.ToJson(r)+r.transform.localToWorldMatrix.ToString("F6"));
             var mf=r.GetComponent<MeshFilter>();if(mf!=null)entries.Add(EditorJsonUtility.ToJson(mf.sharedMesh));
             foreach(var m in r.sharedMaterials)entries.Add(EditorJsonUtility.ToJson(m));
@@ -139,8 +139,30 @@ public static class InteriorPewsBuild
         foreach(var c in Object.FindObjectsByType<Collider>(FindObjectsInactive.Include,FindObjectsSortMode.None))entries.Add(c.name+EditorJsonUtility.ToJson(c)+c.transform.localToWorldMatrix.ToString("F6"));
         foreach(var c in Object.FindObjectsByType<Camera>(FindObjectsInactive.Include,FindObjectsSortMode.None))entries.Add(c.name+EditorJsonUtility.ToJson(c)+c.transform.localToWorldMatrix.ToString("F6"));
         foreach(var l in Object.FindObjectsByType<Light>(FindObjectsInactive.Include,FindObjectsSortMode.None))
-            if(!l.name.Contains("Chandelier"))entries.Add(l.name+EditorJsonUtility.ToJson(l)+l.transform.localToWorldMatrix.ToString("F6"));
+            if(facingOnly || !l.name.Contains("Chandelier"))entries.Add(l.name+EditorJsonUtility.ToJson(l)+l.transform.localToWorldMatrix.ToString("F6"));
         entries.Sort(StringComparer.Ordinal);return string.Join("\n",entries);
+    }
+    // Update only existing backboards and rims; leave every other scene object intact.
+    public static void RunFacingFix()
+    {
+        EditorSceneManager.OpenScene("Assets/Scenes/ArtSpike.unity");
+        var interior=Object.FindFirstObjectByType<ChurchInterior>();
+        var root=interior.detailRoot.transform;string before=Protected(interior,true);
+        float angle=6*Mathf.Deg2Rad;
+        for(int side=0;side<2;side++)for(int row=0;row<6;row++)
+        {
+            string prefix="Interior_V2Pew_"+side+"_"+row;
+            float z=root.Find(prefix+"_Seat").position.z;
+            var back=root.Find(prefix+"_Back");var rim=root.Find(prefix+"_Rim");
+            var p=back.position;p.z=z-(.21f+.21f*Mathf.Sin(angle));back.position=p;
+            p=rim.position;p.z=z-(.21f+.42f*Mathf.Sin(angle));rim.position=p;
+            back.rotation=rim.rotation=Quaternion.Euler(-6,0,0);
+        }
+        if(before!=Protected(interior,true))throw new InvalidOperationException("Facing fix changed protected scene content");
+        InteriorPewsAudit.Facing(interior);
+        Debug.Log("[PEW_FACING_PROTECTED] all_except_back_rim_identical=true");
+        EditorSceneManager.MarkSceneDirty(interior.gameObject.scene);EditorSceneManager.SaveScene(interior.gameObject.scene);
+        PerformanceBuild.Run();
     }
     public static void Run()
     {

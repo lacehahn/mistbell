@@ -14,8 +14,28 @@ public static class InteriorPewsAudit
         return System.IO.Path.Combine(dir!=null?dir.Parent.FullName:System.IO.Directory.GetCurrentDirectory(),"Shots");
     }
     static float Luma(Color c)=>.2126f*c.r+.7152f*c.g+.0722f*c.b;
+    public static void Facing(ChurchInterior interior)
+    {
+        var root=interior.detailRoot.transform;
+        var altar=root.GetComponentsInChildren<MeshRenderer>(true).First(r=>r.name=="Interior_Altar_Model");
+        float altarZ=altar.bounds.center.z,firstZ=root.Find("Interior_V2Pew_0_0_Seat").position.z;
+        int checkedPews=0;float minOffset=float.PositiveInfinity,maxOffset=float.NegativeInfinity;
+        for(int side=0;side<2;side++)for(int row=0;row<6;row++)
+        {
+            string prefix="Interior_V2Pew_"+side+"_"+row;
+            var seat=root.Find(prefix+"_Seat");var back=root.Find(prefix+"_Back");var rim=root.Find(prefix+"_Rim");
+            float offset=back.position.z-seat.position.z;
+            if(!(offset<0 && rim.position.z<back.position.z && altarZ>seat.position.z) ||
+                Quaternion.Angle(back.rotation,Quaternion.Euler(-6,0,0))>.01f ||
+                Quaternion.Angle(rim.rotation,Quaternion.Euler(-6,0,0))>.01f)
+                throw new InvalidOperationException("Pew facing gate failed: "+prefix);
+            minOffset=Mathf.Min(minOffset,offset);maxOffset=Mathf.Max(maxOffset,offset);checkedPews++;
+        }
+        Debug.Log(FormattableString.Invariant($"[PEW_FACING] back_z_side=-1 seat_front_z=+1 faces_altar=true altar_z≈{altarZ:F3} pew_z≈{firstZ:F3} checked={checkedPews} back_offset_min={minOffset:F5} back_offset_max={maxOffset:F5}"));
+    }
     public static void Inside(ChurchInterior interior,Camera cam,Texture2D frame)
     {
+        Facing(interior);
         var report=new Report{width=frame.width,height=frame.height,minGap=100};
         const int layer=28;var queries=new List<GameObject>();var ids=new Dictionary<Collider,string>();
         var renderers=interior.GetComponentsInChildren<MeshRenderer>();
