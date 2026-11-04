@@ -133,6 +133,8 @@ public class Screenshotter : MonoBehaviour
                     ScreenCapture.CaptureScreenshot(file);
                     yield return new WaitForSecondsRealtime(0.4f);
                     Debug.Log("[SHOT] written " + file + " exists=" + File.Exists(file) + " bytes=" + (File.Exists(file) ? new FileInfo(file).Length : 0));
+                    if(p.name=="art_runtime" && Array.IndexOf(Environment.GetCommandLineArgs(),"-far-mist-audit")>=0)
+                    { var png=new Texture2D(2,2);png.LoadImage(File.ReadAllBytes(file));FarMistAudit.Surface(c,png,shotsDir,"art_runtime");Destroy(png);Application.Quit();yield break; }
                     if(p.name=="art_close" && (Array.IndexOf(Environment.GetCommandLineArgs(),"-style3-family")>=0 || Array.IndexOf(Environment.GetCommandLineArgs(),"-style4-family")>=0))
                         yield return CaptureStoneFamily(shotsDir,file);
 
@@ -148,6 +150,8 @@ public class Screenshotter : MonoBehaviour
         ScreenCapture.CaptureScreenshot(outPath);
         yield return new WaitForSecondsRealtime(0.4f);
         Debug.Log("[SHOT] written " + outPath + " exists=" + File.Exists(outPath));
+        if(Array.IndexOf(Environment.GetCommandLineArgs(),"-far-mist-audit")>=0)
+        { var png=new Texture2D(2,2);png.LoadImage(File.ReadAllBytes(outPath));FarMistAudit.Surface(cam,png,dir,"art_runtime");Destroy(png); }
 
         yield return null;
         Application.Quit();

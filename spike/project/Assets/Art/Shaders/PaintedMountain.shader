@@ -10,6 +10,7 @@ Shader "Mistbell/PaintedMountain"
         _HazeBottom ("Extra haze at foot", Range(0,1)) = 0
         _MistContrast ("Relief retained through mist", Range(0,1)) = 0.18
         _MistBrightness ("Mist silhouette brightness", Range(0,1)) = 0.84
+        _RidgeSkyRatio ("Crest light retained against local sky", Range(0,1)) = 0.95
         _SkyTopColor ("Read-only sky zenith sample", Color) = (0.26,0.35,0.48,1)
         _SkyMidColor ("Read-only sky middle sample", Color) = (0.54,0.63,0.73,1)
         _SkyCloudColor ("Read-only sky cloud sample", Color) = (0.95,0.96,0.98,1)
@@ -39,6 +40,7 @@ Shader "Mistbell/PaintedMountain"
                 float _HorizonFog;
                 float _Haze, _HazeBottom;
                 float _MistContrast, _MistBrightness;
+                float _RidgeSkyRatio;
                 float4 _SkyTopColor, _SkyMidColor;
                 float4 _SkyCloudColor, _SkyCloudShadow;
                 float _SkyCloudAmount, _SkyCloudScale;
@@ -113,7 +115,7 @@ Shader "Mistbell/PaintedMountain"
                 // interval. Keep the lower body lit by the horizon/foot mist;
                 // clamping the entire card to the upper sky made it too dark.
                 float ridgeVeil=smoothstep(.50,.82,i.uv.y);
-                c.rgb=lerp(c.rgb,min(c.rgb,sky*.95),ridgeVeil);
+                c.rgb=lerp(c.rgb,min(c.rgb,sky*_RidgeSkyRatio),ridgeVeil);
                 return c;
             }
             ENDHLSL

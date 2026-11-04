@@ -724,3 +724,13 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 - 构建Succeeded/0 errors；进堂INT_PASS全True，walk6距离15.395m、贴地误差0、漏射线0、59.83fps。门洞头顶最小余量1.86461m；现有椅背0.91052m、排距0.80230m、净空0.28m；LookHeight1.6保留。
 - **整体验收未全绿**：reveal原门槛失败，修改前对照ratio1.429020、最终1.431238（要求≥1.6）；两版石材tile1.0与旧1.8断言亦不符。未扩展范围修改reveal/石材/雾/门槛。专用验收脚本exit=1，拒绝通用run_demos.sh漏报gate=FAIL的假绿。
 - 新截图interior_inside.png / pilgrim_scale.png已目视确认。报告[acceptance.md](artifacts/pilgrim_height/acceptance.md)，数字[measurements.json](artifacts/pilgrim_height/measurements.json)。未改AGENTS.md，未提交。
+
+
+## 2026-11-04 远景雾、雪面石头、围栏（far_mist_rocks，整体验收未全绿）
+
+- 仅执行 `tasks/far_mist_rocks.md`。局部入口 `FarMistRocksBuild.Run`：MistHaze=0.04/0.18/0.34/0.50，垂直雾0.65，亮度0.78，天空/雾底色#DCE4EA；山脊对局部天空的亮度比例0.72/0.82/0.90/0.97。运行时雾幕增加深度辨别，250–500m后不再重复盖住已有独立雾的远山。原揭示机位与时序参数保留，试验性时序调整全部撤回。
+- 新1080p PNG独立复算：`[FAR_MIST] visible_ridges=3 mountain_luma=0.472523 sky_luma=0.434141 seam=0.003036`。已目视检查reveal_80/art_runtime，山脊可见。
+- `[SNOW_ROCK] snow_cap_pct=42.441280 dark_face_L=16.340896 count=88 count_unchanged=true`；单块雪盖41.833–43.188%表面积，沿既有朝上/迎风三角面分配，顶点/变换/尺寸SHA一致。`[FENCE] post_b_star=3.225766`，立柱材质L*50.592→45.533（×0.900011）。测量口径与首命中网格掩码见报告。
+- 构建Succeeded/0errors；室外z01=214.69FPS/281drawcalls，terrace=229.09FPS/306drawcalls。进堂INT_PASS全True，walk6=15.396m/贴地0/漏射线0；其余演示bad=0。
+- **未过：reveal gate=FAIL，ratio=1.311026<1.6，bad=1；不能宣称任务全过。** 保留原断言，未修改相机、室内、地面、祭坛、王门或人物来追该门槛。两类保护快照相等，git diff --check通过。
+- 完整验收 `bash spike/tools/accept_far_mist_rocks.sh` 已运行，exit=1；报告 [acceptance.md](artifacts/far_mist_rocks/acceptance.md)，数字 [measurements.json](artifacts/far_mist_rocks/measurements.json)，原始日志`logs/far_mist_rocks_{build,interior,walk,reveal,capture,bench}.log`。AGENTS.md未改，未提交；生成场景/资产/截图/构建沿原忽略规则留本地。

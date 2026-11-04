@@ -86,8 +86,8 @@ public static class MountainBackdrop
     static int ridgeBreaks, straightSegments, maxFacePixels;
     static float minShadowRatio, minShadeLuma, maxFaceGap;
     static float Luma(Color c) => .2126f*c.r+.7152f*c.g+.0722f*c.b;
-    static readonly float[] MistHaze = { .12f, .26f, .42f, .58f };   // 0.34/0.54/0.70/0.84 雾太重，山完全没形体
-    const float MistContrast = .18f, MistBrightness = .84f;
+    static readonly float[] MistHaze = { .04f, .18f, .34f, .50f };
+    const float MistContrast = .18f, MistBrightness = .78f;
 
     static void ConfigureMist(Material material, int layer, Color horizon)
     {
@@ -96,8 +96,9 @@ public static class MountainBackdrop
         material.SetFloat("_HazeBottom", .45f);
         material.SetFloat("_MistContrast", MistContrast);
         material.SetFloat("_MistBrightness", MistBrightness);
+        material.SetFloat("_RidgeSkyRatio", new[]{.72f,.82f,.90f,.97f}[layer]);
         material.SetColor("_HorizonFogColor", horizon);
-        material.SetFloat("_HorizonFog", 1f);
+        material.SetFloat("_HorizonFog", .65f);
         var sky=GameObject.Find("Sky Dome").GetComponent<MeshRenderer>().sharedMaterial;
         material.SetColor("_SkyTopColor", sky.GetColor("_TopColor"));
         material.SetColor("_SkyMidColor", sky.GetColor("_MidColor"));

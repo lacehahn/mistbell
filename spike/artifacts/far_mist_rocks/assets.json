@@ -1,0 +1,12 @@
+{
+    "protected_before": "8597c9bc45d6d00526f231c08a27dbc3e8a97a89f142477e4cef66e54300ea5b",
+    "protected_after": "8597c9bc45d6d00526f231c08a27dbc3e8a97a89f142477e4cef66e54300ea5b",
+    "geometry_before": "bec91f66bd3203d9321f257cca5a2c8a57730a92218bb8db1257aeb9f82e872a",
+    "geometry_after": "bec91f66bd3203d9321f257cca5a2c8a57730a92218bb8db1257aeb9f82e872a",
+    "rocks": 88,
+    "snow_cap_pct": 42.441280364990237,
+    "snow_min_pct": 41.833251953125,
+    "snow_max_pct": 43.1882209777832,
+    "post_before_L": 50.59201431274414,
+    "post_after_L": 45.53337478637695
+}

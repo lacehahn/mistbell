@@ -34,6 +34,8 @@ public sealed class MistReveal : MonoBehaviour
     float baseBloom, baseVignette, previousDistance, pulseTime;
     bool bellFired, pulsing, initialized;
     Color farFog, nearFog, farSky, nearSky;
+    UniversalAdditionalCameraData mistCamera;
+    bool previousDepthTexture;
 
     void Awake()
     {
@@ -43,6 +45,9 @@ public sealed class MistReveal : MonoBehaviour
 
     void Start()
     {
+        mistCamera = Camera.main.GetUniversalAdditionalCameraData();
+        previousDepthTexture = mistCamera.requiresDepthTexture;
+        mistCamera.requiresDepthTexture = true;
         ColorUtility.TryParseHtmlString(FarFog, out farFog);
         ColorUtility.TryParseHtmlString(NearFog, out nearFog);
         ColorUtility.TryParseHtmlString(FarSky, out farSky);
@@ -123,7 +128,8 @@ public sealed class MistReveal : MonoBehaviour
     {
         // The existing church shader does not consume RenderSettings fog. Supply a
         // soft world-space mist bank using vertex opacity, without changing any art
-        // material/shader/texture or creating an asset. UI/Default needs no variants.
+        // church material/shader/texture. Its depth-aware bank leaves distant
+        // mountains to their own haze and restores the original camera depth mode.
         cloudRoot = new GameObject("Runtime Reveal Mist");
         cloudMaterial = new Material(cloudShader) { hideFlags = HideFlags.HideAndDontSave };
         cloudMaterial.SetInt("unity_GUIZTestMode", (int)CompareFunction.LessEqual);
@@ -172,9 +178,15 @@ public sealed class MistReveal : MonoBehaviour
     void OnDisable()
     {
         if (!initialized) return;
+        if (mistCamera != null) mistCamera.requiresDepthTexture = previousDepthTexture;
         if (cloudRoot != null) cloudRoot.SetActive(false);
         if (bloom != null) bloom.intensity.value = baseBloom;
         if (vignette != null) vignette.intensity.value = baseVignette;
+    }
+
+    void OnEnable()
+    {
+        if (initialized && mistCamera != null) mistCamera.requiresDepthTexture = true;
     }
 
     IEnumerator DemoReveal()
@@ -231,6 +243,7 @@ public sealed class MistReveal : MonoBehaviour
             var frame = ScreenCapture.CaptureScreenshotAsTexture();
             string path = Path.Combine(output, "reveal_" + d.ToString("F0", CultureInfo.InvariantCulture) + ".png");
             File.WriteAllBytes(path, frame.EncodeToPNG());
+            if (d == 80) FarMistAudit.Capture(cam, frame, output);
             RectInt roi = ChurchRect(cam, frame.width, frame.height, out float heightPct);
             edges[i] = Edge(frame, roi);
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
