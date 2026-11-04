@@ -219,6 +219,7 @@ public static class ChurchInteriorBuilder
         interior.threshold=ramp;
         BuildWestWindows(detail,interior);
         ApplyLighting(interior);
+        InteriorBalanceBuild.Apply(interior);
         Debug.Log($"[INTERIOR_BUILD] floor_y={fy:F3} lamps={interior.lamps.Length} shafts={interior.shafts.Length} hinge={interior.doorLeaf.position}");
         return interior;
     }

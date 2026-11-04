@@ -852,8 +852,8 @@ public sealed partial class PlayerController : MonoBehaviour
             if(lamp.name.StartsWith("Interior_WindowKey"))
             {
                 // 室内 v2：高窗改 3 盏斜射聚光（光柱+地面光斑的来源），不再是单盏方向光
-                pass &= lamp.enabled && lamp.type==LightType.Spot && Mathf.Abs(lamp.spotAngle-45)<.01f &&
-                    Mathf.Abs(lamp.range-22)<.01f && Mathf.Abs(lamp.intensity-2.5f)<.001f && lamp.shadows==LightShadows.None &&
+                pass &= lamp.enabled && lamp.type==LightType.Spot && Mathf.Abs(lamp.spotAngle-39)<.01f &&
+                    Mathf.Abs(lamp.range-22)<.01f && Mathf.Abs(lamp.intensity-2.125f)<.001f && lamp.shadows==LightShadows.None &&
                     lamp.color==(Color)new Color32(232,210,182,255);
                 continue;
             }
@@ -863,10 +863,20 @@ public sealed partial class PlayerController : MonoBehaviour
                     Mathf.Abs(lamp.range-9)<.01f && lamp.color==(Color)new Color32(255,214,170,255);
                 continue;
             }
+            if(lamp.name=="Interior_NaveFill_Balance")
+            {
+                pass &= lamp.enabled && lamp.type==LightType.Point && Mathf.Abs(lamp.range-10)<.01f && Mathf.Abs(lamp.intensity-1.2f)<.001f && lamp.shadows==LightShadows.None;
+                continue;
+            }
+            if(lamp.name=="Interior_ChancelFill")
+            {
+                pass &= lamp.enabled && lamp.type==LightType.Point && Mathf.Abs(lamp.range-12)<.01f && Mathf.Abs(lamp.intensity-.45f)<.001f && lamp.color==(Color)new Color32(201,183,154,255) && lamp.shadows==LightShadows.None;
+                continue;
+            }
             if(lamp.name=="Interior_FloorBounce")
             {
-                pass &= lamp.enabled && lamp.type==LightType.Point && Mathf.Abs(lamp.range-18)<.01f &&
-                    Mathf.Abs(lamp.intensity-.75f)<.001f && lamp.color==(Color)new Color32(138,106,78,255);
+                pass &= lamp.enabled && lamp.type==LightType.Point && Mathf.Abs(lamp.range-22)<.01f &&
+                    Mathf.Abs(lamp.intensity-.95f)<.001f && lamp.color==(Color)new Color32(138,106,78,255);
                 continue;
             }
             if(lamp.name.StartsWith("Interior_ChandelierCandle_")) { pass &= Mathf.Abs(lamp.range-1.2f)<.001f && Mathf.Abs(lamp.intensity-.35f)<.001f; continue; }
@@ -1114,6 +1124,7 @@ public sealed partial class PlayerController : MonoBehaviour
         float naveLuma=InteriorSurfaceLuma(lightingFrame,new Rect(.2f,.2f,.6f,.6f));
         float wallLuma=(InteriorSurfaceLuma(lightingFrame,new Rect(.03f,.22f,.14f,.22f))+InteriorSurfaceLuma(lightingFrame,new Rect(.83f,.22f,.14f,.22f)))*.5f;
         float benchLuma=(InteriorSurfaceLuma(lightingFrame,new Rect(.19f,.23f,.21f,.065f))+InteriorSurfaceLuma(lightingFrame,new Rect(.60f,.23f,.21f,.065f)))*.5f;
+        InteriorBalanceAudit.Inside(interior, follow, lightingFrame);
         Destroy(lightingFrame);
         // 抬头验证：按 F 的逻辑等价物，把看向点抬到穹顶中心，出一张 interior_lookup.png
         lookUp=true;
@@ -1128,6 +1139,7 @@ public sealed partial class PlayerController : MonoBehaviour
         {
             Color c=domeFrame.GetPixel(x,y); domeSum+=.2126*c.r+.7152*c.g+.0722*c.b; domePixels++;
         }
+        InteriorBalanceAudit.Dome(interior, follow, domeFrame);
         Destroy(domeFrame);
         float headroomLuma=(float)(domeSum/domePixels);
         var windowKey=Array.Find(interior.lamps,l=>l.name=="Interior_WindowKey");
@@ -1157,7 +1169,7 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(.4f);
         bool pass=interiorLightPass && domeLightPass && ceilingSeen && domeSeen && ceilingFx>=.35f && InteriorVisibility() && TestInteriorObstacles() && enteredByWalking && transform.position.x>=-4.5f && transform.position.x<=4.5f &&
             transform.position.z>=-9 && transform.position.z<=7 && Mathf.Abs(transform.position.y-interior.FloorY)<=.3f &&
-            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==18 && interior.shafts.Length==3 &&
+            Mathf.Abs(follow.fieldOfView-50)<.01f && interior.lamps.Length==20 && interior.shafts.Length==3 &&
             new FileInfo(entry).Length>0 && new FileInfo(inside).Length>0;
         Debug.Log($"[INT_PASS] light={interiorLightPass} domeLight={domeLightPass} ceilingSeen={ceilingSeen} " +
             $"domeSeen={domeSeen} fx={ceilingFx:F3} visible={InteriorVisibility()} obstacles={TestInteriorObstacles()} " +

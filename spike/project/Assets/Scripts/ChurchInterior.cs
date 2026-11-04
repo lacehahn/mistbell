@@ -58,6 +58,7 @@ public sealed class ChurchInterior : MonoBehaviour
     bool opening, inside;
     Color sky, equator, ambientGround;
     float ambientIntensity, fogDensity;
+    int outdoorAdditionalLightLimit;
     public float OpenDegrees { get; private set; }
     public float FloorY => floor.bounds.max.y;
     public Vector3 DoorCenter => new Vector3(-2, FloorY + 1.8f, -8.08f);
@@ -87,6 +88,7 @@ public sealed class ChurchInterior : MonoBehaviour
         sky = RenderSettings.ambientSkyColor; equator = RenderSettings.ambientEquatorColor;
         ambientGround = RenderSettings.ambientGroundColor;
         ambientIntensity = RenderSettings.ambientIntensity; fogDensity = RenderSettings.fogDensity;
+        outdoorAdditionalLightLimit=UnityEngine.Rendering.Universal.UniversalRenderPipeline.asset.maxAdditionalLightsCount;
     }
     public void RestoreDoor(bool open)
     {
@@ -146,6 +148,7 @@ public sealed class ChurchInterior : MonoBehaviour
     {
         if (value == inside || PlayerController.CaptureMode) return;
         inside = value;
+        UnityEngine.Rendering.Universal.UniversalRenderPipeline.asset.maxAdditionalLightsCount=value?8:outdoorAdditionalLightLimit;
         domeFadeStart=domeLightIntensity; domeFadeTime=0;
         SetDetail(value);
         foreach(var lamp in lamps) if(lamp.name.StartsWith("Interior_Candle_")) lamp.range=value?6:2.6f;

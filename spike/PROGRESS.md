@@ -689,3 +689,12 @@ family_distance 复现：先 `bash spike/tools/capture_runtime.sh --style3-famil
 | 10:15 | 王门解决十字遮挡 | 图标墙中央拱背板移除 + 金门框，两侧拱与碰撞不动；原机位可见祭坛与十字 | `-demo-enter-church` 全绿、射线命中祭坛 |
 | 10:15 | 用户裁决 | **地板定稿**（冷暖/明暗不再改），后续只动其他元素 | — |
 
+
+## 2026-11-04 室内明暗均衡、抹灰锥顶与长椅接地
+
+- 新增局部幂等入口 `InteriorBalanceBuild.Run`，保留既有场景和地板。三高窗39°/2.125（-15%），反弹光22m/0.95/#8A6A4E；后殿新增12m/0.45/#C9B79A顶光。实测单靠指定补光不足，另加中殿10m/1.2点光；调整独立光柱宽1.4m/HDR亮度×0.25、室内墙材质、室内附加灯上限8（出堂恢复）与小烛灯优先级。完整参数和额外调整理由见报告。
+- 锥顶无贴图#8A7A66抹灰/roughness0.85，新增12根0.12m宽、0.05m出挑肋，明暗面×1.11/0.91；顶孔天空片提亮、增加0.06m金环。长椅12组自动脚底阴影，每组四片0.24×0.18m、黑色alpha0.20；黑色加法不能压暗，明确采用标准透明混合，未伪称按加法实现。
+- 最终PNG独立复算：left=0.06934/right=0.05364/ratio=1.29258/nave=0.03306；rib_contrast=0.24122/oculus_luma=0.96006；shadows=12、48对脚底采样最大差0.00473。原运行时三类日志也全部达标，具体采样空间与微小帧差见报告。
+- 构建Succeeded/0 errors；进堂[INT_PASS]全部True，obstacles=True；1920×1080前台室内254drawcalls/229.88FPS，1%low165.93。`python3 spike/tools/verify_interior_balance.py` exit=0，全部检查true；git diff --check通过。
+- 更新前后保护比对通过：地板材质、全部碰撞、室外渲染/灯/相机、祭坛与王门等受保护对象一致。未改祭坛/王门源文件、AGENTS.md，未提交。最终interior_inside/interior_lookup均已目视检查。
+- [验收报告](artifacts/interior_balance/acceptance.md) / [测量JSON](artifacts/interior_balance/measurements.json)；原始日志`logs/interior_balance_{build,interior,bench}.log`，性能数据`logs/interior_balance_bench.json`。生成场景/资产/截图/构建按原忽略规则留本地。
