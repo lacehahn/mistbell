@@ -1,0 +1,21 @@
+SCREENSHOT climb2d_start.png 1920x1080 bytes=298349
+SCREENSHOT climb2d_ramp_mid.png 1920x1080 bytes=258996
+SCREENSHOT climb2d_turn.png 1920x1080 bytes=269798
+SCREENSHOT climb2d_stairs_mid.png 1920x1080 bytes=345986
+SCREENSHOT climb2d_before_transition.png 1920x1080 bytes=346336
+[CLIMB2D] mode=side resolution=480x270 scale=4 parallax=0.2/0.5/0.6
+[CLIMB2D] input=A/D stair_up=A/Left/W/Up stair_down=D/Right/S/Down follow=0.15 atlas_rows=left:1,right:2 fps=10 auto=True
+[CLIMB2D] deck_support=TerraceLanding ground_error_m=0.000000
+[CLIMB2D] input_audit idle_samples=7 left_samples=482 right_samples=1663 idle_frame=0
+[CLIMB2D] measured walk_s=40.600 stairs_s=7.000 total_s=50.776 fade_s=0.662 samples=2152 support_error_px=0.000031 camera_lag_max_px=34.334 max_dt=0.2089 shots=5
+[CLIMB2D] arrival scene=ArtSpike position=(0.000, 0.286, -9.965) camera_z_distance=11.500 valid=True bad=0
+[CLIMB2D] path=curve stairs=48 transition=ok
+[CLIMB_WALK6] samples=360 bad=0
+[PLAY] walk_start=(-15.667,-28.798,-205.000) walk_end=(-8.203,-26.944,-189.006) distance=17.747 row=3 fps_ok=true
+[PLAY] ground_error_max=0.000000 raycast_misses=0 fps=60.00 animation_fps=10 frames=6
+[CLIMB_WALK6] samples=269 bad=0
+[PLAY] walk_start=(0.000,-1.647,-16.000) walk_end=(0.000,0.302,-9.810) distance=6.490 row=3 fps_ok=true
+[PLAY] ground_error_max=0.000000 raycast_misses=0 fps=59.78 animation_fps=10 frames=6
+[CAM_TEST] phase=0 seconds=6.017 samples=353 bad=0 ground_gap=3.89798 wall_gap=3.99951 turned=true
+[CAM_TEST] phase=1 seconds=6.017 samples=360 bad=0 ground_gap=3.60935 wall_gap=3.99951 turned=true
+ACCEPT climb2d total_s=50.776 stairs_s=7.000 fade_s=0.662 screenshots=5 bad=0; 3D walk/stairs/camera bad=0

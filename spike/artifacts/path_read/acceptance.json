@@ -1,0 +1,62 @@
+{
+  "screenshots": [
+    {
+      "shot": "ramp_mid",
+      "path_L": 56.53545302126231,
+      "ground_L": 95.869678617115,
+      "delta": 39.334225595852686,
+      "stone_detail": 0.35,
+      "edge_width_px": 12,
+      "edge_alpha": [
+        0.42,
+        0.12
+      ],
+      "closed": false,
+      "overlaps": 3,
+      "overlap_px": 8,
+      "columns": [
+        50,
+        75,
+        100
+      ],
+      "shadow_px": 3,
+      "contact_samples": 78,
+      "contact_errors": 0
+    },
+    {
+      "shot": "turn",
+      "path_L": 57.18183209260353,
+      "ground_L": 95.81778248608494,
+      "delta": 38.63595039348141,
+      "stone_detail": 0.35,
+      "edge_width_px": 12,
+      "edge_alpha": [
+        0.42,
+        0.12
+      ],
+      "closed": false,
+      "overlaps": 3,
+      "overlap_px": 8,
+      "columns": [
+        50,
+        75,
+        100
+      ],
+      "shadow_px": 3,
+      "contact_samples": 175,
+      "contact_errors": 0
+    }
+  ],
+  "protected_files": 189,
+  "flow": {
+    "walk_s": "40.600",
+    "stairs_s": "7.000",
+    "total_s": "50.776",
+    "fade_s": "0.662",
+    "samples": "2152",
+    "support_error_px": "0.000031",
+    "camera_lag_max_px": "34.334",
+    "max_dt": "0.2089",
+    "shots": "5"
+  }
+}

@@ -23,11 +23,11 @@
   "screenshots": [
     {
       "shot": "ramp_mid",
-      "snow_b": -0.98414764033894,
-      "stone_b": 6.016231845570173,
-      "contrast_up": 0.12113610521819829,
-      "snow_samples": 27161,
-      "stone_samples": 88427,
+      "snow_b": -0.9861082491868605,
+      "stone_b": 6.070025224602774,
+      "contrast_up": 0.12025288650829435,
+      "snow_samples": 26080,
+      "stone_samples": 89432,
       "hard_lines": 0,
       "trees": [
         {
@@ -124,11 +124,11 @@
     },
     {
       "shot": "turn",
-      "snow_b": -0.9771939617877129,
-      "stone_b": 6.002861122917264,
-      "contrast_up": 0.12124777807856635,
-      "snow_samples": 32261,
-      "stone_samples": 83359,
+      "snow_b": -0.9796877705702931,
+      "stone_b": 6.057628788676373,
+      "contrast_up": 0.12044354386570366,
+      "snow_samples": 32475,
+      "stone_samples": 82971,
       "hard_lines": 0,
       "trees": [
         {
@@ -225,11 +225,11 @@
     },
     {
       "shot": "stairs_mid",
-      "snow_b": -0.9930293859534974,
-      "stone_b": 6.021950494061873,
-      "contrast_up": 0.11990216418694088,
-      "snow_samples": 45981,
-      "stone_samples": 69679,
+      "snow_b": -0.9951838672804865,
+      "stone_b": 6.021444281083363,
+      "contrast_up": 0.12001406029775019,
+      "snow_samples": 44984,
+      "stone_samples": 70676,
       "hard_lines": 0,
       "trees": [
         {
@@ -328,12 +328,12 @@
   "timing": {
     "walk_s": "40.600",
     "stairs_s": "7.000",
-    "total_s": "50.582",
-    "fade_s": "0.634",
-    "samples": "2070",
+    "total_s": "50.776",
+    "fade_s": "0.662",
+    "samples": "2152",
     "support_error_px": "0.000031",
-    "camera_lag_max_px": "33.997",
-    "max_dt": "0.2126",
+    "camera_lag_max_px": "34.334",
+    "max_dt": "0.2089",
     "shots": "5"
   },
   "arrival": {
@@ -344,6 +344,6 @@
     "bad": "0"
   },
   "transition": "ok",
-  "walk6_m": 17.746,
+  "walk6_m": 17.747,
   "bad": 0
 }
