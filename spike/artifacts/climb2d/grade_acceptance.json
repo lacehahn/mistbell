@@ -1,0 +1,349 @@
+{
+  "protected_files": 189,
+  "cliffs": [
+    {
+      "height_px": 120,
+      "width_px": 200,
+      "snow_px": 24,
+      "fade_px": 40
+    },
+    {
+      "height_px": 160,
+      "width_px": 300,
+      "snow_px": 24,
+      "fade_px": 40
+    },
+    {
+      "height_px": 200,
+      "width_px": 400,
+      "snow_px": 24,
+      "fade_px": 40
+    }
+  ],
+  "screenshots": [
+    {
+      "shot": "ramp_mid",
+      "snow_b": -0.98414764033894,
+      "stone_b": 6.016231845570173,
+      "contrast_up": 0.12113610521819829,
+      "snow_samples": 27161,
+      "stone_samples": 88427,
+      "hard_lines": 0,
+      "trees": [
+        {
+          "shot": "ramp_mid",
+          "id": "2",
+          "variant": "2",
+          "height_px": "240",
+          "flip": "false",
+          "gain": "1.00875",
+          "jitter_x": "-0.375",
+          "jitter_y": "-4.547"
+        },
+        {
+          "shot": "ramp_mid",
+          "id": "3",
+          "variant": "0",
+          "height_px": "90",
+          "flip": "true",
+          "gain": "0.97375",
+          "jitter_x": "-10.453",
+          "jitter_y": "-8.063"
+        },
+        {
+          "shot": "ramp_mid",
+          "id": "4",
+          "variant": "1",
+          "height_px": "150",
+          "flip": "false",
+          "gain": "1.01375",
+          "jitter_x": "-7.734",
+          "jitter_y": "8.391"
+        },
+        {
+          "shot": "ramp_mid",
+          "id": "5",
+          "variant": "2",
+          "height_px": "240",
+          "flip": "false",
+          "gain": "1.00844",
+          "jitter_x": "1.688",
+          "jitter_y": "6.375"
+        },
+        {
+          "shot": "ramp_mid",
+          "id": "6",
+          "variant": "0",
+          "height_px": "90",
+          "flip": "false",
+          "gain": "0.92313",
+          "jitter_x": "10.453",
+          "jitter_y": "-0.375"
+        },
+        {
+          "shot": "ramp_mid",
+          "id": "7",
+          "variant": "1",
+          "height_px": "150",
+          "flip": "false",
+          "gain": "0.95500",
+          "jitter_x": "3.938",
+          "jitter_y": "1.430"
+        },
+        {
+          "shot": "ramp_mid",
+          "id": "8",
+          "variant": "2",
+          "height_px": "240",
+          "flip": "true",
+          "gain": "0.94625",
+          "jitter_x": "6.070",
+          "jitter_y": "4.125"
+        },
+        {
+          "shot": "ramp_mid",
+          "id": "9",
+          "variant": "0",
+          "height_px": "90",
+          "flip": "false",
+          "gain": "1.01703",
+          "jitter_x": "11.063",
+          "jitter_y": "-10.699"
+        },
+        {
+          "shot": "ramp_mid",
+          "id": "10",
+          "variant": "1",
+          "height_px": "150",
+          "flip": "false",
+          "gain": "0.97875",
+          "jitter_x": "-3.882",
+          "jitter_y": "1.594"
+        }
+      ]
+    },
+    {
+      "shot": "turn",
+      "snow_b": -0.9771939617877129,
+      "stone_b": 6.002861122917264,
+      "contrast_up": 0.12124777807856635,
+      "snow_samples": 32261,
+      "stone_samples": 83359,
+      "hard_lines": 0,
+      "trees": [
+        {
+          "shot": "turn",
+          "id": "5",
+          "variant": "2",
+          "height_px": "240",
+          "flip": "false",
+          "gain": "1.00844",
+          "jitter_x": "1.688",
+          "jitter_y": "6.375"
+        },
+        {
+          "shot": "turn",
+          "id": "6",
+          "variant": "0",
+          "height_px": "90",
+          "flip": "false",
+          "gain": "0.92313",
+          "jitter_x": "10.453",
+          "jitter_y": "-0.375"
+        },
+        {
+          "shot": "turn",
+          "id": "7",
+          "variant": "1",
+          "height_px": "150",
+          "flip": "false",
+          "gain": "0.95500",
+          "jitter_x": "3.938",
+          "jitter_y": "1.430"
+        },
+        {
+          "shot": "turn",
+          "id": "8",
+          "variant": "2",
+          "height_px": "240",
+          "flip": "true",
+          "gain": "0.94625",
+          "jitter_x": "6.070",
+          "jitter_y": "4.125"
+        },
+        {
+          "shot": "turn",
+          "id": "9",
+          "variant": "0",
+          "height_px": "90",
+          "flip": "false",
+          "gain": "1.01703",
+          "jitter_x": "11.063",
+          "jitter_y": "-10.699"
+        },
+        {
+          "shot": "turn",
+          "id": "10",
+          "variant": "1",
+          "height_px": "150",
+          "flip": "false",
+          "gain": "0.97875",
+          "jitter_x": "-3.882",
+          "jitter_y": "1.594"
+        },
+        {
+          "shot": "turn",
+          "id": "11",
+          "variant": "2",
+          "height_px": "240",
+          "flip": "false",
+          "gain": "0.96625",
+          "jitter_x": "10.688",
+          "jitter_y": "10.406"
+        },
+        {
+          "shot": "turn",
+          "id": "12",
+          "variant": "0",
+          "height_px": "90",
+          "flip": "true",
+          "gain": "0.97063",
+          "jitter_x": "-5.344",
+          "jitter_y": "0.750"
+        },
+        {
+          "shot": "turn",
+          "id": "13",
+          "variant": "1",
+          "height_px": "150",
+          "flip": "false",
+          "gain": "0.92750",
+          "jitter_x": "7.781",
+          "jitter_y": "-6.000"
+        }
+      ]
+    },
+    {
+      "shot": "stairs_mid",
+      "snow_b": -0.9930293859534974,
+      "stone_b": 6.021950494061873,
+      "contrast_up": 0.11990216418694088,
+      "snow_samples": 45981,
+      "stone_samples": 69679,
+      "hard_lines": 0,
+      "trees": [
+        {
+          "shot": "stairs_mid",
+          "id": "6",
+          "variant": "0",
+          "height_px": "90",
+          "flip": "false",
+          "gain": "0.92313",
+          "jitter_x": "10.453",
+          "jitter_y": "-0.375"
+        },
+        {
+          "shot": "stairs_mid",
+          "id": "7",
+          "variant": "1",
+          "height_px": "150",
+          "flip": "false",
+          "gain": "0.95500",
+          "jitter_x": "3.938",
+          "jitter_y": "1.430"
+        },
+        {
+          "shot": "stairs_mid",
+          "id": "8",
+          "variant": "2",
+          "height_px": "240",
+          "flip": "true",
+          "gain": "0.94625",
+          "jitter_x": "6.070",
+          "jitter_y": "4.125"
+        },
+        {
+          "shot": "stairs_mid",
+          "id": "9",
+          "variant": "0",
+          "height_px": "90",
+          "flip": "false",
+          "gain": "1.01703",
+          "jitter_x": "11.063",
+          "jitter_y": "-10.699"
+        },
+        {
+          "shot": "stairs_mid",
+          "id": "10",
+          "variant": "1",
+          "height_px": "150",
+          "flip": "false",
+          "gain": "0.97875",
+          "jitter_x": "-3.882",
+          "jitter_y": "1.594"
+        },
+        {
+          "shot": "stairs_mid",
+          "id": "11",
+          "variant": "2",
+          "height_px": "240",
+          "flip": "false",
+          "gain": "0.96625",
+          "jitter_x": "10.688",
+          "jitter_y": "10.406"
+        },
+        {
+          "shot": "stairs_mid",
+          "id": "12",
+          "variant": "0",
+          "height_px": "90",
+          "flip": "true",
+          "gain": "0.97063",
+          "jitter_x": "-5.344",
+          "jitter_y": "0.750"
+        },
+        {
+          "shot": "stairs_mid",
+          "id": "13",
+          "variant": "1",
+          "height_px": "150",
+          "flip": "false",
+          "gain": "0.92750",
+          "jitter_x": "7.781",
+          "jitter_y": "-6.000"
+        },
+        {
+          "shot": "stairs_mid",
+          "id": "14",
+          "variant": "2",
+          "height_px": "240",
+          "flip": "true",
+          "gain": "1.05250",
+          "jitter_x": "-4.547",
+          "jitter_y": "-3.281"
+        }
+      ]
+    }
+  ],
+  "timing": {
+    "walk_s": "40.600",
+    "stairs_s": "7.000",
+    "total_s": "50.582",
+    "fade_s": "0.634",
+    "samples": "2070",
+    "support_error_px": "0.000031",
+    "camera_lag_max_px": "33.997",
+    "max_dt": "0.2126",
+    "shots": "5"
+  },
+  "arrival": {
+    "scene": "ArtSpike",
+    "position": "(0.000,",
+    "camera_z_distance": "11.500",
+    "valid": "True",
+    "bad": "0"
+  },
+  "transition": "ok",
+  "walk6_m": 17.746,
+  "bad": 0
+}

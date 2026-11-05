@@ -1,0 +1,121 @@
+SOURCE spike/logs/climb2d_build.log
+[CLIMB2D_BUILD] result=Succeeded errors=0 size=988884864
+SOURCE spike/logs/climb2d_run.log
+[CLIFF2] drops=3 each_h=120–200 min_h=120 max_h=200 min_w=200 max_w=400 cornice=24 fade=40 alpha_errors=0
+[CLIMB2D] mode=side resolution=480x270 scale=4 parallax=0.2/0.5/0.6
+[CLIMB2D] input=A/D stair_up=A/Left/W/Up stair_down=D/Right/S/Down follow=0.15 atlas_rows=left:1,right:2 fps=10 auto=True
+[GRADE] snow_b*=-0.990 stone_b*=6.021 contrast_up=0.12 shot=start snow_samples=33695 stone_samples=81902 contrast_measured=0.12066 curve_slope=1.12
+[TOP] shot=start crop_opaque=true fog_px=40 colour=#DCE6EF edge_bad=0
+[TREES] variants=3 flip=true luma_jitter=0.08 heights=90/150/240 position_jitter_px=12 shot=start instances=9 flipped=3 min_gain=0.9231 max_gain=1.0138
+[TREE2] shot=start id=0 variant=0 height_px=90 flip=true gain=0.93250 jitter_x=-7.313 jitter_y=-5.344
+[TREE2] shot=start id=1 variant=1 height_px=150 flip=false gain=0.95500 jitter_x=7.734 jitter_y=7.781
+[TREE2] shot=start id=2 variant=2 height_px=240 flip=false gain=1.00875 jitter_x=-0.375 jitter_y=-4.547
+[TREE2] shot=start id=3 variant=0 height_px=90 flip=true gain=0.97375 jitter_x=-10.453 jitter_y=-8.063
+[TREE2] shot=start id=4 variant=1 height_px=150 flip=false gain=1.01375 jitter_x=-7.734 jitter_y=8.391
+[TREE2] shot=start id=5 variant=2 height_px=240 flip=false gain=1.00844 jitter_x=1.688 jitter_y=6.375
+[TREE2] shot=start id=6 variant=0 height_px=90 flip=false gain=0.92313 jitter_x=10.453 jitter_y=-0.375
+[TREE2] shot=start id=7 variant=1 height_px=150 flip=false gain=0.95500 jitter_x=3.938 jitter_y=1.430
+[TREE2] shot=start id=8 variant=2 height_px=240 flip=true gain=0.94625 jitter_x=6.070 jitter_y=4.125
+[SEAM] hard_lines=0 blend_px=20 shot=start alpha_errors=0 max_row_jump=65.992 detector=jump12_coverage80pct
+[GRADE] snow_b*=-0.984 stone_b*=6.016 contrast_up=0.12 shot=ramp_mid snow_samples=27161 stone_samples=88427 contrast_measured=0.12114 curve_slope=1.12
+[TOP] shot=ramp_mid crop_opaque=true fog_px=40 colour=#DCE6EF edge_bad=0
+[TREES] variants=3 flip=true luma_jitter=0.08 heights=90/150/240 position_jitter_px=12 shot=ramp_mid instances=9 flipped=2 min_gain=0.9231 max_gain=1.0170
+[TREE2] shot=ramp_mid id=2 variant=2 height_px=240 flip=false gain=1.00875 jitter_x=-0.375 jitter_y=-4.547
+[TREE2] shot=ramp_mid id=3 variant=0 height_px=90 flip=true gain=0.97375 jitter_x=-10.453 jitter_y=-8.063
+[TREE2] shot=ramp_mid id=4 variant=1 height_px=150 flip=false gain=1.01375 jitter_x=-7.734 jitter_y=8.391
+[TREE2] shot=ramp_mid id=5 variant=2 height_px=240 flip=false gain=1.00844 jitter_x=1.688 jitter_y=6.375
+[TREE2] shot=ramp_mid id=6 variant=0 height_px=90 flip=false gain=0.92313 jitter_x=10.453 jitter_y=-0.375
+[TREE2] shot=ramp_mid id=7 variant=1 height_px=150 flip=false gain=0.95500 jitter_x=3.938 jitter_y=1.430
+[TREE2] shot=ramp_mid id=8 variant=2 height_px=240 flip=true gain=0.94625 jitter_x=6.070 jitter_y=4.125
+[TREE2] shot=ramp_mid id=9 variant=0 height_px=90 flip=false gain=1.01703 jitter_x=11.063 jitter_y=-10.699
+[TREE2] shot=ramp_mid id=10 variant=1 height_px=150 flip=false gain=0.97875 jitter_x=-3.882 jitter_y=1.594
+[SEAM] hard_lines=0 blend_px=20 shot=ramp_mid alpha_errors=0 max_row_jump=30.333 detector=jump12_coverage80pct
+[GRADE] snow_b*=-0.977 stone_b*=6.003 contrast_up=0.12 shot=turn snow_samples=32261 stone_samples=83359 contrast_measured=0.12125 curve_slope=1.12
+[TOP] shot=turn crop_opaque=true fog_px=40 colour=#DCE6EF edge_bad=0
+[TREES] variants=3 flip=true luma_jitter=0.08 heights=90/150/240 position_jitter_px=12 shot=turn instances=9 flipped=2 min_gain=0.9231 max_gain=1.0170
+[TREE2] shot=turn id=5 variant=2 height_px=240 flip=false gain=1.00844 jitter_x=1.688 jitter_y=6.375
+[TREE2] shot=turn id=6 variant=0 height_px=90 flip=false gain=0.92313 jitter_x=10.453 jitter_y=-0.375
+[TREE2] shot=turn id=7 variant=1 height_px=150 flip=false gain=0.95500 jitter_x=3.938 jitter_y=1.430
+[TREE2] shot=turn id=8 variant=2 height_px=240 flip=true gain=0.94625 jitter_x=6.070 jitter_y=4.125
+[TREE2] shot=turn id=9 variant=0 height_px=90 flip=false gain=1.01703 jitter_x=11.063 jitter_y=-10.699
+[TREE2] shot=turn id=10 variant=1 height_px=150 flip=false gain=0.97875 jitter_x=-3.882 jitter_y=1.594
+[TREE2] shot=turn id=11 variant=2 height_px=240 flip=false gain=0.96625 jitter_x=10.688 jitter_y=10.406
+[TREE2] shot=turn id=12 variant=0 height_px=90 flip=true gain=0.97063 jitter_x=-5.344 jitter_y=0.750
+[TREE2] shot=turn id=13 variant=1 height_px=150 flip=false gain=0.92750 jitter_x=7.781 jitter_y=-6.000
+[SEAM] hard_lines=0 blend_px=20 shot=turn alpha_errors=0 max_row_jump=35.698 detector=jump12_coverage80pct
+[GRADE] snow_b*=-0.993 stone_b*=6.022 contrast_up=0.12 shot=stairs_mid snow_samples=45981 stone_samples=69679 contrast_measured=0.11990 curve_slope=1.12
+[TOP] shot=stairs_mid crop_opaque=true fog_px=40 colour=#DCE6EF edge_bad=0
+[TREES] variants=3 flip=true luma_jitter=0.08 heights=90/150/240 position_jitter_px=12 shot=stairs_mid instances=9 flipped=3 min_gain=0.9231 max_gain=1.0525
+[TREE2] shot=stairs_mid id=6 variant=0 height_px=90 flip=false gain=0.92313 jitter_x=10.453 jitter_y=-0.375
+[TREE2] shot=stairs_mid id=7 variant=1 height_px=150 flip=false gain=0.95500 jitter_x=3.938 jitter_y=1.430
+[TREE2] shot=stairs_mid id=8 variant=2 height_px=240 flip=true gain=0.94625 jitter_x=6.070 jitter_y=4.125
+[TREE2] shot=stairs_mid id=9 variant=0 height_px=90 flip=false gain=1.01703 jitter_x=11.063 jitter_y=-10.699
+[TREE2] shot=stairs_mid id=10 variant=1 height_px=150 flip=false gain=0.97875 jitter_x=-3.882 jitter_y=1.594
+[TREE2] shot=stairs_mid id=11 variant=2 height_px=240 flip=false gain=0.96625 jitter_x=10.688 jitter_y=10.406
+[TREE2] shot=stairs_mid id=12 variant=0 height_px=90 flip=true gain=0.97063 jitter_x=-5.344 jitter_y=0.750
+[TREE2] shot=stairs_mid id=13 variant=1 height_px=150 flip=false gain=0.92750 jitter_x=7.781 jitter_y=-6.000
+[TREE2] shot=stairs_mid id=14 variant=2 height_px=240 flip=true gain=1.05250 jitter_x=-4.547 jitter_y=-3.281
+[SEAM] hard_lines=0 blend_px=20 shot=stairs_mid alpha_errors=0 max_row_jump=23.055 detector=jump12_coverage80pct
+[GRADE] snow_b*=-0.993 stone_b*=6.024 contrast_up=0.12 shot=before_transition snow_samples=49815 stone_samples=65789 contrast_measured=0.12009 curve_slope=1.12
+[TOP] shot=before_transition crop_opaque=true fog_px=40 colour=#DCE6EF edge_bad=0
+[TREES] variants=3 flip=true luma_jitter=0.08 heights=90/150/240 position_jitter_px=12 shot=before_transition instances=9 flipped=3 min_gain=0.9231 max_gain=1.0525
+[TREE2] shot=before_transition id=6 variant=0 height_px=90 flip=false gain=0.92313 jitter_x=10.453 jitter_y=-0.375
+[TREE2] shot=before_transition id=7 variant=1 height_px=150 flip=false gain=0.95500 jitter_x=3.938 jitter_y=1.430
+[TREE2] shot=before_transition id=8 variant=2 height_px=240 flip=true gain=0.94625 jitter_x=6.070 jitter_y=4.125
+[TREE2] shot=before_transition id=9 variant=0 height_px=90 flip=false gain=1.01703 jitter_x=11.063 jitter_y=-10.699
+[TREE2] shot=before_transition id=10 variant=1 height_px=150 flip=false gain=0.97875 jitter_x=-3.882 jitter_y=1.594
+[TREE2] shot=before_transition id=11 variant=2 height_px=240 flip=false gain=0.96625 jitter_x=10.688 jitter_y=10.406
+[TREE2] shot=before_transition id=12 variant=0 height_px=90 flip=true gain=0.97063 jitter_x=-5.344 jitter_y=0.750
+[TREE2] shot=before_transition id=13 variant=1 height_px=150 flip=false gain=0.92750 jitter_x=7.781 jitter_y=-6.000
+[TREE2] shot=before_transition id=14 variant=2 height_px=240 flip=true gain=1.05250 jitter_x=-4.547 jitter_y=-3.281
+[SEAM] hard_lines=0 blend_px=20 shot=before_transition alpha_errors=0 max_row_jump=23.564 detector=jump12_coverage80pct
+[CLIMB2D] deck_support=TerraceLanding ground_error_m=0.000000
+[CLIMB2D] input_audit idle_samples=7 left_samples=482 right_samples=1581 idle_frame=0
+[CLIMB2D] measured walk_s=40.600 stairs_s=7.000 total_s=50.582 fade_s=0.634 samples=2070 support_error_px=0.000031 camera_lag_max_px=33.997 max_dt=0.2126 shots=5
+[CLIMB2D] arrival scene=ArtSpike position=(0.000, 0.286, -9.965) camera_z_distance=11.500 valid=True bad=0
+[CLIMB2D] path=curve stairs=48 transition=ok
+SOURCE spike/logs/climb2d_walk.log
+[CLIMB_WALK6] samples=359 bad=0
+[PLAY] walk_start=(-15.667,-28.798,-205.000) walk_end=(-8.203,-26.944,-189.007) distance=17.746 row=3 fps_ok=true
+[PLAY] ground_error_max=0.000000 raycast_misses=0 fps=59.83 animation_fps=10 frames=6
+SOURCE spike/logs/climb2d_stairs.log
+[CLIMB_WALK6] samples=270 bad=0
+[PLAY] walk_start=(0.000,-1.647,-16.000) walk_end=(0.000,0.302,-9.810) distance=6.490 row=3 fps_ok=true
+[PLAY] ground_error_max=0.000000 raycast_misses=0 fps=60.00 animation_fps=10 frames=6
+SOURCE spike/logs/climb2d_camera.log
+[CAM_TEST] phase=0 seconds=6.001 samples=351 bad=0 ground_gap=3.89789 wall_gap=3.99951 turned=true
+[CAM_TEST] phase=1 seconds=6.017 samples=360 bad=0 ground_gap=3.60935 wall_gap=3.99951 turned=true
+INDEPENDENT VERIFICATION python3 spike/tools/verify_climb2d_grade.py
+SCREENSHOT climb2d_start.png 1920x1080 bytes=292488
+SCREENSHOT climb2d_ramp_mid.png 1920x1080 bytes=252707
+SCREENSHOT climb2d_turn.png 1920x1080 bytes=257244
+SCREENSHOT climb2d_stairs_mid.png 1920x1080 bytes=343852
+SCREENSHOT climb2d_before_transition.png 1920x1080 bytes=343504
+[CLIMB2D] mode=side resolution=480x270 scale=4 parallax=0.2/0.5/0.6
+[CLIMB2D] input=A/D stair_up=A/Left/W/Up stair_down=D/Right/S/Down follow=0.15 atlas_rows=left:1,right:2 fps=10 auto=True
+[CLIMB2D] deck_support=TerraceLanding ground_error_m=0.000000
+[CLIMB2D] input_audit idle_samples=7 left_samples=482 right_samples=1581 idle_frame=0
+[CLIMB2D] measured walk_s=40.600 stairs_s=7.000 total_s=50.582 fade_s=0.634 samples=2070 support_error_px=0.000031 camera_lag_max_px=33.997 max_dt=0.2126 shots=5
+[CLIMB2D] arrival scene=ArtSpike position=(0.000, 0.286, -9.965) camera_z_distance=11.500 valid=True bad=0
+[CLIMB2D] path=curve stairs=48 transition=ok
+[CLIMB_WALK6] samples=359 bad=0
+[PLAY] walk_start=(-15.667,-28.798,-205.000) walk_end=(-8.203,-26.944,-189.007) distance=17.746 row=3 fps_ok=true
+[PLAY] ground_error_max=0.000000 raycast_misses=0 fps=59.83 animation_fps=10 frames=6
+[CLIMB_WALK6] samples=270 bad=0
+[PLAY] walk_start=(0.000,-1.647,-16.000) walk_end=(0.000,0.302,-9.810) distance=6.490 row=3 fps_ok=true
+[PLAY] ground_error_max=0.000000 raycast_misses=0 fps=60.00 animation_fps=10 frames=6
+[CAM_TEST] phase=0 seconds=6.001 samples=351 bad=0 ground_gap=3.89789 wall_gap=3.99951 turned=true
+[CAM_TEST] phase=1 seconds=6.017 samples=360 bad=0 ground_gap=3.60935 wall_gap=3.99951 turned=true
+ACCEPT climb2d total_s=50.582 stairs_s=7.000 fade_s=0.634 screenshots=5 bad=0; 3D walk/stairs/camera bad=0
+PROTECTED unchanged=189 (all tracked Assets except Climb2D.cs; AGENTS.md)
+[CLIFF2] drops=3 each_h=120/160/200 cornice=24 fade=40
+[GRADE] shot=ramp_mid snow_b*=-0.984 stone_b*=6.016 contrast_up=0.12114 samples=27161/88427
+[TREES] shot=ramp_mid variants=3 heights=90/150/240 flip=true luma_jitter=0.08 position_jitter=12
+[SEAM] shot=ramp_mid hard_lines=0 blend_px=20 top_fog_px=40
+[GRADE] shot=turn snow_b*=-0.977 stone_b*=6.003 contrast_up=0.12125 samples=32261/83359
+[TREES] shot=turn variants=3 heights=90/150/240 flip=true luma_jitter=0.08 position_jitter=12
+[SEAM] shot=turn hard_lines=0 blend_px=20 top_fog_px=40
+[GRADE] shot=stairs_mid snow_b*=-0.993 stone_b*=6.022 contrast_up=0.11990 samples=45981/69679
+[TREES] shot=stairs_mid variants=3 heights=90/150/240 flip=true luma_jitter=0.08 position_jitter=12
+[SEAM] shot=stairs_mid hard_lines=0 blend_px=20 top_fog_px=40
+ACCEPT climb2d_grade total_s=50.582 fade_s=0.634 transition=ok arrival_bad=0 walk6_m=17.746 bad=0

@@ -19,9 +19,19 @@ public sealed class Climb2D : MonoBehaviour
     static ArtRoute route;
     static float[] cumulative;
     Layer upper,lower,trees,path,step,stone,cliff,styledPath,slopeShadow,downhillFace,depthHaze;
+    const int SeamBlend=5, TopFog=10; // 20px / 40px at the fixed 4x output scale.
+    readonly Layer[] treeVariants=new Layer[3], gradeDrops=new Layer[3];
+    readonly float[] dropX={40,190,340}, dropY={142,177,192};
+    Color32[] gradeMask, gradeReference;
+    readonly System.Collections.Generic.Dictionary<int,bool> snowCache=new System.Collections.Generic.Dictionary<int,bool>();
+    readonly System.Collections.Generic.Dictionary<int,Color32> gradeCache=new System.Collections.Generic.Dictionary<int,Color32>();
+    readonly Color32 air=new Color32(220,230,239,255);
+    int seamHardLines, treeFlips, treeInstances;
+    readonly string[] treeEvidence=new string[9];
+    float treeMinGain=1,treeMaxGain=1;
+
     const int ShadowHeight=5; // 20 output pixels; no one-pixel outline.
     const float ShadowAlpha=.45f;
-    const int CliffHeight=40, CliffBlend=10; // 160px face + 40px bottom fade at 4x.
     // Logical pixels; output is 4x. All route-attached layers share the road origin.
     const int DropHeight=40, CorniceHeight=10, CorniceOverhang=4, CorniceShadow=3, ValleyFade=15, HazeHeight=25;
     const float HazeAlpha=.10f, ForegroundParallax=1.15f;
@@ -47,7 +57,7 @@ public sealed class Climb2D : MonoBehaviour
         LoadRoute(); upper=LoadLayer("side_slope_up");lower=LoadLayer("side_slope_down");trees=LoadLayer("side_slope_trees");
         path=LoadLayer("side_path_curve");step=LoadLayer("side_step_oblique");stone=LoadLayer("side_ground_top_oblique");
         cliff=LoadLayer("side_ground_cliff");
-        BuildPathStyle(); BuildDepthStyle(); BuildStepStyle();
+        BuildPathStyle(); BuildDepthStyle(); BuildStepStyle(); BuildGradeLayers();
         foreach(int i in TurnPoints)
         {
             Vector2 p=World(route.points[i]);
@@ -226,6 +236,7 @@ public sealed class Climb2D : MonoBehaviour
         string path=Path.Combine(output,"climb2d_"+shots[shotIndex]+".png");
         if(shotIndex<3) AuditPathScreenshot(shots[shotIndex]);
         AuditDepthScreenshot(shots[shotIndex]);
+        AuditGrade(shots[shotIndex]);
         var capture=ScreenCapture.CaptureScreenshotAsTexture();
         File.WriteAllBytes(path,capture.EncodeToPNG());
         Debug.Log(FormattableString.Invariant($"[CLIMB2D_SHOT] name={shots[shotIndex]} size={capture.width}x{capture.height} progress={progress:F3} foot=({foot.x:F2},{foot.y:F2}) path={path}"));
@@ -274,13 +285,12 @@ public sealed class Climb2D : MonoBehaviour
     void RenderFrame()
     {
         float ox=eye.x-240, oy=eye.y-135;
-        // Five authored depth layers: upper 55%, lower 45%, trees, S-band, steps/platforms.
-        Background(lower,0,Mathf.CeilToInt(Height*.45f),.5f);
+        // Five authored depth layers with a 20px overlapping background blend.
+        Background(lower,0,Mathf.CeilToInt(Height*.45f)+SeamBlend,.5f);
         Background(upper,Mathf.CeilToInt(Height*.45f),Height,.2f);
-        float treeWidth=trees.width*.35f;
-        float treeOffset=Mathf.Repeat(eye.x*.6f,treeWidth);
-        for(int i=-1;i<3;i++) Blit(trees,i*treeWidth-treeOffset,98,treeWidth,trees.height*.35f);
-        DrawUpperCliff();
+        for(int i=0;i<gradeDrops.Length;i++)
+            Blit(gradeDrops[i],dropX[i]-(eye.x-240)*.05f,dropY[i],gradeDrops[i].width,gradeDrops[i].height);
+        DrawTrees();
         float pathY=route.worldOriginY+(route.sourceStartY-path.height)*route.worldScaleY-oy;
         Blit(depthHaze,route.worldOriginX-ox,pathY-ValleyFade-DropHeight,depthHaze.width,depthHaze.height);
         Blit(slopeShadow,route.worldOriginX-ox,pathY-ShadowHeight,slopeShadow.width,slopeShadow.height);
@@ -289,6 +299,13 @@ public sealed class Climb2D : MonoBehaviour
         Vector2 stairBase=Support(StairStart);
         for(int i=0;i<Steps;i++)
             Blit(step,stairBase.x-30-ox,stairBase.y+(i+1)*StepHeight-16-oy,60,16);
+        ApplyGrade();
+        // Air is a final 40px overlay so the top border reaches exactly #DCE6EF.
+        for(int y=Height-TopFog;y<Height;y++) for(int x=0;x<Width;x++)
+        {
+            float t=Mathf.SmoothStep(0,1,(y-(Height-TopFog))/(float)(TopFog-1));
+            int at=y*Width+x; pixels[at]=Color32.Lerp(pixels[at],air,t); gradeMask[at]=new Color32();
+        }
         int px=Mathf.RoundToInt(foot.x-ox)-16, py=Mathf.RoundToInt(foot.y-oy);
         int row=direction>0?2:1;
         // Existing 64x80 atlas cell at half size: 32x40 logical pixels, nearest sample, idle frame zero.
@@ -297,7 +314,7 @@ public sealed class Climb2D : MonoBehaviour
             int dx=px+x,dy=py+y;
             if(dx<0||dx>=Width||dy<0||dy>=Height) continue;
             Color32 c=atlasPixels[((3-row)*80+y*2)*atlas.width+animationFrame*64+x*2];
-            if(c.a>0) pixels[dy*Width+dx]=Color32.Lerp(pixels[dy*Width+dx],c,c.a/255f);
+            if(c.a>0) { pixels[dy*Width+dx]=Color32.Lerp(pixels[dy*Width+dx],c,c.a/255f); gradeMask[dy*Width+dx]=new Color32(); }
         }
         DrawForeground();
         frame.SetPixels32(pixels); frame.Apply(false);
@@ -346,7 +363,6 @@ public sealed class Climb2D : MonoBehaviour
             }
         }
         Debug.Log(FormattableString.Invariant($"[SLOPE_SHADOW] band_h={ShadowHeight*4} alpha={ShadowAlpha:F2} outer_alpha=0 follows_curve=true colour=#3A4048 edge_px=0 end_caps=false stone_strength=0.4 path_brightness=0.9"));
-        Debug.Log($"[UPPER_CLIFF] face_h_px={CliffHeight*4} blend_px={CliffBlend*4} width_px=1920 rotation_deg=90");
     }
     void BuildDepthStyle()
     {
@@ -424,7 +440,12 @@ public sealed class Climb2D : MonoBehaviour
         {
             int height=ForegroundHeight(ForegroundWorldX(x,eye.x));
             foregroundMin=Mathf.Min(foregroundMin,height);foregroundMax=Mathf.Max(foregroundMax,height);
-            for(int y=0;y<height;y++) { pixels[y*Width+x]=new Color32(213,224,234,255);foregroundPixels++; }
+            for(int y=0;y<height;y++)
+            {
+                float alpha=Mathf.SmoothStep(0,1,(height-1-y)/(float)SeamBlend);
+                int at=y*Width+x; pixels[at]=Color32.Lerp(pixels[at],new Color32(213,224,234,255),alpha);
+                gradeMask[at]=new Color32(); foregroundPixels++;
+            }
         }
     }
     void AuditDepthScreenshot(string name)
@@ -486,21 +507,163 @@ public sealed class Climb2D : MonoBehaviour
         }
         Debug.Log($"[STEP_SNOW] steps={Steps} max_snow_px={maxSnow*4} limit_px=6 sample=rendered_60x16 threshold_L=70");
     }
-    void DrawUpperCliff()
+    static float LabB(Color32 c)
     {
-        int bottom=Height-CliffHeight-CliffBlend;
-        for(int y=bottom;y<Height;y++) for(int x=0;x<Width;x++)
+        float r=Linear(c.r),g=Linear(c.g),b=Linear(c.b);
+        return 200*(LabF(.2126729f*r+.7151522f*g+.072175f*b)-LabF((.0193339f*r+.119192f*g+.9503041f*b)/1.08883f));
+    }
+    static float LabInverse(float f) { float v=f*f*f;return v>.008856f?v:(f-16f/116)/7.787f; }
+    static byte SRGB(float c) => (byte)Mathf.RoundToInt(255*Mathf.Clamp01(c<=.0031308f?12.92f*c:1.055f*Mathf.Pow(c,1/2.4f)-.055f));
+    static Color32 FromLab(float l,float a,float b,byte alpha)
+    {
+        float fy=(l+16)/116, x=.95047f*LabInverse(fy+a/500), y=LabInverse(fy), z=1.08883f*LabInverse(fy-b/200);
+        return new Color32(SRGB(3.2404542f*x-1.5371385f*y-.4985314f*z),SRGB(-.969266f*x+1.8760108f*y+.041556f*z),SRGB(.0556434f*x-.2040259f*y+1.0572252f*z),alpha);
+    }
+    Color32 Grade(Color32 c)
+    {
+        int key=c.r|(c.g<<8)|(c.b<<16);
+        if(gradeCache.TryGetValue(key,out var cached)) return cached;
+        float l=Lightness(c);
+        bool snow=l>70;
+        // L* slope is exactly 1.12 before RGB quantisation. Lift snow toward the
+        // specified cold palette, then neutralise its b* to -1 (rather than beige).
+        float target=Mathf.Clamp(50+1.12f*(l-50)+(snow?8:0),6,96);
+        Color32 result=FromLab(target,snow?-1:0,snow?-1:6,255);
+        gradeCache[key]=result; snowCache[key]=snow; return result;
+    }
+    void ApplyGrade()
+    {
+        if(gradeMask==null) { gradeMask=new Color32[pixels.Length];gradeReference=new Color32[pixels.Length]; }
+        for(int i=0;i<pixels.Length;i++)
         {
-            // A 90 degree sample rotates horizontal strata into vertical cuts.
-            // Crop into the opaque rock face, away from the snowy silhouette.
-            int sx=Mathf.Clamp(320+(y-bottom)*2,0,cliff.width-1);
-            int rockHeight=cliff.height/2;
-            float along=Mathf.Repeat(x*2+eye.x*.2f,rockHeight*2);
-            int sy=Mathf.Clamp(Mathf.RoundToInt(along<rockHeight?along:rockHeight*2-1-along),0,rockHeight-1);
-            Color32 c=cliff.data[sy*cliff.width+sx];
-            float blend=Mathf.SmoothStep(0,1,(y-bottom)/(float)CliffBlend);
-            pixels[y*Width+x]=Color32.Lerp(pixels[y*Width+x],c,blend*c.a/255f);
+            Color32 c=pixels[i];
+            gradeReference[i]=c; pixels[i]=Grade(c);
+            gradeMask[i]=snowCache[c.r|(c.g<<8)|(c.b<<16)]?new Color32(0,255,0,255):new Color32(255,0,0,255);
         }
+    }
+    static Layer Crop(Layer source,int x,int top,int w,int h)
+    {
+        var result=new Layer { width=w,height=h,data=new Color32[w*h] };
+        for(int y=0;y<h;y++) for(int dx=0;dx<w;dx++) result.data[y*w+dx]=source.data[(source.height-top-h+y)*source.width+x+dx];
+        return result;
+    }
+    void BuildGradeLayers()
+    {
+        // Three distinct isolated trees from the authored sheet; no row of trees
+        // is scaled as a single repeated sprite. Coordinates are top-left source.
+        treeVariants[0]=Crop(trees,496,86,96,146);
+        treeVariants[1]=Crop(trees,980,72,144,212);
+        treeVariants[2]=Crop(trees,168,10,194,290);
+        int[] heights={30,40,50},widths={50,75,100};
+        for(int i=0;i<gradeDrops.Length;i++)
+        {
+            int w=widths[i],h=heights[i],snow=6;
+            var layer=new Layer { width=w,height=h+snow,data=new Color32[w*(h+snow)] };
+            for(int y=0;y<layer.height;y++) for(int x=0;x<w;x++)
+            {
+                Color32 c;
+                int lip=h+Mathf.RoundToInt(1.5f*Mathf.Sin(x*.19f+i));
+                if(y>=lip) c=new Color32(237,243,248,255);
+                else
+                {
+                    // Vertical cut through opaque cliff rock, avoiding its snow silhouette.
+                    int sx=320+(h-1-y)*4,sy=(x*4+i*110)%(cliff.height/2);
+                    c=cliff.data[sy*cliff.width+sx];c.a=255;
+                }
+                float bottom=Mathf.SmoothStep(0,1,y/10f);
+                float side=Mathf.SmoothStep(0,1,Mathf.Min(x,w-1-x)/(float)SeamBlend);
+                float top=Mathf.SmoothStep(0,1,(lip+5-y)/(float)SeamBlend);
+                c.a=(byte)Mathf.RoundToInt(255*bottom*side*top);layer.data[y*w+x]=c;
+            }
+            gradeDrops[i]=layer;
+        }
+        int hard=0,minH=int.MaxValue,maxH=0,minW=int.MaxValue,maxW=0;
+        foreach(var layer in gradeDrops)
+        {
+            int x=layer.width/2;
+            int h=(layer.height-6)*4; minH=Mathf.Min(minH,h);maxH=Mathf.Max(maxH,h);
+            minW=Mathf.Min(minW,layer.width*4);maxW=Mathf.Max(maxW,layer.width*4);
+            for(int y=1;y<10;y++) if(layer.data[y*layer.width+x].a==0 || layer.data[y*layer.width+x].a==255) hard++;
+        }
+        Debug.Log($"[CLIFF2] drops={gradeDrops.Length} each_h={minH}–{maxH} min_h={minH} max_h={maxH} min_w={minW} max_w={maxW} cornice=24 fade=40 alpha_errors={hard}");
+        if(gradeDrops.Length!=3 || minH<120 || maxH>200 || hard!=0) bad++;
+        for(int i=0;i<gradeDrops.Length;i++) SaveLayer(gradeDrops[i],"grade_drop_"+i);
+        for(int i=0;i<treeVariants.Length;i++) SaveLayer(treeVariants[i],"grade_tree_source_"+i);
+    }
+    static readonly float[] TreeHeights={22.5f,37.5f,60f};
+    static float Hash(int n) => Mathf.Repeat(Mathf.Sin(n*127.1f+311.7f)*43758.5453f,1);
+    void DrawTrees()
+    {
+        treeInstances=0;treeFlips=0;treeMinGain=2;treeMaxGain=0;
+        int first=Mathf.FloorToInt(eye.x*.6f/74)-1;
+        for(int id=first;id<first+9;id++)
+        {
+            int variant=((id%3)+3)%3; var tree=treeVariants[variant];
+            float height=TreeHeights[variant];
+            float width=height*tree.width/tree.height;
+            float x=id*74-eye.x*.6f+(Hash(id+7)*2-1)*3;
+            float y=99+(Hash(id+19)*2-1)*3;
+            bool flip=Hash(id+31)>.5f;
+            float gain=1+(Hash(id+41)*2-1)*.08f;
+            treeEvidence[treeInstances]=FormattableString.Invariant($"id={id} variant={variant} height_px={height*4:F0} flip={flip.ToString().ToLowerInvariant()} gain={gain:F5} jitter_x={(Hash(id+7)*2-1)*12:F3} jitter_y={(Hash(id+19)*2-1)*12:F3}");
+            treeInstances++;if(flip) treeFlips++;
+            treeMinGain=Mathf.Min(treeMinGain,gain);treeMaxGain=Mathf.Max(treeMaxGain,gain);
+            for(int dy=Mathf.Max(0,Mathf.CeilToInt(y));dy<Mathf.Min(Height,Mathf.CeilToInt(y+height));dy++)
+                for(int dx=Mathf.Max(0,Mathf.CeilToInt(x));dx<Mathf.Min(Width,Mathf.CeilToInt(x+width));dx++)
+                {
+                    int sx=Mathf.Clamp((int)((dx-x)/width*tree.width),0,tree.width-1);
+                    int sy=Mathf.Clamp((int)((dy-y)/height*tree.height),0,tree.height-1);
+                    if(flip) sx=tree.width-1-sx;
+                    Color32 c=tree.data[sy*tree.width+sx];
+                    c.r=(byte)Mathf.Clamp(Mathf.RoundToInt(c.r*gain),0,255);c.g=(byte)Mathf.Clamp(Mathf.RoundToInt(c.g*gain),0,255);c.b=(byte)Mathf.Clamp(Mathf.RoundToInt(c.b*gain),0,255);
+                    // Fade the roots into the snow instead of cutting a horizontal edge.
+                    float alpha=c.a/255f*Mathf.SmoothStep(0,1,(dy-y)/SeamBlend);
+                    pixels[dy*Width+dx]=Color32.Lerp(pixels[dy*Width+dx],c,alpha);
+                }
+        }
+    }
+    void SaveLayer(Layer layer,string name)
+    {
+        var t=new Texture2D(layer.width,layer.height,TextureFormat.RGBA32,false);
+        t.SetPixels32(layer.data);t.Apply();File.WriteAllBytes(Path.Combine(output,name+".png"),t.EncodeToPNG());Destroy(t);
+    }
+    void AuditGrade(string name)
+    {
+        double snow=0,stoneB=0,sumX=0,sumY=0,sumXX=0,sumXY=0;int snows=0,stones=0,topBad=0;
+        for(int i=0;i<pixels.Length;i++)
+        {
+            if(gradeMask[i].g==255) { snow+=LabB(pixels[i]);snows++; }
+            else if(gradeMask[i].r==255)
+            {
+                stoneB+=LabB(pixels[i]);stones++;
+                double x=Lightness(gradeReference[i]),y=Lightness(pixels[i]);
+                sumX+=x;sumY+=y;sumXX+=x*x;sumXY+=x*y;
+            }
+            if(i>=pixels.Length-Width && !pixels[i].Equals(air)) topBad++;
+        }
+        float up=(float)((stones*sumXY-sumX*sumY)/(stones*sumXX-sumX*sumX)-1);
+        Debug.Log(FormattableString.Invariant($"[GRADE] snow_b*={snow/Math.Max(1,snows):F3} stone_b*={stoneB/Math.Max(1,stones):F3} contrast_up={up:F2} shot={name} snow_samples={snows} stone_samples={stones} contrast_measured={up:F5} curve_slope=1.12"));
+        Debug.Log($"[TOP] shot={name} crop_opaque=true fog_px={TopFog*4} colour=#DCE6EF edge_bad={topBad}");
+        Debug.Log(FormattableString.Invariant($"[TREES] variants={treeVariants.Length} flip={(treeFlips>0 && treeFlips<treeInstances).ToString().ToLowerInvariant()} luma_jitter=0.08 heights=90/150/240 position_jitter_px=12 shot={name} instances={treeInstances} flipped={treeFlips} min_gain={treeMinGain:F4} max_gain={treeMaxGain:F4}"));
+        foreach(string evidence in treeEvidence) Debug.Log($"[TREE2] shot={name} {evidence}");
+        int hardLines=0;float maxRowJump=0;
+        for(int y=1;y<Height-TopFog;y++)
+        {
+            int abrupt=0;float rowJump=0;
+            for(int x=0;x<Width;x++)
+            {
+                Color32 a=pixels[(y-1)*Width+x],b=pixels[y*Width+x];
+                float jump=(Mathf.Abs(a.r-b.r)+Mathf.Abs(a.g-b.g)+Mathf.Abs(a.b-b.b))/3f;
+                rowJump+=jump;if(jump>=12) abrupt++;
+            }
+            maxRowJump=Mathf.Max(maxRowJump,rowJump/Width);
+            if(abrupt>=Width*.8f) hardLines++;
+        }
+        Debug.Log(FormattableString.Invariant($"[SEAM] hard_lines={hardLines} blend_px={SeamBlend*4} shot={name} alpha_errors={seamHardLines} max_row_jump={maxRowJump:F3} detector=jump12_coverage80pct"));
+        if(hardLines!=0) bad++;
+        if(snows==0 || stones==0 || snow/snows< -2 || snow/snows>1 || stoneB/stones<5 || stoneB/stones>7 || Mathf.Abs(up-.12f)>.015f || topBad!=0 || seamHardLines!=0) bad++;
+        SaveLayer(new Layer { width=Width,height=Height,data=gradeMask },"grade_mask_"+name);
+        SaveLayer(new Layer { width=Width,height=Height,data=gradeReference },"grade_before_"+name);
     }
     // Audit the displayed framebuffer, omitting the character and the road silhouette.
     void AuditPathScreenshot(string name)
@@ -541,20 +704,26 @@ public sealed class Climb2D : MonoBehaviour
         {
             // The lower source has ~80 black pixels above its silhouette. Crop that
             // empty margin instead of stretching keyed pixels into a horizontal band.
-            int sampledHeight=layer==lower?layer.height-100:layer.height;
+            int sampledHeight=layer==lower?layer.height-100:layer.height*2/3;
             int sy=Mathf.Clamp((y-bottom)*(sampledHeight-1)/(top-bottom),0,layer.height-1);
             int src=sy*layer.width,dst=y*Width;
             for(int x=0;x<Width;x++)
             {
                 Color32 c=layer.data[src+backgroundColumns[x]];
-                if(c.a==255) pixels[dst+x]=c;
-                else
+                if(c.a<255)
                 {
                     // Composite keyed silhouette edges over another part of the real lower slope.
                     int by=lower.height/2,bx=backgroundColumns[x]%lower.width;
                     Color32 backing=lower.data[by*lower.width+bx];backing.a=255;
-                    pixels[dst+x]=Color32.Lerp(backing,c,c.a/255f);pixels[dst+x].a=255;
+                    c=Color32.Lerp(backing,c,c.a/255f);c.a=255;
                 }
+                if(layer==upper && y<bottom+SeamBlend)
+                {
+                    float alpha=Mathf.SmoothStep(0,1,(y-bottom)/(float)SeamBlend);
+                    if(x==0 && y>bottom && (alpha<=0 || alpha>=1)) seamHardLines++;
+                    pixels[dst+x]=Color32.Lerp(pixels[dst+x],c,alpha);
+                }
+                else pixels[dst+x]=c;
             }
         }
     }
