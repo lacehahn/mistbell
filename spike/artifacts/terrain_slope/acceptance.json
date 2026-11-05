@@ -1,0 +1,51 @@
+{
+  "lateral10m": [
+    1.121759,
+    1.156958,
+    0.937762,
+    1.322863
+  ],
+  "field_rise": [
+    21.12758,
+    21.01728
+  ],
+  "build": true,
+  "slope": true,
+  "protection": true,
+  "walk": {
+    "rc": 0,
+    "bad": 0,
+    "distance": 17.734,
+    "walk_ok": true
+  },
+  "enter": {
+    "rc": 0,
+    "bad": 0
+  },
+  "reveal": {
+    "rc": 0,
+    "bad": 0
+  },
+  "steps": {
+    "rc": 0,
+    "bad": 0
+  },
+  "slope_capture": {
+    "rc": 0,
+    "bad": 0
+  },
+  "bench": {
+    "rc": 0,
+    "bad": 0
+  },
+  "outdoor_fps": {
+    "z01": 211.3450164794922,
+    "terrace": 224.75230407714844
+  },
+  "shots": {
+    "climb_slope.png": true,
+    "play_view.png": true,
+    "climb_steps.png": true
+  },
+  "pass": true
+}

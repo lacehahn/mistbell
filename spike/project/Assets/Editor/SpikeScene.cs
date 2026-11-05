@@ -1327,10 +1327,12 @@ public static class SpikeScene
         if(z >= -40f) return original; // Existing church, approach and far field stay fixed.
         float dx = Mathf.Abs(x-ClimbRoute.CenterX(z));
         float bank = ClimbRoute.Depth * Mathf.SmoothStep(0,1,Mathf.InverseLerp(2.5f,4.5f,dx));
-        float shoulder = 1.1f * Mathf.SmoothStep(0,1,Mathf.InverseLerp(4.5f,15f,dx));
+        float shoulder = .9f * Mathf.SmoothStep(0,1,Mathf.InverseLerp(4.5f,10f,dx))
+            + .11f * Mathf.Clamp(dx-10f,0f,80f);
         float route = ClimbRoute.Height(z) + bank + shoulder + snowDrift * Mathf.Clamp01((dx-4.5f)/10);
-        // Blend back to the original snow field outside the playable ridge and at the old approach.
-        float blend = (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(25,65,dx)))
+        // Carry the route elevation across the whole hillside; join the remote foot at 60–140m.
+        // Keep the old church approach fade and the inner 4.5m route/bank unchanged.
+        float blend = (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(60,140,dx)))
             * (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(-46,-40,z)));
         return Mathf.Lerp(original,route,blend);
     }

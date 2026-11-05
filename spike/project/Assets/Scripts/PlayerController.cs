@@ -157,6 +157,8 @@ public sealed partial class PlayerController : MonoBehaviour
         { suppressCinema=true; StartCoroutine(DemoAltar()); return; }
         if (Array.IndexOf(args, "-bench") >= 0)
         { suppressCinema = true; interiorAuto = true; StartCoroutine(Benchmark(args)); return; }
+        if (Array.IndexOf(args, "-demo-terrain-slope") >= 0)
+        { suppressCinema=true; StartCoroutine(DemoTerrainSlope()); return; }
         if (Array.IndexOf(args, "-demo-climb-feel") >= 0)
         { suppressCinema=true; StartCoroutine(DemoClimbFeel()); return; }
         cinemaDemo = Array.IndexOf(args,"-demo-cinema")>=0;

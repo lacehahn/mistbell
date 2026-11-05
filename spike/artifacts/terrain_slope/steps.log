@@ -1,0 +1,65 @@
+Mono path[0] = '/Users/lance/workspace/mistbell/spike/project/Builds/Mac/Mistbell.app/Contents/Resources/Data/Managed'
+Mono config path = '/Users/lance/workspace/mistbell/spike/project/Builds/Mac/Mistbell.app/Contents/MonoBleedingEdge/etc'
+Input System module state changed to: Initialized.
+[Physics::Module] Initialized fallback backend.
+[Physics::Module] Id: 0xdecafbad
+Initialize engine version: 6000.3.27f2 (22188f149405)
+[Subsystems] Discovering subsystems at path /Users/lance/workspace/mistbell/spike/project/Builds/Mac/Mistbell.app/Contents/Resources/Data/UnitySubsystems
+GfxDevice: creating device client; kGfxThreadingModeDirect
+ preferred device: Apple M6 (high power)
+Metal devices available: 1
+0: Apple M6 (high power)
+Using device Apple M6 (high power)
+Initializing Metal device caps: Apple M6
+Mac GPU Family: 2
+Apple GPU Family: 9
+MSL Version: 3.0
+Has Float MSAA: 1
+Has Float Filtering: 1
+ReadWrite Texture Tier: 2
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  0.039 seconds
+- Finished resetting the current domain, in  0.001 seconds
+[Physics::Module] Selected backend.
+[Physics::Module] Name: PhysX
+[Physics::Module] Id: 0xf2b8ea05
+[Physics::Module] SDK Version: 4.1.2
+[Physics::Module] Integration Version: 1.0.0
+[Physics::Module] Threading Mode: Multi-Threaded
+Source mesh has over 2,097,152 triangles in it, and is using the Fast Midphase option. This might cause certain collisions to not be detected correctly due to an issue in the physics engine. If you observe that in your project, a workaround could be to turn off the Fast Midphase option for this particular mesh. Source mesh name: Snow2Terrain
+UnloadTime: 0.226958 ms
+[BOOT] PlayerController.Awake begin
+[SPAWN] dist_to_center=0.000000 position=(-15.667, -28.798, -205.000)
+[PILGRIM] animation fps=10 frames=6 directionRows=down,left,right,up directionCheck=PASS
+[DOME] drum_sides=12 drum_h=3.6 windows=12 ribs=12 cone_h=2.4 aperture=0.8 look_target=10.2
+[INTERIOR] shafts=3 pools=3 dust=3 altar_total_h=2.14 pew_rows=6
+[PERF_PACING] vSync=0 targetFrameRate=-1 (session only)
+[STATIC_PEW_BATCH] sources=6 meshes=1 source_tris=7320 merged_tris=7320 material_slots=3
+[STATIC_BATCH] sources=865 meshes=14 source_tris=158637 merged_tris=158637 grouping=root_material floor_groups=4
+[CLIMB_FOG] density_base=0.010000 density_top=+24% density_top_value=0.012400 height_span=29.082 per_10m_pct=8.253 mode=Linear distance_scale_top=0.806452
+[REVEAL] fog=120..420→20..120 color=#CBD8E4→#EAF0F6 bell_at=45m
+[BOOT] PlayerController.Start begin
+[CLIMB_CAM] look_start=1.20 look_end=1.45 y_start=2.1 y_end=2.6
+[MOVE] step_up_max=0.28 ramp=true accel=12 decel=18 spawn=centerline_z_-205
+[CAM_FRAME] dist=11.50 h=2.10 look=1.20 fov=48.00 pilgrim_px=158.478 pilgrim_pct=14.674 actual_h=1080 contained=True
+[PILGRIM_SIZE] world_h=1.52000 aspect_preserved=true collider=1.5 zone=outdoor alpha_h_min=1.50000 alpha_h_max=1.52000
+[TOWER] collider=Capsule r=2.7 h=12 wall_intrusion=1.535 poi_anchor=(11.067,0.871,-4.400) poi_clearance=0.000
+[POI] count=8 ids=gergeti_p01,gergeti_p02,gergeti_p03,gergeti_p04,gergeti_p05,gergeti_p06,gergeti_p00,gergeti_p0a radius=3.5/3.0/2.5/2.6/2.2/2.2/3.0/3.0 snapped=true
+[ROUTE] segments=3 total_len_m=210.455 climb_m=27.442 spawn=(-16,-205) pois=5 slots=5 trench_w=5 trench_depth=0.25
+[SETTINGS] volume=0.800 language=both path=/Users/lance/Library/Application Support/Mistbell/mistbell_settings.json
+[AUDIO_BELL] count=1 distance=1.000 frame=2363
+[REVEAL] bell pulse once rise=1.2s fall=0.8s bloom=x1.6 vignette=x1.3
+[CLIMB_FOG_SAMPLE] base=0.010000 top=0.012400 increase_pct=23.9986 height_gain=29.081
+[CLIMB_WALK] flights=3 samples=1790 bad=0 ground_error_max=0.000000 raycast_misses=0
+[AUDIO] bell_len=4.00 bell_rms=0.109985 wind_len=8.00 wind_rms=0.104267 step_len=0.12 step_rms=0.073907 bell_played_at_d=1.000 footsteps=456
+Thread 0x16f6fb000 may have been prematurely finalized
+[Physics::Module] Cleanup current backend.
+[Physics::Module] Id: 0xf2b8ea05
+Input System module state changed to: ShutdownInProgress.
+Input System polling thread exited.
+Input System module state changed to: Shutdown.
+Thread 0x16e5bb000 may have been prematurely finalized
+Thread 0x16e6d3000 may have been prematurely finalized
+Thread 0x16e647000 may have been prematurely finalized
+Thread 0x16e52f000 may have been prematurely finalized
+Thread 0x16e75f000 may have been prematurely finalized
