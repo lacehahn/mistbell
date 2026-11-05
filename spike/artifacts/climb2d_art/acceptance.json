@@ -1,0 +1,52 @@
+{
+  "layers": 5,
+  "max_seam": 0.0,
+  "runtime_hue_b": 4.775,
+  "runtime_colour_samples": 90047,
+  "bitmap_misses": 0,
+  "centreline_test_samples": 2020,
+  "assets": [
+    {
+      "name": "side_slope_up",
+      "seam": 0.0,
+      "hue_b": 4.826554323520598,
+      "colours": 5012
+    },
+    {
+      "name": "side_slope_up_b",
+      "seam": 0.0,
+      "hue_b": 4.826554323520598,
+      "colours": 5012
+    },
+    {
+      "name": "side_slope_down",
+      "seam": 0.0,
+      "hue_b": 4.691920159025422,
+      "colours": 5293
+    },
+    {
+      "name": "side_slope_trees",
+      "seam": 0.0,
+      "hue_b": 5.0,
+      "colours": 5
+    },
+    {
+      "name": "side_path_curve",
+      "seam": 0.0,
+      "hue_b": 5.0,
+      "colours": 5
+    },
+    {
+      "name": "side_ground_top_oblique",
+      "seam": 0.0,
+      "hue_b": 5.0,
+      "colours": 5
+    },
+    {
+      "name": "side_ground_cliff",
+      "seam": 0.0,
+      "hue_b": 4.90274289832138,
+      "colours": 5053
+    }
+  ]
+}

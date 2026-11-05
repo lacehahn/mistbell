@@ -1,0 +1,99 @@
+{
+  "black_threshold": 22,
+  "edge_erosion_px": 1,
+  "overlap_fraction": 0.1,
+  "snow_rgb_scale": 0.92,
+  "step_snow_lip_px": 8,
+  "assets": [
+    {
+      "name": "side_slope_up",
+      "width": 1280,
+      "height": 480,
+      "seam": 0.0,
+      "hue_b": 4.8266,
+      "poster_levels": 0,
+      "alpha_min": 0
+    },
+    {
+      "name": "side_slope_up_b",
+      "width": 1280,
+      "height": 480,
+      "seam": 0.0,
+      "hue_b": 4.8266,
+      "poster_levels": 0,
+      "alpha_min": 0
+    },
+    {
+      "name": "side_slope_down",
+      "width": 1280,
+      "height": 427,
+      "seam": 0.0,
+      "hue_b": 4.692,
+      "poster_levels": 0,
+      "alpha_min": 0
+    },
+    {
+      "name": "side_slope_trees",
+      "width": 1280,
+      "height": 427,
+      "seam": 0.0,
+      "hue_b": 5.0,
+      "poster_levels": 5,
+      "alpha_min": 0
+    },
+    {
+      "name": "side_path_curve",
+      "width": 1280,
+      "height": 427,
+      "seam": 0.0,
+      "hue_b": 5.0,
+      "poster_levels": 5,
+      "alpha_min": 0
+    },
+    {
+      "name": "side_ground_top_oblique",
+      "width": 1280,
+      "height": 640,
+      "seam": 0.0,
+      "hue_b": 5.0,
+      "poster_levels": 5,
+      "alpha_min": 0
+    },
+    {
+      "name": "side_step_oblique",
+      "width": 1280,
+      "height": 663,
+      "seam": 31.7768,
+      "hue_b": 5.0,
+      "poster_levels": 0,
+      "alpha_min": 0
+    },
+    {
+      "name": "side_step_alt",
+      "width": 944,
+      "height": 313,
+      "seam": 11.5887,
+      "hue_b": 5.0,
+      "poster_levels": 0,
+      "alpha_min": 0
+    },
+    {
+      "name": "side_ground_cliff",
+      "width": 1280,
+      "height": 960,
+      "seam": 0.0,
+      "hue_b": 4.9027,
+      "poster_levels": 0,
+      "alpha_min": 0
+    },
+    {
+      "name": "side_step",
+      "width": 960,
+      "height": 1280,
+      "seam": 0.0,
+      "hue_b": 5.0,
+      "poster_levels": 0,
+      "alpha_min": 0
+    }
+  ]
+}

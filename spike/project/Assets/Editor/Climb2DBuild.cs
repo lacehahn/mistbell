@@ -8,6 +8,17 @@ public static class Climb2DBuild
 {
     public static void Run()
     {
+        AssetDatabase.Refresh();
+        foreach(string file in System.IO.Directory.GetFiles("Assets/Resources/Climb2DArt","*.png"))
+        {
+            var importer=(TextureImporter)AssetImporter.GetAtPath(file);
+            importer.textureType=TextureImporterType.Default; importer.isReadable=true;
+            importer.filterMode=FilterMode.Point; importer.mipmapEnabled=false;
+            importer.textureCompression=TextureImporterCompression.Uncompressed;
+            importer.alphaSource=TextureImporterAlphaSource.FromInput; importer.alphaIsTransparency=false;
+            importer.npotScale=TextureImporterNPOTScale.None; importer.maxTextureSize=2048;
+            importer.SaveAndReimport();
+        }
         EditorSceneManager.OpenScene("Assets/Scenes/ArtSpike.unity");
         var pilgrim=UnityEngine.Object.FindFirstObjectByType<PilgrimAnimator>();
         var atlas=(Texture2D)pilgrim.GetComponent<MeshRenderer>().sharedMaterial.mainTexture;
