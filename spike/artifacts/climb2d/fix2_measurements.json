@@ -1,0 +1,83 @@
+{
+  "task": "climb2d_fix2_fullflow",
+  "build_errors": 0,
+  "fullflow_script_exit": 0,
+  "accept_climb2d_exit": 0,
+  "fullflow_semantically_all_green": false,
+  "fullflow_logs": {
+    "-demo-walk 6": "spike/logs/run_121035_-demo-walk6.log",
+    "-demo-walk-stairs": "spike/logs/run_121045_-demo-walk-stairs.log",
+    "-demo-walk-to-tower": "spike/logs/run_121052_-demo-walk-to-tower.log",
+    "-demo-enter-church": "spike/logs/run_121104_-demo-enter-church.log",
+    "-demo-cinema": "spike/logs/run_121126_-demo-cinema.log",
+    "-demo-reveal": "spike/logs/run_121141_-demo-reveal.log",
+    "-demo-journal": "spike/logs/run_121157_-demo-journal.log",
+    "-demo-settings": "spike/logs/run_121212_-demo-settings.log",
+    "-demo-save": "spike/logs/run_121228_-demo-save.log",
+    "-demo-load": "spike/logs/run_121243_-demo-load.log",
+    "-demo-trail 10": "spike/logs/run_121246_-demo-trail10.log"
+  },
+  "logged_failures": {
+    "-demo-walk 6": [],
+    "-demo-walk-stairs": [],
+    "-demo-walk-to-tower": [],
+    "-demo-enter-church": [],
+    "-demo-cinema": [],
+    "-demo-reveal": [],
+    "-demo-journal": [],
+    "-demo-settings": [],
+    "-demo-save": [],
+    "-demo-load": [],
+    "-demo-trail 10": []
+  },
+  "actual_trail_exit": {
+    "command": "-demo-trail 10",
+    "pid": 41758,
+    "observer": "macOS kqueue EVFILT_PROC NOTE_EXIT | NOTE_EXITSTATUS",
+    "raw_wait_status": 256,
+    "actual_exit_code": 1,
+    "log": "/Users/lance/workspace/mistbell/spike/logs/climb2d_fix2_trail_exit.log"
+  },
+  "visual": {
+    "shadow_px": 20,
+    "alpha_start": 0.45,
+    "alpha_end": 0,
+    "outline_px": 0,
+    "cliff_px": 160,
+    "cliff_blend_px": 40,
+    "snow_max_px": 4,
+    "contrast": [
+      {
+        "shot": "start",
+        "path": 56.47506089909939,
+        "snow": 73.49795802239386,
+        "delta": 17.02289712329447,
+        "path_samples": 22016,
+        "snow_samples": 121
+      },
+      {
+        "shot": "ramp_mid",
+        "path": 56.667585836906014,
+        "snow": 73.94574021553994,
+        "delta": 17.27815437863393,
+        "path_samples": 39298,
+        "snow_samples": 517
+      },
+      {
+        "shot": "turn",
+        "path": 56.649073500869996,
+        "snow": 73.93421098420619,
+        "delta": 17.285137483336193,
+        "path_samples": 38271,
+        "snow_samples": 436
+      }
+    ]
+  },
+  "protected_unchanged": true,
+  "climb2d_terminal": [
+    "[CLIMB2D] deck_support=TerraceLanding ground_error_m=0.000000",
+    "[CLIMB2D] measured walk_s=40.600 stairs_s=7.000 total_s=50.600 fade_s=0.619 samples=2118 support_error_px=0.000031 camera_lag_max_px=34.003 max_dt=0.1511 shots=5",
+    "[CLIMB2D] arrival scene=ArtSpike position=(0.000, 0.286, -9.965) camera_z_distance=11.500 valid=True bad=0",
+    "[CLIMB2D] path=curve stairs=48 transition=ok"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "command": "-demo-trail 10",
+  "pid": 41758,
+  "observer": "macOS kqueue EVFILT_PROC NOTE_EXIT | NOTE_EXITSTATUS",
+  "raw_wait_status": 256,
+  "actual_exit_code": 1,
+  "log": "/Users/lance/workspace/mistbell/spike/logs/climb2d_fix2_trail_exit.log"
+}

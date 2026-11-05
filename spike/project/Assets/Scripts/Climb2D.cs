@@ -18,9 +18,10 @@ public sealed class Climb2D : MonoBehaviour
     sealed class Layer { public int width,height; public Color32[] data; }
     static ArtRoute route;
     static float[] cumulative;
-    Layer upper,lower,trees,path,step,stone,styledPath,slopeShadow;
-    const int ShadowHeight=14; // 56 screen pixels at the fixed 4x presentation.
-    const float ShadowAlpha=.42f;
+    Layer upper,lower,trees,path,step,stone,cliff,styledPath,slopeShadow;
+    const int ShadowHeight=5; // 20 output pixels; no one-pixel outline.
+    const float ShadowAlpha=.45f;
+    const int CliffHeight=40, CliffBlend=10; // 160px face + 40px bottom fade at 4x.
     float maxBitmapError;
     int artSamples;
     static Vector2 World(RoutePoint p) => new Vector2(route.worldOriginX+p.x*route.worldScaleX,route.worldOriginY+(route.sourceStartY-p.y)*route.worldScaleY);
@@ -41,7 +42,8 @@ public sealed class Climb2D : MonoBehaviour
     {
         LoadRoute(); upper=LoadLayer("side_slope_up");lower=LoadLayer("side_slope_down");trees=LoadLayer("side_slope_trees");
         path=LoadLayer("side_path_curve");step=LoadLayer("side_step_oblique");stone=LoadLayer("side_ground_top_oblique");
-        BuildPathStyle();
+        cliff=LoadLayer("side_ground_cliff");
+        BuildPathStyle(); BuildStepStyle();
         foreach(int i in TurnPoints)
         {
             Vector2 p=World(route.points[i]);
@@ -273,8 +275,9 @@ public sealed class Climb2D : MonoBehaviour
         float treeWidth=trees.width*.35f;
         float treeOffset=Mathf.Repeat(eye.x*.6f,treeWidth);
         for(int i=-1;i<3;i++) Blit(trees,i*treeWidth-treeOffset,98,treeWidth,trees.height*.35f);
+        DrawUpperCliff();
         float pathY=route.worldOriginY+(route.sourceStartY-path.height)*route.worldScaleY-oy;
-        Blit(slopeShadow,route.worldOriginX-ox,pathY,slopeShadow.width,slopeShadow.height);
+        Blit(slopeShadow,route.worldOriginX-ox,pathY-ShadowHeight,slopeShadow.width,slopeShadow.height);
         Blit(styledPath,route.worldOriginX-ox,pathY,styledPath.width,styledPath.height);
         Vector2 stairBase=Support(StairStart);
         for(int i=0;i<Steps;i++)
@@ -296,7 +299,7 @@ public sealed class Climb2D : MonoBehaviour
     {
         int w=Mathf.CeilToInt(path.width*route.worldScaleX),h=Mathf.CeilToInt(path.height*route.worldScaleY);
         styledPath=new Layer { width=w,height=h,data=new Color32[w*h] };
-        slopeShadow=new Layer { width=w,height=h+ShadowHeight,data=new Color32[w*(h+ShadowHeight)] };
+        slopeShadow=new Layer { width=w,height=h+2*ShadowHeight,data=new Color32[w*(h+2*ShadowHeight)] };
         for(int y=0;y<h;y++) for(int x=0;x<w;x++)
         {
             int sx=Mathf.Min(path.width-1,Mathf.FloorToInt(x/route.worldScaleX));
@@ -310,30 +313,91 @@ public sealed class Climb2D : MonoBehaviour
             c.b=(byte)Mathf.RoundToInt(c.b*.9f*.6f+detail.b*.65f*.4f);
             styledPath.data[y*w+x]=c;
         }
-        // Follow every upper silhouette, including both switchbacks; draw beneath the road.
-        for(int y=0;y<h;y++) for(int x=0;x<w;x++)
+        // Shade only the uphill/downhill edges of each road run. Do not trace
+        // the vertical end caps: their neighbouring edge heights change steeply.
+        for(int x=2;x<w-2;x++) for(int y=0;y<h;y++)
         {
-            int at=y*w+x;
-            if(styledPath.data[at].a<128) continue;
-            bool above=y==h-1 || styledPath.data[at+w].a<128;
-            if(above) for(int d=1;d<=ShadowHeight;d++)
-                slopeShadow.data[(y+d)*w+x]=new Color32(58,64,72,(byte)Mathf.RoundToInt(255*ShadowAlpha));
-        }
-        // One logical pixel = 4 output pixels; use the original mask so edits cannot propagate.
-        var mask=(Color32[])styledPath.data.Clone();
-        for(int y=0;y<h;y++) for(int x=0;x<w;x++)
-        {
-            int at=y*w+x;
-            if(mask[at].a<128) continue;
-            if(y==0 || y==h-1 || x==0 || x==w-1 || mask[at-w].a<128 || mask[at+w].a<128 || mask[at-1].a<128 || mask[at+1].a<128)
+            if(styledPath.data[y*w+x].a<128) continue;
+            foreach(int side in new[]{-1,1})
             {
-                Color32 c=styledPath.data[at];
-                styledPath.data[at]=new Color32((byte)(c.r*.5f),(byte)(c.g*.5f),(byte)(c.b*.5f),c.a);
+                int next=y+side;
+                if(next>=0 && next<h && styledPath.data[next*w+x].a>=128) continue;
+                int left=EdgeAt(x-2,y,side),right=EdgeAt(x+2,y,side);
+                if(left<0 || right<0 || Mathf.Abs(left-right)>4) continue;
+                for(int d=1;d<=ShadowHeight;d++)
+                {
+                    int sy=y+side*d;
+                    if(sy<0 || sy>=h || styledPath.data[sy*w+x].a<128)
+                    {
+                        float alpha=ShadowAlpha*(1-(d-1f)/(ShadowHeight-1));
+                        int at=(sy+ShadowHeight)*w+x;
+                        byte a=(byte)Mathf.RoundToInt(255*alpha);
+                        if(a>slopeShadow.data[at].a) slopeShadow.data[at]=new Color32(58,64,72,a);
+                    }
+                }
             }
         }
-        Debug.Log(FormattableString.Invariant($"[SLOPE_SHADOW] band_h={ShadowHeight*4} alpha={ShadowAlpha:F2} follows_curve=true colour=#3A4048 edge_px=4 stone_strength=0.4 path_brightness=0.9"));
+        Debug.Log(FormattableString.Invariant($"[SLOPE_SHADOW] band_h={ShadowHeight*4} alpha={ShadowAlpha:F2} outer_alpha=0 follows_curve=true colour=#3A4048 edge_px=0 end_caps=false stone_strength=0.4 path_brightness=0.9"));
+        Debug.Log($"[UPPER_CLIFF] face_h_px={CliffHeight*4} blend_px={CliffBlend*4} width_px=1920 rotation_deg=90");
     }
-    // Audit the displayed framebuffer, omitting the character and the dark outline.
+    int EdgeAt(int x,int y,int side)
+    {
+        int w=styledPath.width,h=styledPath.height;
+        // Search locally only: another branch must never bridge an end cap.
+        for(int d=0;d<=3;d++) for(int sign=-1;sign<=1;sign+=2)
+        {
+            int sy=y+d*sign;
+            if(sy<0 || sy>=h || styledPath.data[sy*w+x].a<128) continue;
+            int next=sy+side;
+            if(next<0 || next>=h || styledPath.data[next*w+x].a<128) return sy;
+        }
+        return -1;
+    }
+    void BuildStepStyle()
+    {
+        var source=step;
+        step=new Layer { width=60,height=16,data=new Color32[60*16] };
+        int maxSnow=0;
+        for(int x=0;x<60;x++)
+        {
+            int snow=0,sx=x*source.width/60;
+            for(int y=0;y<16;y++)
+            {
+                Color32 c=source.data[(y*source.height/16)*source.width+sx];
+                // The compressed source lip sits at row 10 (bottom-up). All
+                // other bright patches become riser stone, including tread snow.
+                if(c.a>0 && Lightness(c)>70)
+                {
+                    if(y==10) snow++;
+                    else
+                    {
+                        Color32 rock=source.data[(source.height/3)*source.width+sx];
+                        c=new Color32((byte)Mathf.Min(rock.r,145),(byte)Mathf.Min(rock.g,145),(byte)Mathf.Min(rock.b,145),c.a);
+                    }
+                }
+                step.data[y*60+x]=c;
+            }
+            maxSnow=Mathf.Max(maxSnow,snow);
+        }
+        Debug.Log($"[STEP_SNOW] steps={Steps} max_snow_px={maxSnow*4} limit_px=6 sample=rendered_60x16 threshold_L=70");
+    }
+    void DrawUpperCliff()
+    {
+        int bottom=Height-CliffHeight-CliffBlend;
+        for(int y=bottom;y<Height;y++) for(int x=0;x<Width;x++)
+        {
+            // A 90 degree sample rotates horizontal strata into vertical cuts.
+            // Crop into the opaque rock face, away from the snowy silhouette.
+            int sx=Mathf.Clamp(320+(y-bottom)*2,0,cliff.width-1);
+            int rockHeight=cliff.height/2;
+            float along=Mathf.Repeat(x*2+eye.x*.2f,rockHeight*2);
+            int sy=Mathf.Clamp(Mathf.RoundToInt(along<rockHeight?along:rockHeight*2-1-along),0,rockHeight-1);
+            Color32 c=cliff.data[sy*cliff.width+sx];
+            float blend=Mathf.SmoothStep(0,1,(y-bottom)/(float)CliffBlend);
+            pixels[y*Width+x]=Color32.Lerp(pixels[y*Width+x],c,blend*c.a/255f);
+        }
+    }
+    // Audit the displayed framebuffer, omitting the character and the road silhouette.
     void AuditPathScreenshot(string name)
     {
         double road=0,snow=0;int roads=0,snows=0;
@@ -354,7 +418,7 @@ public sealed class Climb2D : MonoBehaviour
             { snow+=Lightness(pixels[y*Width+x]);snows++;marks[y*Width+x]=new Color32(0,255,0,255); }
         }
         float delta=(float)(snow/Math.Max(1,snows)-road/Math.Max(1,roads));
-        Debug.Log(FormattableString.Invariant($"[PATH_CONTRAST] shot={name} path_L={road/Math.Max(1,roads):F3} snow_L={snow/Math.Max(1,snows):F3} delta={delta:F3} edge_dark=true path_samples={roads} snow_samples={snows}"));
+        Debug.Log(FormattableString.Invariant($"[PATH_CONTRAST] shot={name} path_L={road/Math.Max(1,roads):F3} snow_L={snow/Math.Max(1,snows):F3} delta={delta:F3} edge_dark=false path_samples={roads} snow_samples={snows}"));
         if(roads==0 || snows==0 || delta<12) bad++;
         mask.SetPixels32(marks);mask.Apply();File.WriteAllBytes(Path.Combine(output,"contrast_mask_"+name+".png"),mask.EncodeToPNG());Destroy(mask);
     }
