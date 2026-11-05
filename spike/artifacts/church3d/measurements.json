@@ -1,0 +1,188 @@
+{
+  "block_levels": 4,
+  "palette": [
+    [
+      82,
+      71,
+      56
+    ],
+    [
+      92,
+      80,
+      65
+    ],
+    [
+      102,
+      90,
+      75
+    ],
+    [
+      112,
+      99,
+      84
+    ]
+  ],
+  "b_star_max_error": 0.18036446418976482,
+  "joint_var": 0.4,
+  "joint_width_px": [
+    3,
+    7
+  ],
+  "joint_dark": [
+    0.1966435819507415,
+    0.20071950163288332
+  ],
+  "long_stone_every": [
+    6,
+    9
+  ],
+  "long_stone_ratio": [
+    1.5833333333333333,
+    1.625
+  ],
+  "stone_pixel_samples": 8886,
+  "roof_jitter": 0.020000000000000018,
+  "roof_pixel_samples": 14826,
+  "eave_shadow_every": [
+    5,
+    7
+  ],
+  "eave_dark": [
+    0.11907365214396104,
+    0.1212072239505474
+  ],
+  "assets": {
+    "protected_before": "20E8A2ECA848DECD5CC139C628CA81CB0E56F54C40161541722D9FCFB3C48943",
+    "protected_after": "20E8A2ECA848DECD5CC139C628CA81CB0E56F54C40161541722D9FCFB3C48943",
+    "roof_strips": 153,
+    "roof_alpha": 0.3499999940395355,
+    "roof_width_texels": 8.0,
+    "windows": [
+      {
+        "name": "WarmWindow_FrontR",
+        "projection": 0.15000000596046448,
+        "glow_ratio": 1.2000000476837158,
+        "reveal_ratio": 0.9200000166893005,
+        "vertical": 1,
+        "horizontal": 2,
+        "shadow_quads": 3,
+        "glow_vertices": 4
+      },
+      {
+        "name": "WarmWindow_Drum4",
+        "projection": 0.15000000596046448,
+        "glow_ratio": 1.2000000476837158,
+        "reveal_ratio": 0.9200000166893005,
+        "vertical": 1,
+        "horizontal": 2,
+        "shadow_quads": 3,
+        "glow_vertices": 4
+      },
+      {
+        "name": "WarmWindow_Drum2",
+        "projection": 0.15000000596046448,
+        "glow_ratio": 1.2000000476837158,
+        "reveal_ratio": 0.9200000166893005,
+        "vertical": 1,
+        "horizontal": 2,
+        "shadow_quads": 3,
+        "glow_vertices": 4
+      },
+      {
+        "name": "WarmWindow_Drum3",
+        "projection": 0.15000000596046448,
+        "glow_ratio": 1.2000000476837158,
+        "reveal_ratio": 0.9200000166893005,
+        "vertical": 1,
+        "horizontal": 2,
+        "shadow_quads": 3,
+        "glow_vertices": 4
+      },
+      {
+        "name": "WarmWindow_Drum1",
+        "projection": 0.15000000596046448,
+        "glow_ratio": 1.2000000476837158,
+        "reveal_ratio": 0.9200000166893005,
+        "vertical": 1,
+        "horizontal": 2,
+        "shadow_quads": 3,
+        "glow_vertices": 4
+      },
+      {
+        "name": "WarmWindow_FrontL",
+        "projection": 0.15000000596046448,
+        "glow_ratio": 1.2000000476837158,
+        "reveal_ratio": 0.9200000166893005,
+        "vertical": 1,
+        "horizontal": 2,
+        "shadow_quads": 3,
+        "glow_vertices": 4
+      },
+      {
+        "name": "WarmWindow_Drum0",
+        "projection": 0.15000000596046448,
+        "glow_ratio": 1.2000000476837158,
+        "reveal_ratio": 0.9200000166893005,
+        "vertical": 1,
+        "horizontal": 2,
+        "shadow_quads": 3,
+        "glow_vertices": 4
+      }
+    ]
+  },
+  "bad": {
+    "walk": 0,
+    "interior": 0,
+    "reveal": 0
+  },
+  "bench": [
+    {
+      "pos": "z01",
+      "fps_avg": 213.0367889404297,
+      "fps_p1": 166.50062561035156,
+      "vram_mb": 868.332763671875,
+      "drawcalls": 242,
+      "tris": 5951785
+    },
+    {
+      "pos": "terrace",
+      "fps_avg": 223.6786346435547,
+      "fps_p1": 160.19223022460938,
+      "vram_mb": 868.332763671875,
+      "drawcalls": 277,
+      "tris": 6552820
+    }
+  ],
+  "shots": {
+    "art_runtime": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "4eb142cc09a409674a9aff05b336e263ba1a28f6d9d5c9c92119821d09178cc9",
+      "bytes": 1523802
+    },
+    "church_closeup": {
+      "size": [
+        1920,
+        1080
+      ],
+      "sha256": "813838153d85400ed8bed8d74003f017fdbe563e428bcd97a1616d7884bfb2f8",
+      "bytes": 1328207
+    }
+  },
+  "checks": {
+    "build": true,
+    "levels": true,
+    "b_star_quantization": true,
+    "joints": true,
+    "long_stones": true,
+    "roof": true,
+    "windows": true,
+    "roof_edges": true,
+    "protected": true,
+    "regressions": true,
+    "performance": true,
+    "source_unchanged": true
+  }
+}

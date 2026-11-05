@@ -1,0 +1,79 @@
+{
+    "protected_before": "20E8A2ECA848DECD5CC139C628CA81CB0E56F54C40161541722D9FCFB3C48943",
+    "protected_after": "20E8A2ECA848DECD5CC139C628CA81CB0E56F54C40161541722D9FCFB3C48943",
+    "roof_strips": 153,
+    "roof_alpha": 0.3499999940395355,
+    "roof_width_texels": 8.0,
+    "windows": [
+        {
+            "name": "WarmWindow_FrontR",
+            "projection": 0.15000000596046449,
+            "glow_ratio": 1.2000000476837159,
+            "reveal_ratio": 0.9200000166893005,
+            "vertical": 1,
+            "horizontal": 2,
+            "shadow_quads": 3,
+            "glow_vertices": 4
+        },
+        {
+            "name": "WarmWindow_Drum4",
+            "projection": 0.15000000596046449,
+            "glow_ratio": 1.2000000476837159,
+            "reveal_ratio": 0.9200000166893005,
+            "vertical": 1,
+            "horizontal": 2,
+            "shadow_quads": 3,
+            "glow_vertices": 4
+        },
+        {
+            "name": "WarmWindow_Drum2",
+            "projection": 0.15000000596046449,
+            "glow_ratio": 1.2000000476837159,
+            "reveal_ratio": 0.9200000166893005,
+            "vertical": 1,
+            "horizontal": 2,
+            "shadow_quads": 3,
+            "glow_vertices": 4
+        },
+        {
+            "name": "WarmWindow_Drum3",
+            "projection": 0.15000000596046449,
+            "glow_ratio": 1.2000000476837159,
+            "reveal_ratio": 0.9200000166893005,
+            "vertical": 1,
+            "horizontal": 2,
+            "shadow_quads": 3,
+            "glow_vertices": 4
+        },
+        {
+            "name": "WarmWindow_Drum1",
+            "projection": 0.15000000596046449,
+            "glow_ratio": 1.2000000476837159,
+            "reveal_ratio": 0.9200000166893005,
+            "vertical": 1,
+            "horizontal": 2,
+            "shadow_quads": 3,
+            "glow_vertices": 4
+        },
+        {
+            "name": "WarmWindow_FrontL",
+            "projection": 0.15000000596046449,
+            "glow_ratio": 1.2000000476837159,
+            "reveal_ratio": 0.9200000166893005,
+            "vertical": 1,
+            "horizontal": 2,
+            "shadow_quads": 3,
+            "glow_vertices": 4
+        },
+        {
+            "name": "WarmWindow_Drum0",
+            "projection": 0.15000000596046449,
+            "glow_ratio": 1.2000000476837159,
+            "reveal_ratio": 0.9200000166893005,
+            "vertical": 1,
+            "horizontal": 2,
+            "shadow_quads": 3,
+            "glow_vertices": 4
+        }
+    ]
+}
