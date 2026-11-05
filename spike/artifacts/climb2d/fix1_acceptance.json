@@ -1,0 +1,32 @@
+{
+  "removed_instances": 2,
+  "band_h": 56.0,
+  "alpha": 0.42,
+  "edge_px": 4.0,
+  "contrast": [
+    {
+      "shot": "start",
+      "path_L": 56.47506089909939,
+      "snow_L": 78.22348155144117,
+      "delta": 21.74842065234178,
+      "path_samples": 22016,
+      "snow_samples": 539
+    },
+    {
+      "shot": "ramp_mid",
+      "path_L": 56.667585836906014,
+      "snow_L": 79.56005304108884,
+      "delta": 22.89246720418282,
+      "path_samples": 39298,
+      "snow_samples": 1573
+    },
+    {
+      "shot": "turn",
+      "path_L": 56.64908767022921,
+      "snow_L": 78.68918879641798,
+      "delta": 22.040101126188773,
+      "path_samples": 38271,
+      "snow_samples": 1402
+    }
+  ]
+}
