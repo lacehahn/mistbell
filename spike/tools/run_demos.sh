@@ -13,6 +13,12 @@ caffeinate -dimu -t 1200 sleep 1200 &
 CAFF=$!
 trap 'kill $CAFF 2>/dev/null' EXIT
 
+# Override only for failure-injection acceptance; the normal gate remains 20.
+TRAIL_MIN_SPAWNS=${TRAIL_MIN_SPAWNS:-20}
+if ! [[ "$TRAIL_MIN_SPAWNS" =~ ^[0-9]+$ ]]; then
+  echo 'TRAIL_MIN_SPAWNS must be a non-negative integer' >&2
+  exit 1
+fi
 FAIL=0
 for spec in "$@"; do
   pkill -x Mistbell 2>/dev/null
@@ -35,6 +41,33 @@ for spec in "$@"; do
   if [[ "$spec" == *-demo-reveal* ]] && ! grep -aqE '^\[REVEAL\] gate=(pass|FAIL) ' "$LOG"; then
     BAD=$(( ${BAD:-0} + 1 ))
     echo '[REVEAL] missing terminal gate result'
+  fi
+  if [[ "$spec" == *-demo-trail* ]]; then
+    TRAIL_BAD=$(python3 - "$LOG" "$TRAIL_MIN_SPAWNS" <<'PYTRAIL'
+import math
+import re
+import sys
+from pathlib import Path
+text = Path(sys.argv[1]).read_text(errors='replace') if Path(sys.argv[1]).exists() else ''
+minimum = int(sys.argv[2])
+def terminal(tag):
+    lines = re.findall(r'^\[' + tag + r'\] (.*)$', text, re.M)
+    return dict(re.findall(r'(\w+)=([^\s]+)', lines[0])) if len(lines) == 1 else {}
+summary, shot = terminal('TRAIL'), terminal('TRAIL_SHOT')
+try:
+    count = int(summary['spawns'])
+    error = float(summary['ground_err_max'])
+    passed = (count >= minimum and math.isfinite(error) and 0 <= error <= .02
+              and int(shot['spawns']) == count and shot['walk_pass'] == 'true'
+              and shot['gate'] == 'pass')
+except (KeyError, ValueError):
+    passed = False
+print(f"[TRAIL_CHECK] min_spawns={minimum} spawns={summary.get('spawns', 'missing')} "
+      f"ground_err_max={summary.get('ground_err_max', 'missing')} gate={'pass' if passed else 'FAIL'}", file=sys.stderr)
+print(0 if passed else 1)
+PYTRAIL
+    )
+    BAD=$(( ${BAD:-0} + ${TRAIL_BAD:-1} ))
   fi
   printf '%-26s rc=%s bad=%s\n' "$spec" "$RC" "$BAD"
   [ "$RC" -ne 0 ] && FAIL=1

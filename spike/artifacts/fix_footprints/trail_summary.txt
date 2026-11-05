@@ -1,0 +1,3 @@
+[TRAIL_CHECK] min_spawns=20 spawns=38 ground_err_max=0.0120 gate=pass
+-demo-trail 10             rc=0 bad=0
+FAIL=0

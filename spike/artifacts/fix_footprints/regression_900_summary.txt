@@ -1,0 +1,3 @@
+-demo-walk 6               rc=0 bad=0
+-demo-climb2d -climb2d-auto -climb2d-output /Users/lance/workspace/mistbell/spike/artifacts/fix_footprints/climb2d rc=0 bad=0
+FAIL=0

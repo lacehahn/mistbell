@@ -1,0 +1,6 @@
+pass: bad=0 expected=0
+below_threshold: bad=1 expected=1
+missing: bad=1 expected=1
+walk_failure: bad=1 expected=1
+ground_error: bad=1 expected=1
+zero_spawns: bad=1 expected=1

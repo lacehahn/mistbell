@@ -19,7 +19,6 @@ public sealed class FootprintTrail : MonoBehaviour
     readonly Mesh[] meshes = new Mesh[Capacity];
     readonly Vector3[] vertices = new Vector3[Verts];
     readonly int[] triangles = new int[72];
-    readonly RaycastHit[] hits = new RaycastHit[8];
 
     // Narrow paving exposes more snow contacts. Keep the same ring pool but
     // submit its disjoint decals as one dynamic mesh rather than 120 renderers.
@@ -28,10 +27,11 @@ public sealed class FootprintTrail : MonoBehaviour
     Mesh batchMesh;
     bool batchDirty;
 
+    PlayerController player;
     AudioDirector audioDirector;
     Material material;
     Transform root;
-    float remainder, groundErrorMax;
+    float remainder, groundErrorMax, groundSpanMax;
     int next, contacts;
 
     public int Spawns { get; private set; }
@@ -45,6 +45,7 @@ public sealed class FootprintTrail : MonoBehaviour
     public void Initialize(AudioDirector audio)
     {
         audioDirector = audio;
+        player = GetComponent<PlayerController>();
 
         // 场景里的静态脚印当模板（材质、尺寸都和它一致），没有就退到 URP Lit，绝不抛异常：
         // 这个组件是装饰层，初始化失败不能把 PlayerController.Awake 打断（曾经因此所有演示卡死）。
@@ -130,16 +131,14 @@ public sealed class FootprintTrail : MonoBehaviour
     {
         Vector3 right = Vector3.Cross(Vector3.up, forward);
         float side = (contacts++ % 2 == 0 ? -.18f : .18f);
-        // Contacts on the authored route use its current center, including rounded bends.
-        if(point.z>=ClimbRoute.Points[0].y && point.z<=ClimbRoute.Points[ClimbRoute.Points.Length-1].y && ClimbRoute.DistanceToCenter(point)<=ClimbRoute.PavingWidth*.5f) {
-            point.x=ClimbRoute.CenterX(point.z);
-            forward=new Vector3(ClimbRoute.CenterX(point.z+.1f)-point.x,0,.1f).normalized;
-            right=Vector3.Cross(Vector3.up,forward);
-        }
         point += right * side;
 
-        if (!Physics.Raycast(point + Vector3.up * 2f, Vector3.down, out var hit, 4f, ~0, QueryTriggerInteraction.Ignore))
+        // Use the same explicit support rays as movement: fence/prop colliders are not ground.
+        if (!player.SurfaceAt(point, out var hit))
+        {
+            Diagnose(false, default, "ray_miss");
             return;
+        }
 
         var colliderRenderer = hit.collider.GetComponent<MeshRenderer>();
         string materialName = colliderRenderer != null && colliderRenderer.sharedMaterial != null
@@ -149,30 +148,37 @@ public sealed class FootprintTrail : MonoBehaviour
             hit.collider.name.StartsWith("Interior", StringComparison.Ordinal))
         {
             PavingSkipped++;
+            Diagnose(true, hit, "paving_or_interior");
             return;
         }
 
         // 每个顶点单独向下取地面高度，脚印会顺着坡面贴上去，不会插进雪里或浮空。
-        // groundErrorMax 记录单个脚印覆盖范围内地面高差（0.5 m 内高差越大，贴片越"折"）。
-        float minGround = float.MaxValue, maxGround = float.MinValue;
+        // 地面高差与贴地误差分开统计；贴地误差包含防止 Z-fighting 的 Lift。
+        float minGround = float.MaxValue, maxGround = float.MinValue, contactError = 0;
         for (int v = 0; v < Verts; v++)
         {
             float angle = (v - 1) * Mathf.PI * 2f / 24f;
             var offset = v == 0 ? Vector3.zero
                 : new Vector3(Mathf.Cos(angle) * HalfWidth, 0, Mathf.Sin(angle) * HalfLength);
             Vector3 world = point + right * offset.x + forward * offset.z;
-            float groundY = hit.point.y;
-            if (Physics.Raycast(world + Vector3.up * 2f, Vector3.down, out var vertexHit, 4f, ~0, QueryTriggerInteraction.Ignore))
-                groundY = vertexHit.point.y;
+            if (!player.SurfaceAt(world, out var vertexHit))
+            {
+                Diagnose(false, default, "vertex_ray_miss");
+                return;
+            }
+            float groundY = vertexHit.point.y;
             vertices[v] = new Vector3(world.x, groundY + Lift, world.z);
+            contactError = Mathf.Max(contactError, Mathf.Abs(vertices[v].y - groundY));
             minGround = Mathf.Min(minGround, groundY);
             maxGround = Mathf.Max(maxGround, groundY);
         }
 
         float span = maxGround - minGround;
-        if (span > 0f) groundErrorMax = Mathf.Max(groundErrorMax, span);
+        groundSpanMax = Mathf.Max(groundSpanMax, span);
         // 台阶边缘一个 0.5 m 脚印会横跨两级（高差 >0.12 m），贴片会被拉成一条竖带——直接不落。
-        if (span > .12f) { UnevenSkipped++; return; }
+        if (span > .12f) { UnevenSkipped++; Diagnose(true, hit, "uneven"); return; }
+        groundErrorMax = Mathf.Max(groundErrorMax, contactError);
+        Diagnose(true, hit, "none");
 
         int slot = next % Capacity;
         if (patches[slot].activeSelf) Despawns++;
@@ -190,6 +196,14 @@ public sealed class FootprintTrail : MonoBehaviour
         if (audioDirector != null) audioDirector.PlayFootstep();
     }
 
+    void Diagnose(bool rayHit, RaycastHit hit, string reason)
+    {
+        // One line per 0.75m contact, never per frame/vertex.
+        string layer = rayHit ? hit.collider.gameObject.layer.ToString() : "none";
+        string surface = rayHit ? hit.collider.name : "none";
+        Debug.Log($"[TRAIL_DIAG] ray_hit={rayHit.ToString().ToLowerInvariant()} layer={layer} skip_reason={reason} surface={surface}");
+    }
+
     void LateUpdate()
     {
         if (!batchDirty || batchMesh == null) return;
@@ -205,7 +219,7 @@ public sealed class FootprintTrail : MonoBehaviour
     public void LogSummary()
     {
         Debug.Log($"[TRAIL] spacing={Spacing:F2}m max={Capacity} spawns={Spawns} despawns={Despawns} " +
-                  $"ground_span_max={groundErrorMax:F4} paving_skipped={PavingSkipped} uneven_skipped={UnevenSkipped} static_kept={StaticKept} " +
+                  $"ground_err_max={groundErrorMax:F4} ground_span_max={groundSpanMax:F4} paving_skipped={PavingSkipped} uneven_skipped={UnevenSkipped} static_kept={StaticKept} " +
                   $"distance={Distance:F2}");
     }
 }

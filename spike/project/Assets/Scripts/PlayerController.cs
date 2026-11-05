@@ -47,6 +47,8 @@ public sealed partial class PlayerController : MonoBehaviour
     float animationTime, demoSeconds, elapsed, maxGroundError;
     int frames, misses, climbWalkBad;
     bool walkingDemo;
+    const int TrailMinSpawns = 20;
+    const float TrailSnowOffset = 2.1f; // Existing snow shoulder, clear of the 2.1m paving.
     FootprintTrail footprintTrail;
     DepthOfField dofOverride;
     bool trailShot;
@@ -193,7 +195,13 @@ public sealed partial class PlayerController : MonoBehaviour
             float.TryParse(args[trailIndex + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out demoSeconds))
         {
             walkingDemo = true; trailShot = true;
-            walkStart = transform.position;
+            // Exercise real snow contacts; the ordinary walk demo stays on paving.
+            var start = transform.position;
+            start.x = ClimbRoute.CenterX(start.z) + TrailSnowOffset;
+            if (!SurfaceAt(start, out var snowHit))
+            { Debug.LogError("[TRAIL] snow shoulder surface missing"); Application.Quit(1); return; }
+            start.y = snowHit.point.y;
+            transform.position = walkStart = start;
         }
         if (Array.IndexOf(args, "-demo-walk-stairs") >= 0)
         {
@@ -248,7 +256,7 @@ public sealed partial class PlayerController : MonoBehaviour
         {
             dt = Mathf.Min(dt, demoSeconds - elapsed);
             direction = !stairsDemo && !churchDemo && !towerDemo
-                ? new Vector3(ClimbRoute.CenterX(transform.position.z+1)-transform.position.x,0,1).normalized : Vector3.forward;
+                ? new Vector3(ClimbRoute.CenterX(transform.position.z+1)+(trailShot ? TrailSnowOffset : 0)-transform.position.x,0,1).normalized : Vector3.forward;
             if (towerDemo)
             {
                 // Walk across the open front plaza before approaching the tower.
@@ -338,7 +346,7 @@ public sealed partial class PlayerController : MonoBehaviour
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "[PLAY] ground_error_max={0:F6} raycast_misses={1} fps={2:F2} animation_fps=10 frames=6",
                 maxGroundError, misses, fps));
-            if (footprintTrail != null) footprintTrail.LogSummary();
+            if (footprintTrail != null && !trailShot) footprintTrail.LogSummary();
             bool pass;
             if (towerDemo)
             {
@@ -614,7 +622,7 @@ public sealed partial class PlayerController : MonoBehaviour
 
     // Query terrain AND independent terrace colliders. Bounds reject almost all
     // terrace meshes before raycasting; decorative snow/props cannot become ground.
-    bool SurfaceAt(Vector3 position, out RaycastHit hit)
+    internal bool SurfaceAt(Vector3 position, out RaycastHit hit)
     {
         var ray = new Ray(new Vector3(position.x, 500, position.z), Vector3.down);
         // Indoors the flat floor owns support; the underlying hillside cannot win a highest-ray test.
@@ -936,9 +944,12 @@ public sealed partial class PlayerController : MonoBehaviour
         yield return new WaitForEndOfFrame();
         string path = InteriorShot("footprints_trail");
 
+        // Capture after deceleration and LateUpdate so both terminal records describe the same trail.
+        if (footprintTrail != null) footprintTrail.LogSummary();
         int spawns = footprintTrail != null ? footprintTrail.Spawns : 0;
-        Debug.Log($"[TRAIL_SHOT] spawns={spawns} walk_pass={walkPass.ToString().ToLowerInvariant()} shot={Path.GetFileName(path)} top={Path.GetFileName(topPath)}");
-        Application.Quit(walkPass && spawns >= 8 ? 0 : 1);
+        bool pass = walkPass && spawns >= TrailMinSpawns && footprintTrail != null && footprintTrail.GroundErrorMax <= .02f;
+        Debug.Log($"[TRAIL_SHOT] spawns={spawns} walk_pass={walkPass.ToString().ToLowerInvariant()} min_spawns={TrailMinSpawns} gate={(pass ? "pass" : "FAIL")} shot={Path.GetFileName(path)} top={Path.GetFileName(topPath)}");
+        Application.Quit(pass ? 0 : 1);
     }
 
     string InteriorShot(string name)
