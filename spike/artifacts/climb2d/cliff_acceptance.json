@@ -1,0 +1,74 @@
+{
+  "cliff": {
+    "drop_h": "160",
+    "cornice": "40",
+    "fog": "10%",
+    "follows_curve": "true",
+    "drop_max": "160",
+    "cornice_max": "40",
+    "overhang": "16",
+    "shadow": "12",
+    "valley_fade": "60",
+    "edge_samples": "1471",
+    "curve_errors": "0"
+  },
+  "screenshots": [
+    {
+      "foreground_min_px": 60,
+      "foreground_max_px": 84,
+      "haze_alpha": "0.102",
+      "fg_silhouette": "true",
+      "fg_parallax": "1.15",
+      "shot": "ramp_mid",
+      "haze_h": "100",
+      "fg_min": "60",
+      "fg_max": "84",
+      "face_pixels": "32482",
+      "haze_pixels": "20223",
+      "fg_pixels": "8663"
+    },
+    {
+      "foreground_min_px": 60,
+      "foreground_max_px": 84,
+      "haze_alpha": "0.102",
+      "fg_silhouette": "true",
+      "fg_parallax": "1.15",
+      "shot": "turn",
+      "haze_h": "100",
+      "fg_min": "60",
+      "fg_max": "84",
+      "face_pixels": "36849",
+      "haze_pixels": "22561",
+      "fg_pixels": "8621"
+    },
+    {
+      "foreground_min_px": 60,
+      "foreground_max_px": 84,
+      "haze_alpha": "0.102",
+      "fg_silhouette": "true",
+      "fg_parallax": "1.15",
+      "shot": "stairs_mid",
+      "haze_h": "100",
+      "fg_min": "60",
+      "fg_max": "84",
+      "face_pixels": "0",
+      "haze_pixels": "0",
+      "fg_pixels": "8570"
+    }
+  ],
+  "timing": {
+    "walk_s": "40.600",
+    "stairs_s": "7.000",
+    "total_s": "50.738",
+    "fade_s": "0.651",
+    "samples": "2111",
+    "support_error_px": "0.000031",
+    "camera_lag_max_px": "33.999",
+    "max_dt": "0.1790",
+    "shots": "5"
+  },
+  "arrival": "[CLIMB2D] arrival scene=ArtSpike position=(0.000, 0.286, -9.965) camera_z_distance=11.500 valid=True bad=0",
+  "transition": "ok",
+  "walk_3d_m": 17.748,
+  "bad": 0
+}

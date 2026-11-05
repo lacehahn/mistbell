@@ -18,10 +18,14 @@ public sealed class Climb2D : MonoBehaviour
     sealed class Layer { public int width,height; public Color32[] data; }
     static ArtRoute route;
     static float[] cumulative;
-    Layer upper,lower,trees,path,step,stone,cliff,styledPath,slopeShadow;
+    Layer upper,lower,trees,path,step,stone,cliff,styledPath,slopeShadow,downhillFace,depthHaze;
     const int ShadowHeight=5; // 20 output pixels; no one-pixel outline.
     const float ShadowAlpha=.45f;
     const int CliffHeight=40, CliffBlend=10; // 160px face + 40px bottom fade at 4x.
+    // Logical pixels; output is 4x. All route-attached layers share the road origin.
+    const int DropHeight=40, CorniceHeight=10, CorniceOverhang=4, CorniceShadow=3, ValleyFade=15, HazeHeight=25;
+    const float HazeAlpha=.10f, ForegroundParallax=1.15f;
+    int cliffColumns, curveErrors, facePixels, hazePixels, foregroundPixels, foregroundMin, foregroundMax;
     float maxBitmapError;
     int artSamples;
     static Vector2 World(RoutePoint p) => new Vector2(route.worldOriginX+p.x*route.worldScaleX,route.worldOriginY+(route.sourceStartY-p.y)*route.worldScaleY);
@@ -43,7 +47,7 @@ public sealed class Climb2D : MonoBehaviour
         LoadRoute(); upper=LoadLayer("side_slope_up");lower=LoadLayer("side_slope_down");trees=LoadLayer("side_slope_trees");
         path=LoadLayer("side_path_curve");step=LoadLayer("side_step_oblique");stone=LoadLayer("side_ground_top_oblique");
         cliff=LoadLayer("side_ground_cliff");
-        BuildPathStyle(); BuildStepStyle();
+        BuildPathStyle(); BuildDepthStyle(); BuildStepStyle();
         foreach(int i in TurnPoints)
         {
             Vector2 p=World(route.points[i]);
@@ -221,6 +225,7 @@ public sealed class Climb2D : MonoBehaviour
         yield return new WaitForEndOfFrame();
         string path=Path.Combine(output,"climb2d_"+shots[shotIndex]+".png");
         if(shotIndex<3) AuditPathScreenshot(shots[shotIndex]);
+        AuditDepthScreenshot(shots[shotIndex]);
         var capture=ScreenCapture.CaptureScreenshotAsTexture();
         File.WriteAllBytes(path,capture.EncodeToPNG());
         Debug.Log(FormattableString.Invariant($"[CLIMB2D_SHOT] name={shots[shotIndex]} size={capture.width}x{capture.height} progress={progress:F3} foot=({foot.x:F2},{foot.y:F2}) path={path}"));
@@ -277,7 +282,9 @@ public sealed class Climb2D : MonoBehaviour
         for(int i=-1;i<3;i++) Blit(trees,i*treeWidth-treeOffset,98,treeWidth,trees.height*.35f);
         DrawUpperCliff();
         float pathY=route.worldOriginY+(route.sourceStartY-path.height)*route.worldScaleY-oy;
+        Blit(depthHaze,route.worldOriginX-ox,pathY-ValleyFade-DropHeight,depthHaze.width,depthHaze.height);
         Blit(slopeShadow,route.worldOriginX-ox,pathY-ShadowHeight,slopeShadow.width,slopeShadow.height);
+        Blit(downhillFace,route.worldOriginX-ox-CorniceOverhang,pathY-ValleyFade-DropHeight,downhillFace.width,downhillFace.height);
         Blit(styledPath,route.worldOriginX-ox,pathY,styledPath.width,styledPath.height);
         Vector2 stairBase=Support(StairStart);
         for(int i=0;i<Steps;i++)
@@ -292,6 +299,7 @@ public sealed class Climb2D : MonoBehaviour
             Color32 c=atlasPixels[((3-row)*80+y*2)*atlas.width+animationFrame*64+x*2];
             if(c.a>0) pixels[dy*Width+dx]=Color32.Lerp(pixels[dy*Width+dx],c,c.a/255f);
         }
+        DrawForeground();
         frame.SetPixels32(pixels); frame.Apply(false);
     }
     static float Lightness(Color32 c) => 116*LabF(.2126729f*Linear(c.r)+.7151522f*Linear(c.g)+.072175f*Linear(c.b))-16;
@@ -339,6 +347,103 @@ public sealed class Climb2D : MonoBehaviour
         }
         Debug.Log(FormattableString.Invariant($"[SLOPE_SHADOW] band_h={ShadowHeight*4} alpha={ShadowAlpha:F2} outer_alpha=0 follows_curve=true colour=#3A4048 edge_px=0 end_caps=false stone_strength=0.4 path_brightness=0.9"));
         Debug.Log($"[UPPER_CLIFF] face_h_px={CliffHeight*4} blend_px={CliffBlend*4} width_px=1920 rotation_deg=90");
+    }
+    void BuildDepthStyle()
+    {
+        int w=styledPath.width,h=styledPath.height, pad=DropHeight+ValleyFade;
+        downhillFace=new Layer { width=w+2*CorniceOverhang,height=h+pad+HazeHeight,data=new Color32[(w+2*CorniceOverhang)*(h+pad+HazeHeight)] };
+        depthHaze=new Layer { width=w,height=h+pad+HazeHeight,data=new Color32[w*(h+pad+HazeHeight)] };
+        int minDrop=int.MaxValue,maxDrop=0,minCornice=int.MaxValue,maxCornice=0;
+        // Every opaque run is a separate road branch. Process low to high so
+        // the upper branch occludes the lower cliff at a hairpin.
+        for(int x=0;x<w;x++) for(int y=0;y<h;y++)
+        {
+            if(styledPath.data[y*w+x].a<128) continue;
+            if(y==0 || styledPath.data[(y-1)*w+x].a<128)
+            {
+                cliffColumns++;
+                int renderedDrop=0,renderedSnow=0;
+                for(int d=1;d<=DropHeight+ValleyFade;d++)
+                {
+                    Color32 c;
+                    if(d<=CorniceHeight)
+                    {
+                        // Cold snow cap with a scalloped projecting lower lip.
+                        byte shade=(byte)(238-d*2);
+                        c=new Color32(shade,(byte)(shade+4),(byte)Mathf.Min(255,shade+9),255);
+                        renderedSnow++;
+                    }
+                    else
+                    {
+                        int sx=Mathf.Clamp(320+(d-CorniceHeight)*4,0,cliff.width-1);
+                        int rockHeight=cliff.height/2;
+                        int along=x*2%(rockHeight*2);
+                        int sy=along<rockHeight?along:rockHeight*2-1-along;
+                        c=cliff.data[sy*cliff.width+sx];c.a=255;
+                        c=Color32.Lerp(c,new Color32(71,83,100,255),.28f);
+                        if(d<=CorniceHeight+CorniceShadow) c=Color32.Lerp(c,new Color32(42,52,67,255),.65f);
+                        if(d>DropHeight-8) c=Color32.Lerp(c,new Color32(185,199,212,255),(d-(DropHeight-8))/8f);
+                    }
+                    if(d<=DropHeight) renderedDrop++;
+                    else
+                    {
+                        // The final 60 output pixels fade the cliff into valley air.
+                        float t=(d-DropHeight)/(float)ValleyFade;
+                        c=new Color32(185,199,212,(byte)Mathf.RoundToInt(255*.5f*(1-t)));
+                    }
+                    int targetY=y-d+pad;
+                    int spread=d<=CorniceHeight?CorniceOverhang:0;
+                    for(int dx=-spread;dx<=spread;dx++)
+                    {
+                        int targetX=x+CorniceOverhang+dx;
+                        downhillFace.data[targetY*downhillFace.width+targetX]=c;
+                    }
+                }
+                minDrop=Mathf.Min(minDrop,renderedDrop);maxDrop=Mathf.Max(maxDrop,renderedDrop);
+                minCornice=Mathf.Min(minCornice,renderedSnow);maxCornice=Mathf.Max(maxCornice,renderedSnow);
+                // Check the generated lip against its source road edge, not a straight baseline.
+                if(downhillFace.data[(y-1+pad)*downhillFace.width+x+CorniceOverhang].a==0) curveErrors++;
+            }
+            if(y==h-1 || styledPath.data[(y+1)*w+x].a<128)
+                for(int d=1;d<=HazeHeight;d++)
+                    depthHaze.data[(y+d+pad)*w+x]=new Color32(188,201,213,(byte)Mathf.RoundToInt(255*HazeAlpha));
+        }
+        Debug.Log(FormattableString.Invariant($"[CLIFF] drop_h={minDrop*4} cornice={minCornice*4} fog={HazeAlpha*100:F0}% follows_curve={(cliffColumns>0 && curveErrors==0).ToString().ToLowerInvariant()} drop_max={maxDrop*4} cornice_max={maxCornice*4} overhang={CorniceOverhang*4} shadow={CorniceShadow*4} valley_fade={ValleyFade*4} edge_samples={cliffColumns} curve_errors={curveErrors}"));
+        if(cliffColumns==0 || curveErrors!=0 || minDrop*4<120 || maxDrop*4>200 || minCornice*4<30 || maxCornice*4>50) bad++;
+    }
+    static float ForegroundWorldX(float x,float cameraX) => x+cameraX*ForegroundParallax;
+    static int ForegroundHeight(float worldX)
+    {
+        // Two irregular frequencies make snow shelves and rock corners.
+        return 15+Mathf.FloorToInt(4*(.5f+.5f*Mathf.Sin(worldX*.043f))+3*(.5f+.5f*Mathf.Sin(worldX*.113f)));
+    }
+    void DrawForeground()
+    {
+        foregroundPixels=0;foregroundMin=int.MaxValue;foregroundMax=0;
+        for(int x=0;x<Width;x++)
+        {
+            int height=ForegroundHeight(ForegroundWorldX(x,eye.x));
+            foregroundMin=Mathf.Min(foregroundMin,height);foregroundMax=Mathf.Max(foregroundMax,height);
+            for(int y=0;y<height;y++) { pixels[y*Width+x]=new Color32(213,224,234,255);foregroundPixels++; }
+        }
+    }
+    void AuditDepthScreenshot(string name)
+    {
+        facePixels=0;hazePixels=0;
+        float ox=eye.x-240,oy=eye.y-135;
+        float originY=route.worldOriginY+(route.sourceStartY-path.height)*route.worldScaleY-oy-DropHeight-ValleyFade;
+        for(int y=foregroundMax;y<Height;y++) for(int x=0;x<Width;x++)
+        {
+            int sx=Mathf.FloorToInt(x+ox-route.worldOriginX),sy=Mathf.FloorToInt(y-originY);
+            if(sx<0 || sx>=depthHaze.width || sy<0 || sy>=depthHaze.height) continue;
+            if(downhillFace.data[sy*downhillFace.width+sx+CorniceOverhang].a>0) facePixels++;
+            if(depthHaze.data[sy*depthHaze.width+sx].a>0) hazePixels++;
+        }
+        float shift=ForegroundWorldX(0,eye.x+100)-ForegroundWorldX(0,eye.x);
+        bool fg=foregroundPixels>0 && foregroundMin*4>=60 && foregroundMax*4<=90;
+        Debug.Log(FormattableString.Invariant($"[DEPTH] haze_alpha={depthHaze.data[Array.FindIndex(depthHaze.data,c=>c.a>0)].a/255f:F3} fg_silhouette={fg.ToString().ToLowerInvariant()} fg_parallax={shift/100:F2} shot={name} haze_h={HazeHeight*4} fg_min={foregroundMin*4} fg_max={foregroundMax*4} face_pixels={facePixels} haze_pixels={hazePixels} fg_pixels={foregroundPixels}"));
+        // The vertical stair camera has left the curved road behind.
+        if(!fg || (progress<StairStart && (facePixels==0 || hazePixels==0))) bad++;
     }
     int EdgeAt(int x,int y,int side)
     {
